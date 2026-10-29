@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GODOT_VERSION: "4.3"
+  GODOT_VERSION: "4.7.2"
 
 jobs:
   test:
@@ -19,14 +19,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Validar JSON de datos
         run: find data -name '*.json' -print0 | xargs -0 -n1 jq empty
 
       - name: Caché de Godot
         id: cache-godot
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/godot
           key: godot-${{ env.GODOT_VERSION }}-linux
@@ -46,7 +46,9 @@ jobs:
         run: godot --headless --import --path .
 
       - name: Pruebas unitarias
-        run: godot --headless --path . -s tests/test_validator.gd
+        run: |
+          godot --headless --path . -s tests/test_validator.gd
+          godot --headless --path . -s tests/test_semver.gd
 
       - name: Smoke test de escenas
         run: bash tests/smoke.sh

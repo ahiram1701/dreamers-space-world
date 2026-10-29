@@ -3,6 +3,18 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.2.0] - 2026-10-29
+
+### Añadido
+- Actualizador integrado: comprueba al arrancar si hay una versión estable nueva en GitHub Releases, la descarga, verifica su SHA-256, se reemplaza y se reinicia con un clic. Los mundos y ajustes se conservan.
+- Versión del juego visible en el menú principal y opción «Buscar actualizaciones» en Ajustes.
+- `SemVer`: comparación de versiones semánticas, con pruebas.
+- Las Releases incluyen `SHA256SUMS.txt`.
+
+### Cambiado
+- El proyecto, la CI y el CD pasan de Godot 4.3 a **Godot 4.7.2**.
+- Acciones de GitHub actualizadas (`checkout@v7`, `cache@v6`, ya en Node 24).
+
 ## [0.1.0] - 2026-10-29
 
 ### Añadido

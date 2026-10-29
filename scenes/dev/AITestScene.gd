@@ -5,6 +5,7 @@ extends Control
 var _key: LineEdit
 var _model: LineEdit
 var _mock: CheckBox
+var _updates: CheckBox
 var _type: OptionButton
 var _hint: LineEdit
 var _generate: Button
@@ -37,6 +38,10 @@ func _build_ui() -> void:
 	_mock.text = "Modo mock (sin red)"
 	_mock.button_pressed = Settings.use_mock
 	cfg.add_child(_mock)
+	_updates = CheckBox.new()
+	_updates.text = "Buscar actualizaciones"
+	_updates.button_pressed = Settings.auto_check_updates
+	cfg.add_child(_updates)
 	var save := Button.new()
 	save.text = "Guardar ajustes"
 	save.pressed.connect(_on_save)
@@ -80,6 +85,7 @@ func _on_save() -> void:
 	Settings.api_key = _key.text.strip_edges()
 	Settings.model = _model.text.strip_edges() if not _model.text.strip_edges().is_empty() else Settings.DEFAULT_MODEL
 	Settings.use_mock = _mock.button_pressed
+	Settings.auto_check_updates = _updates.button_pressed
 	Settings.save_settings()
 	_print("[color=gray]Ajustes guardados.[/color]")
 

@@ -9,7 +9,7 @@ a partir de tus decisiones, un mundo **único y persistente** para cada jugador.
 
 [![CI](https://github.com/ahiram1701/dreamers-space-world/actions/workflows/ci.yml/badge.svg)](https://github.com/ahiram1701/dreamers-space-world/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/ahiram1701/dreamers-space-world?include_prereleases&label=release)](https://github.com/ahiram1701/dreamers-space-world/releases)
-[![Godot](https://img.shields.io/badge/Godot-4.3-478cbf?logo=godotengine&logoColor=white)](https://godotengine.org)
+[![Godot](https://img.shields.io/badge/Godot-4.7-478cbf?logo=godotengine&logoColor=white)](https://godotengine.org)
 [![IA](https://img.shields.io/badge/IA-Ollama%20Cloud-black)](https://ollama.com)
 [![Licencia](https://img.shields.io/badge/licencia-todos%20los%20derechos%20reservados-lightgrey)](LICENSE)
 
@@ -65,8 +65,13 @@ Si la IA no está disponible, el juego usa contenido de respaldo y **nunca se qu
 ### Descargar
 Descarga la última versión para **Windows** o **Linux** desde [Releases](https://github.com/ahiram1701/dreamers-space-world/releases), descomprímela y ejecútala.
 
+### Actualizaciones automáticas
+Desde la **v0.2.0**, el juego comprueba al arrancar si hay una versión estable nueva en GitHub Releases. Si la hay, el menú muestra **Actualizar**: el juego descarga la versión nueva, verifica su SHA-256, se reemplaza y se reinicia. **Tus mundos y ajustes se conservan**, porque viven en la carpeta de usuario y no junto al ejecutable. Puedes desactivarlo en *Ajustes → Buscar actualizaciones*.
+
+> Si instalas el juego en una carpeta protegida (p. ej. `Program Files`), *Actualizar* abre la página de descarga. Las versiones `-alpha`/`-beta` nunca se ofrecen como actualización.
+
 ### Desde el código
-1. Instala [Godot 4.3+](https://godotengine.org/download) (versión estándar).
+1. Instala [Godot 4.7.2](https://godotengine.org/download) (versión estándar), por ejemplo con `winget install --id GodotEngine.GodotEngine --version 4.7.2 -e`.
 2. Clona el repositorio y abre `project.godot`.
 3. Pulsa <kbd>F5</kbd>.
 
@@ -98,6 +103,7 @@ Descarga la última versión para **Windows** o **Linux** desde [Releases](https
 | [`StoryDirector`](autoload/StoryDirector.gd) | Conversaciones turno a turno con los PNJs |
 | [`NPCMemory`](autoload/NPCMemory.gd) | Lo que cada PNJ recuerda del jugador |
 | [`PlayerProfile`](autoload/PlayerProfile.gd) | Carácter del jugador inferido de cómo juega |
+| [`Updater`](autoload/Updater.gd) | Busca versiones estables en GitHub Releases y se actualiza con un clic |
 
 ```
 autoload/      Sistemas globales (IA, mundo, memoria, narrativa)
@@ -112,7 +118,8 @@ tests/         Pruebas unitarias y smoke test
 
 ```bash
 godot --headless --import --path .
-godot --headless --path . -s tests/test_validator.gd   # pruebas unitarias
+godot --headless --path . -s tests/test_validator.gd   # pruebas del validador
+godot --headless --path . -s tests/test_semver.gd      # pruebas de versiones (actualizador)
 bash tests/smoke.sh                                    # arranca las escenas y busca errores de script
 ```
 

@@ -8,7 +8,7 @@ permissions:
   contents: write
 
 env:
-  GODOT_VERSION: "4.3"
+  GODOT_VERSION: "4.7.2"
 
 jobs:
   ci:
@@ -20,11 +20,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Caché de Godot y plantillas
         id: cache-godot
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/godot
@@ -73,7 +73,9 @@ jobs:
         run: |
           (cd build/windows && zip -qr "$GITHUB_WORKSPACE/DreamersSpaceWorld-${GITHUB_REF_NAME}-windows.zip" .)
           (cd build/linux && zip -qr "$GITHUB_WORKSPACE/DreamersSpaceWorld-${GITHUB_REF_NAME}-linux.zip" .)
-          ls -la *.zip
+          # El actualizador del juego verifica cada descarga contra este archivo
+          sha256sum DreamersSpaceWorld-*.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
 
       - name: Publicar Release
         env:
@@ -81,6 +83,6 @@ jobs:
         run: |
           PRE=""
           if [[ "$GITHUB_REF_NAME" == *-* ]]; then PRE="--prerelease"; fi
-          gh release create "$GITHUB_REF_NAME" DreamersSpaceWorld-*.zip \
+          gh release create "$GITHUB_REF_NAME" DreamersSpaceWorld-*.zip SHA256SUMS.txt \
             --title "Dreamer's Space World ${GITHUB_REF_NAME}" \
             --generate-notes $PRE

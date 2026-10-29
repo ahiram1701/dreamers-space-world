@@ -7,9 +7,9 @@ config_version=5
 
 config/name="Dreamer's Space World"
 config/description="Un multiverso que crece contigo: la IA genera el mundo según tus decisiones."
-config/version="0.1.0"
+config/version="0.2.0"
 run/main_scene="res://scenes/main_menu/MainMenu.tscn"
-config/features=PackedStringArray("4.3")
+config/features=PackedStringArray("4.7")
 
 [autoload]
 
@@ -21,6 +21,7 @@ ContentGenerator="*res://autoload/ContentGenerator.gd"
 NPCMemory="*res://autoload/NPCMemory.gd"
 PlayerProfile="*res://autoload/PlayerProfile.gd"
 StoryDirector="*res://autoload/StoryDirector.gd"
+Updater="*res://autoload/Updater.gd"
 
 [display]
 

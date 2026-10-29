@@ -13,6 +13,7 @@ var endpoint: String = DEFAULT_ENDPOINT
 var language: String = "es"
 ## Sin red ni coste: AIClient responde con los JSON de res://data/fallback/.
 var use_mock: bool = false
+var auto_check_updates: bool = true
 
 
 func _ready() -> void:
@@ -32,6 +33,7 @@ func load_settings() -> void:
 	endpoint = cfg.get_value("ai", "endpoint", DEFAULT_ENDPOINT)
 	use_mock = cfg.get_value("ai", "use_mock", false)
 	language = cfg.get_value("game", "language", "es")
+	auto_check_updates = cfg.get_value("game", "auto_check_updates", true)
 
 
 func save_settings() -> void:
@@ -41,6 +43,7 @@ func save_settings() -> void:
 	cfg.set_value("ai", "endpoint", endpoint)
 	cfg.set_value("ai", "use_mock", use_mock)
 	cfg.set_value("game", "language", language)
+	cfg.set_value("game", "auto_check_updates", auto_check_updates)
 	var err := cfg.save_encrypted_pass(PATH, _passphrase())
 	if err != OK:
 		push_error("No se pudieron guardar los ajustes: %s" % error_string(err))
