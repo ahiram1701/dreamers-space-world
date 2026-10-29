@@ -10,6 +10,7 @@ SCENES=(
 	"res://scenes/act0_town/Act0Town.tscn"
 	"res://scenes/dev/AITestScene.tscn"
 )
+IGNORE='Parameter "m" is null'  # mesh_get_surface_count en servers/rendering/dummy
 status=0
 
 for scene in "${SCENES[@]}"; do
@@ -17,7 +18,10 @@ for scene in "${SCENES[@]}"; do
 	log="$("$GODOT" --headless --path . "$scene" --quit-after 300 2>&1)"
 	echo "$log"
 	echo "::endgroup::"
-	if grep -qE 'SCRIPT ERROR|Parse Error|ERROR:' <<<"$log"; then
+	# Ruido conocido del renderizador "dummy" de --headless: no son errores del juego
+	errors="$(grep -E 'SCRIPT ERROR|Parse Error|ERROR:' <<<"$log" | grep -vE "$IGNORE" || true)"
+	if [[ -n "$errors" ]]; then
+		echo "$errors" | sort | uniq -c
 		echo "::error::Errores al ejecutar $scene"
 		status=1
 	else

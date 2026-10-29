@@ -12,7 +12,7 @@ const FALLBACK_DIR := "res://data/fallback/"
 
 func chat(messages: Array, schema: Dictionary = {}, mock_type: String = "") -> Dictionary:
 	if Settings.use_mock:
-		return _mock(mock_type)
+		return await _mock(mock_type)
 	if not Settings.has_api_key():
 		return _fail("Falta la API key de Ollama Cloud (Ajustes).")
 
