@@ -112,6 +112,52 @@ func apply_awakening(data: Dictionary, choice_index: int) -> Dictionary:
 	return {"consequence": consequence, "companion": companion, "anchor_id": anchor_id}
 
 
+# --- El final -------------------------------------------------------------------------
+
+## La revelación del origen de la señal y los tres finales, escritos con TODO lo vivido.
+func generate_finale() -> Dictionary:
+	var awakening: Dictionary = WorldDB.get_state("awakening", {})
+	var places := PackedStringArray()
+	for n in TimelineManager.visited_locations():
+		places.append(Travel.location_name(n.location_id))
+	var quests := PackedStringArray()
+	for q in Quests.all_quests():
+		if q.status == "done":
+			quests.append(q.title)
+	var companion := WorldDB.get_entity("npc", GameState.companion())
+	var messages := [
+		{"role": "system", "content": ContentGenerator.world_rules_prompt() + "\n\nEres el narrador del FINAL. Cierra la historia de este jugador con coherencia total con el canon, en segunda persona, con emoción contenida y física creíble."},
+		{"role": "user", "content": """El jugador ha reunido las coordenadas completas de la transmisión de radio que Samir captaba cada noche a las 3:33 en Bahía de las Horas, y ha llegado a su origen.
+
+Origen de su Ancla: %s (%s)
+Decisión en El Despertar: %s
+Compañero: %s
+Lugares recorridos: %s
+Misiones completadas: %s
+Quién es: %s
+
+Escribe:
+- "revelation": qué es realmente el origen de la señal y por qué el jugador. Debe encajar con el origen del Ancla y el canon.
+- "source_voice": lo que dice la propia señal (o quien la emite) al jugador.
+- "choices": exactamente tres, una por final: close_the_loop (convertirse en el emisor y cerrar el bucle causal), return_home (volver a Bahía de las Horas y apagar el Ancla), keep_traveling (dejar el emisor y seguir explorando). Cada una con su "epilogue": cómo termina la historia, mencionando detalles de su viaje.""" % [
+			awakening.get("origin", "?"), awakening.get("title", ""), awakening.get("choice", "?"),
+			companion.get("name", "nadie"), ", ".join(places), ", ".join(quests), PlayerProfile.describe()]},
+	]
+	var res := await ContentGenerator.request_valid("finale", messages)
+	var data: Dictionary = res.data if res.ok else ContentGenerator.load_fallback("finale")
+	data["source"] = "ai" if res.ok else "fallback"
+	return data
+
+
+## Guarda el final elegido. El mundo queda "completado", pero se puede seguir jugando.
+func apply_ending(data: Dictionary, choice_index: int) -> Dictionary:
+	var choice: Dictionary = data.choices[clampi(choice_index, 0, data.choices.size() - 1)]
+	GameState.set_ending(choice.ending)
+	WorldDB.add_canon("Final: %s" % choice.text)
+	WorldDB.set_state("finale", {"title": data.title, "ending": choice.ending, "epilogue": choice.epilogue})
+	return {"ending": choice.ending, "epilogue": choice.epilogue, "title": data.title}
+
+
 ## El vecino con mejor relación (a igualdad, el que más ha hablado contigo) te acompaña.
 func _closest_neighbor() -> String:
 	var best := ""

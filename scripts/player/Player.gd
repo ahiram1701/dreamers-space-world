@@ -1,7 +1,7 @@
 class_name Player
 extends CharacterBody3D
 ## Persona común en tercera persona. WASD, Shift correr, Espacio saltar, ratón cámara,
-## E hablar, Esc soltar el ratón. Usa teclas físicas para no depender del Input Map todavía.
+## E interactuar (Esc, T e I los gestiona GameplayUI). Usa teclas físicas para no depender del Input Map todavía.
 
 signal interact_requested(target: Node)
 
@@ -67,13 +67,10 @@ func _ready() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		_yaw.rotate_y(-event.relative.x * MOUSE_SENSITIVITY)
-		_spring.rotation.x = clampf(_spring.rotation.x - event.relative.y * MOUSE_SENSITIVITY, -1.2, 0.4)
+		_yaw.rotate_y(-event.relative.x * MOUSE_SENSITIVITY * Settings.mouse_sensitivity)
+		_spring.rotation.x = clampf(_spring.rotation.x - event.relative.y * MOUSE_SENSITIVITY * Settings.mouse_sensitivity, -1.2, 0.4)
 	elif event is InputEventKey and event.pressed and not event.echo:
 		match event.physical_keycode:
-			KEY_ESCAPE:
-				if controls_enabled:
-					Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 			KEY_E:
 				if controls_enabled and interact_target != null:
 					interact_requested.emit(interact_target)

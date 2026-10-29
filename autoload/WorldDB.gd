@@ -65,7 +65,17 @@ func list_worlds() -> Array[Dictionary]:
 	for id in dir.get_directories():
 		var parsed = JSON.parse_string(FileAccess.get_file_as_string(_path(id)))
 		if typeof(parsed) == TYPE_DICTIONARY:
-			out.append({"id": id, "name": parsed.get("name", id), "created_at": parsed.get("created_at", "")})
+			var state: Dictionary = parsed.get("state", {})
+			var game: Dictionary = state.get("game", {})
+			var location: String = game.get("location", "home")
+			var place: String = "Bahía de las Horas" if location == "home" \
+				else parsed.get("entities", {}).get("location", {}).get(location, {}).get("name", "?")
+			out.append({
+				"id": id, "name": parsed.get("name", id), "created_at": parsed.get("created_at", ""),
+				"place": place, "awakened": game.get("awakened", false),
+				"fragments": int(game.get("fragments", 0)), "ending": game.get("ending", ""),
+			})
+	out.sort_custom(func(a, b): return a.created_at > b.created_at)
 	return out
 
 

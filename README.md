@@ -59,8 +59,13 @@ Si la IA no está disponible, el juego usa contenido de respaldo y **nunca se qu
 | ✅ | **El Despertar** (ciencia ficción): la IA elige el origen científico de tu Ancla según cómo jugaste, con canon permanente y una decisión que ramifica la historia |
 | ✅ | Árbol de líneas temporales, energía, inestabilidad y saltos con el Ancla (<kbd>T</kbd>) |
 | ✅ | **Mundos generados**: cada salto a lo desconocido crea un lugar 3D nuevo (terreno, cielo, gravedad, balizas) con sus habitantes |
-| 🔜 | Más variedad procedural: asentamientos, estaciones espaciales, interiores |
-| 🔜 | Misiones, inventario, nave, espacio y pregeneración en segundo plano |
+| ✅ | **Mundos variados**: ciudades y pueblos con el estilo de su época, estaciones espaciales entre estrellas, ruinas, vegetación, cristales, lava, océanos y zonas de anomalía |
+| ✅ | **Misiones generadas** en cada mundo, ancladas a lugares, personas y objetos reales |
+| ✅ | **Hilo principal**: reúne 5 fragmentos de coordenadas y sigue la transmisión hasta su origen |
+| ✅ | **Final** escrito para tu partida, con 3 desenlaces, epílogo y créditos con el resumen de tu multiverso |
+| ✅ | Inventario y objetos usables, inestabilidad con fallos visuales, desanclaje y recuperación |
+| ✅ | Siguiente destino pregenerado en segundo plano, túnel de salto y sonido ambiental procedural |
+| ✅ | Menú de pausa, ajustes (IA, ratón, volumen) y gestión de partidas |
 
 ## 🚀 Jugar
 
@@ -90,8 +95,10 @@ Desde la **v0.2.0**, el juego comprueba al arrancar si hay una versión estable 
 | Moverse / correr | <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / <kbd>Shift</kbd> |
 | Saltar | <kbd>Espacio</kbd> |
 | Cámara | Ratón |
-| Hablar | <kbd>E</kbd> |
-| Soltar el ratón | <kbd>Esc</kbd> |
+| Hablar / recoger | <kbd>E</kbd> |
+| Ancla (saltar) | <kbd>T</kbd> |
+| Inventario | <kbd>I</kbd> |
+| Pausa | <kbd>Esc</kbd> |
 
 ## 🏗️ Arquitectura
 
@@ -106,6 +113,10 @@ Desde la **v0.2.0**, el juego comprueba al arrancar si hay una versión estable 
 | [`NPCMemory`](autoload/NPCMemory.gd) | Lo que cada PNJ recuerda del jugador |
 | [`PlayerProfile`](autoload/PlayerProfile.gd) | Carácter del jugador inferido de cómo juega |
 | [`Updater`](autoload/Updater.gd) | Busca versiones estables en GitHub Releases y se actualiza con un clic |
+| [`GameState`](autoload/GameState.gd) | Salud, energía, inestabilidad, fragmentos, compañero y final |
+| [`TimelineManager`](autoload/TimelineManager.gd) | Árbol de líneas temporales (muchos mundos: nada se reescribe) |
+| [`Travel`](autoload/Travel.gd) | Saltos, generación de mundos y pregeneración en segundo plano |
+| [`Inventory`](autoload/Inventory.gd) / [`Quests`](autoload/Quests.gd) | Objetos usables y misiones generadas |
 
 ```
 autoload/      Sistemas globales (IA, mundo, memoria, narrativa)
@@ -122,6 +133,8 @@ tests/         Pruebas unitarias y smoke test
 godot --headless --import --path .
 godot --headless --path . -s tests/test_validator.gd   # pruebas del validador
 godot --headless --path . -s tests/test_semver.gd      # pruebas de versiones (actualizador)
+godot --headless --path . -s tests/test_awakening_flow.gd  # El Despertar y los saltos
+godot --headless --path . -s tests/test_full_game.gd   # partida completa: misiones, fragmentos y final
 bash tests/smoke.sh                                    # arranca las escenas y busca errores de script
 ```
 

@@ -1,12 +1,14 @@
 class_name AnchorPanel
 extends CanvasLayer
-## El Ancla (tecla T): saltar a una rama nueva o volver a un lugar conocido.
-## Hace el salto completo: pantalla de carga, Travel y cambio de escena.
+## El Ancla (tecla T): saltar a una rama nueva, volver a un lugar conocido o, con las
+## coordenadas completas, seguir la señal hasta su origen. Hace el salto completo:
+## túnel, Travel y cambio de escena.
 
 signal opened
 signal closed
 
 var _panel: PanelContainer
+var _title: Label
 var _info: Label
 var _list: VBoxContainer
 var _loading: LoadingOverlay
@@ -21,14 +23,14 @@ func _ready() -> void:
 	_panel.anchor_top = 0.15
 	_panel.anchor_bottom = 0.85
 	_panel.visible = false
+	UIStyle.apply(_panel)
 	add_child(_panel)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	_panel.add_child(box)
-	var title := Label.new()
-	title.text = _anchor_name()
-	title.add_theme_font_size_override("font_size", 24)
-	box.add_child(title)
+	_title = Label.new()
+	_title.add_theme_font_size_override("font_size", 24)
+	box.add_child(_title)
 	_info = Label.new()
 	_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_info.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
@@ -56,6 +58,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
+func is_open() -> bool:
+	return _panel.visible
+
+
 func open() -> void:
 	_rebuild()
 	_panel.visible = true
@@ -63,7 +69,7 @@ func open() -> void:
 
 
 func close() -> void:
-	if _busy:
+	if _busy or not _panel.visible:
 		return
 	_panel.visible = false
 	closed.emit()
@@ -72,8 +78,17 @@ func close() -> void:
 func _rebuild() -> void:
 	for c in _list.get_children():
 		c.queue_free()
-	_info.text = "Energía: %d · Inestabilidad: %d · Ramas recorridas: %d" % [
-		GameState.get_stat("energy"), GameState.get_stat("instability"), TimelineManager.depth()]
+	var anchor_id: String = WorldDB.get_state("awakening", {}).get("anchor_id", "")
+	_title.text = WorldDB.get_entity("item", anchor_id).get("name", "El Ancla")
+	_info.text = "Energía: %d · Inestabilidad: %d · Ramas recorridas: %d · Coordenadas: %d/%d" % [
+		GameState.get_stat("energy"), GameState.get_stat("instability"), TimelineManager.depth(),
+		GameState.fragments(), GameState.FRAGMENTS_NEEDED]
+	if GameState.has_free_jump():
+		_info.text += "\nCoordenadas grabadas: el próximo salto no gasta energía."
+	if Travel.is_pregenerating():
+		_info.text += "\nCalculando el siguiente destino en segundo plano…"
+	if GameState.has_all_fragments() and GameState.ending().is_empty():
+		_add_option("Seguir la señal hasta su origen", GameState.travel_cost("finale"), "finale")
 	_add_option("Saltar a una rama desconocida", GameState.travel_cost("new"), "new")
 	for d in Travel.known_destinations():
 		_add_option("Volver a %s" % d.name, d.cost, d.location_id)
@@ -91,14 +106,20 @@ func _add_option(text: String, cost: int, target: String) -> void:
 func _travel(target: String) -> void:
 	_busy = true
 	_panel.visible = false
-	if target == "new":
-		_loading.show_loading("Saltando a lo desconocido",
-			["Calculando trayectoria", "Estabilizando el Ancla", "Buscando una rama compatible", "Midiendo la decoherencia"])
-	else:
-		_loading.show_loading("Recorriendo una ruta conocida", ["Sincronizando el Ancla"])
+	match target:
+		"new":
+			_loading.show_loading("Saltando a lo desconocido", PackedStringArray([
+				"Calculando trayectoria", "Estabilizando el Ancla", "Buscando una rama compatible", "Midiendo la decoherencia"]), true)
+		"finale":
+			_loading.show_loading("Siguiendo la señal", PackedStringArray([
+				"Triangulando las cinco coordenadas", "Todas las ramas convergen", "La transmisión se hace más fuerte"]), true)
+		_:
+			_loading.show_loading("Recorriendo una ruta conocida", PackedStringArray(["Sincronizando el Ancla"]), true)
 	var r: Dictionary
 	if target == "new":
 		r = await Travel.jump_new()
+	elif target == "finale":
+		r = await Travel.jump_finale()
 	else:
 		r = await Travel.go_to(target)
 	if r.ok:
@@ -106,10 +127,6 @@ func _travel(target: String) -> void:
 		return
 	_loading.hide_loading()
 	_busy = false
-	open()
+	_rebuild()
+	_panel.visible = true
 	_info.text = r.error
-
-
-func _anchor_name() -> String:
-	var anchor_id: String = WorldDB.get_state("awakening", {}).get("anchor_id", "")
-	return WorldDB.get_entity("item", anchor_id).get("name", "El Ancla")

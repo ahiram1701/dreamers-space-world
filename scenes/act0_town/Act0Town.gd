@@ -19,6 +19,7 @@ var _sun: DirectionalLight3D
 var _env: Environment
 var _sky_mat: ProceduralSkyMaterial
 var _awakening: AwakeningSequence
+var _ui: GameplayUI
 var _npcs: Dictionary = {}  # npc_id -> TownNPC
 
 
@@ -50,11 +51,13 @@ func _ready() -> void:
 	_dialogue.scene_context = SCENE_CONTEXT
 	add_child(_dialogue)
 	_dialogue.closed.connect(_on_dialogue_closed)
-	add_child(StatsHUD.new())
-	var anchor := AnchorPanel.new()
-	add_child(anchor)
-	anchor.opened.connect(func(): _player.controls_enabled = false)
-	anchor.closed.connect(func(): _player.controls_enabled = true)
+	_ui = GameplayUI.new()
+	_ui.player = _player
+	_ui.nearby_npcs = func(): return _npcs.keys()
+	add_child(_ui)
+	var waves := AmbientAudio.new()
+	waves.kind = AmbientAudio.Kind.WAVES
+	add_child(waves)
 	_update_objective()
 
 
@@ -95,13 +98,13 @@ func _progress() -> Dictionary:
 
 func _on_interact(target: Node) -> void:
 	if target is TownNPC:
-		_player.controls_enabled = false
+		_ui.block(true)
 		target.face(_player.global_position)
 		_dialogue.open(target.npc_id)
 
 
 func _on_dialogue_closed(npc_id: String) -> void:
-	_player.controls_enabled = true
+	_ui.block(false)
 	_npcs[npc_id].refresh_name(WorldDB.get_entity("npc", npc_id))
 	var p := _progress()
 	if not (npc_id in p.talked):
@@ -308,7 +311,7 @@ func _build_hud() -> void:
 	_objective.add_theme_color_override("font_outline_color", Color.BLACK)
 	hud.add_child(_objective)
 	var help := Label.new()
-	help.text = "WASD moverse · Shift correr · Espacio saltar · Ratón cámara · E hablar · Esc soltar ratón"
+	help.text = "WASD moverse · Shift correr · Espacio saltar · Ratón cámara · E hablar · I inventario · Esc pausa"
 	help.anchor_top = 1.0
 	help.anchor_bottom = 1.0
 	help.offset_top = -34

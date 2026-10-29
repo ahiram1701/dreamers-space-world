@@ -1,0 +1,22 @@
+{
+	"title": "El emisor",
+	"revelation": "Las cinco piezas de coordenadas te traen a un punto donde todas las ramas que has visitado convergen, como hilos que pasan por el mismo ojo de aguja. Aquí no hay suelo ni cielo, solo la brecha original, ancha como un océano. En su borde hay un transmisor improvisado, construido con piezas de cada mundo que has pisado. Reconoces tu letra en las etiquetas. La señal que Samir captaba cada noche a las 3:33 no venía de otra persona: venía de una versión de ti que llegó hasta aquí antes. Y el transmisor está esperando a que alguien la envíe.",
+	"source_voice": "Si estás oyendo esto, ya sabes lo que significa. Alguien tiene que enviar la primera señal. Si no lo haces, nunca habrás empezado.",
+	"choices": [
+		{
+			"text": "Enviar la transmisión al pasado y cerrar el bucle.",
+			"ending": "close_the_loop",
+			"epilogue": "Ajustas la frecuencia, escribes los dos nombres y pulsas el botón. En una rama, hace mucho, Samir levanta la cabeza en su taller. El bucle se cierra sobre sí mismo: no tuvo principio y ahora no tiene final. Te quedas en el borde de la brecha, convertido en el faro de otros."
+		},
+		{
+			"text": "Volver a Bahía de las Horas y apagar el Ancla para siempre.",
+			"ending": "return_home",
+			"epilogue": "El salto de vuelta es el más largo de todos. Llegas al amanecer: el faro ya no parpadea, los relojes vuelven a andar. Le devuelves a Marina lo que queda de su reloj. Nadie en el pueblo sabrá nunca dónde estuviste, pero tú sí."
+		},
+		{
+			"text": "Dejar el transmisor para otro viajero y seguir explorando.",
+			"ending": "keep_traveling",
+			"epilogue": "Dejas una nota junto al transmisor, para quien venga después, y recalibras el Ancla. Hay ramas que nadie ha visto todavía. El multiverso no tiene final, y tú tampoco tienes prisa."
+		}
+	]
+}

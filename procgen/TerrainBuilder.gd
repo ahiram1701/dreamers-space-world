@@ -14,7 +14,7 @@ const BIOMES := {
 	"desert": {"low": "#d9b26f", "high": "#b9824a", "amp": 6.0, "fog": "#e8cfa0"},
 	"ice": {"low": "#dfeef5", "high": "#9fc2d6", "amp": 8.0, "fog": "#e4f0f7"},
 	"jungle": {"low": "#2f5a2a", "high": "#4d7d36", "amp": 9.0, "fog": "#9fbf9a"},
-	"ocean": {"low": "#2b6c8f", "high": "#e3cf9c", "amp": 2.5, "fog": "#a9c8d8"},
+	"ocean": {"low": "#b8a676", "high": "#e3cf9c", "amp": 4.5, "fog": "#a9c8d8"},
 	"volcanic": {"low": "#2a2220", "high": "#7a2e1c", "amp": 14.0, "fog": "#5a3a33"},
 	"crystal": {"low": "#5c4b8a", "high": "#a7e0f0", "amp": 11.0, "fog": "#b9a9e0"},
 	"barren": {"low": "#8a5a3c", "high": "#c48a5a", "amp": 6.0, "fog": "#c9956a"},

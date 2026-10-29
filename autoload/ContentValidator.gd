@@ -78,6 +78,26 @@ const SPECS := {
 		}}},
 		"destination_hint": {"t": "string", "min": 10, "max": 300},
 	},
+	# Misión local. El motor resuelve target_index contra las listas reales del lugar
+	# (puntos de interés, PNJs u objetos), así la IA no puede inventar objetivos imposibles.
+	"quest": {
+		"title": {"t": "string", "min": 3, "max": 60},
+		"description": {"t": "string", "min": 10, "max": 300},
+		"objective": {"t": "enum", "from": "quest_objective"},
+		"target_index": {"t": "int", "min": 0, "max": 5},
+		"completion_text": {"t": "string", "min": 5, "max": 300},
+	},
+	# El origen de la señal: revelación final y los tres finales con su epílogo.
+	"finale": {
+		"title": {"t": "string", "min": 2, "max": 60},
+		"revelation": {"t": "string", "min": 80, "max": 1500},
+		"source_voice": {"t": "string", "min": 10, "max": 400},
+		"choices": {"t": "array", "min": 3, "max": 3, "items": {"t": "object", "fields": {
+			"text": {"t": "string", "min": 5, "max": 140},
+			"ending": {"t": "enum", "from": "ending"},
+			"epilogue": {"t": "string", "min": 40, "max": 900},
+		}}},
+	},
 }
 
 ## Tipos que se guardan en WorldDB (el resto de SPECS son respuestas efímeras).

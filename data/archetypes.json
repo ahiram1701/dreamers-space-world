@@ -12,5 +12,7 @@
 	"player_trait": ["curiosity", "empathy", "courage", "skepticism", "ambition"],
 	"awakening_origin": ["future_probe", "failed_experiment", "branch_transmission", "alien_artifact", "natural_anomaly"],
 	"awakening_consequence": ["jump_alone", "jump_with_companion", "seal_behind"],
-	"anchor_base": ["marina_watch", "samir_radio", "teo_notebook", "none"]
+	"anchor_base": ["marina_watch", "samir_radio", "teo_notebook", "none"],
+	"quest_objective": ["visit_poi", "talk_npc", "bring_item"],
+	"ending": ["close_the_loop", "return_home", "keep_traveling"]
 }

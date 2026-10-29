@@ -1,0 +1,7 @@
+{
+	"title": "Lecturas de la brecha",
+	"description": "Hay una baliza en este lugar que registra las fluctuaciones de la brecha. Alguien necesita esos datos para calcular la siguiente coordenada de la transmisión.",
+	"objective": "visit_poi",
+	"target_index": 0,
+	"completion_text": "Los datos de la baliza encajan con un fragmento de la transmisión: otra pieza de las coordenadas de su origen."
+}

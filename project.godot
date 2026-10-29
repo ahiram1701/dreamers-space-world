@@ -25,6 +25,8 @@ Updater="*res://autoload/Updater.gd"
 GameState="*res://autoload/GameState.gd"
 TimelineManager="*res://autoload/TimelineManager.gd"
 Travel="*res://autoload/Travel.gd"
+Inventory="*res://autoload/Inventory.gd"
+Quests="*res://autoload/Quests.gd"
 
 [display]
 

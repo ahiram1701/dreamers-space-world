@@ -32,6 +32,7 @@ func _ready() -> void:
 	panel.anchor_right = 0.9
 	panel.anchor_top = 0.55
 	panel.anchor_bottom = 0.97
+	UIStyle.apply(panel)
 	add_child(panel)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 8)
