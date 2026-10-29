@@ -14,7 +14,9 @@ var _player: Player
 var _dialogue: DialoguePanel
 var _ui: GameplayUI
 var _env: Environment
+var _fx: EnvironmentFX
 var _npcs: Dictionary = {}
+var _places: Dictionary = {}  # nombre del punto de interés -> posición
 var _placed: Array = []  # posiciones ocupadas (balizas, objetos) para que la decoración no las tape
 
 
@@ -51,7 +53,12 @@ func _ready() -> void:
 	_ui = GameplayUI.new()
 	_ui.player = _player
 	_ui.nearby_npcs = func(): return _npcs.keys()
+	_ui.scene_context = _action_context
 	add_child(_ui)
+	Actions.npc_action.connect(_on_npc_action)
+	for id in _npcs:  # quien aceptó acompañarte sigue contigo
+		if NPCMemory.is_following(id):
+			_npcs[id].follow(_player)
 	_dialogue = DialoguePanel.new()
 	_dialogue.scene_context = _scene_context()
 	add_child(_dialogue)
@@ -85,44 +92,23 @@ func _process(_delta: float) -> void:
 
 func _build_environment(space: bool) -> void:
 	var pal := TerrainBuilder.palette(_def.get("biome", "barren"))
-	var sky_color := Color(_def.get("sky_color", "#7090c0"))
-	var sky_mat := ProceduralSkyMaterial.new()
-	if space:
-		sky_mat.sky_top_color = Color("#020309")
-		sky_mat.sky_horizon_color = Color("#0a0f22").lerp(sky_color, 0.15)
-		sky_mat.ground_horizon_color = sky_mat.sky_horizon_color
-		sky_mat.ground_bottom_color = Color("#020309")
-	else:
-		sky_mat.sky_top_color = sky_color.darkened(0.7)  # contraste con el horizonte: si no, todo se ve plano
-		sky_mat.sky_horizon_color = sky_color
-		sky_mat.ground_horizon_color = sky_color.darkened(0.2)
-		sky_mat.ground_bottom_color = Color(pal.low).darkened(0.5)
-	var sky := Sky.new()
-	sky.sky_material = sky_mat
-	_env = Environment.new()
-	_env.background_mode = Environment.BG_SKY
-	_env.sky = sky
-	_env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	_env.ambient_light_energy = 1.6 if space else 1.0
-	_env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	_env.glow_enabled = true
-	_env.fog_enabled = not space
-	_env.fog_light_color = Color(pal.fog)
-	_env.fog_density = 0.003
-	_env.fog_aerial_perspective = 0.4
-	var world_env := WorldEnvironment.new()
-	world_env.environment = _env
-	add_child(world_env)
-	if space:
-		StationBuilder.add_starfield(self, _rng(5), sky_color)
-
 	var rng := _rng(1)
-	var sun := DirectionalLight3D.new()
-	sun.light_color = Color.WHITE.lerp(sky_color, 0.35)
-	sun.light_energy = 1.0
-	sun.shadow_enabled = true
-	sun.rotation_degrees = Vector3(rng.randf_range(-60, -25), rng.randf_range(0, 360), 0)
-	add_child(sun)
+	_fx = EnvironmentFX.new()
+	_fx.sky_color = Color(_def.get("sky_color", "#7090c0"))
+	_fx.fog_color = Color(pal.fog)
+	_fx.ground_color = Color(pal.low)
+	_fx.space = space
+	_fx.fog_density = 0.003
+	_fx.sun_tint = Color.WHITE.lerp(_fx.sky_color, 0.25)
+	add_child(_fx)
+	_env = _fx.env
+	Decor.bind_windows(_fx)
+	if space:
+		StationBuilder.add_starfield(self, _rng(5), _fx.sky_color)
+	elif _def.get("biome", "") in ["temperate", "jungle", "ocean", "urban"]:
+		var tip := Color(pal.high).lightened(0.15)
+		Decor.grass(self, Vector2.ZERO, Vector2(60, 60), 1.4 if _def.get("biome", "") != "urban" else 0.4, rng, _height_at,
+			func(x: float, z: float) -> bool: return _height_at.call(x, z) > -0.2, tip, Color(pal.low).darkened(0.3))
 
 
 ## Cada punto de interés es una baliza con nombre (llegar a ella cuenta para las misiones).
@@ -139,6 +125,7 @@ func _build_points_of_interest() -> void:
 		pos.y = _height_at.call(pos.x, pos.z)
 		var is_recharge := i == names.size() - 1
 		_beacon(pos, names[i], Color("#4fc3f7") if is_recharge else Color("#f2a65a"), -1 if is_recharge else i)
+		_places[str(names[i])] = pos
 		_placed.append(pos)
 
 
@@ -241,7 +228,7 @@ func _build_hud() -> void:
 	sub.add_theme_color_override("font_outline_color", Color.BLACK)
 	box.add_child(sub)
 	var help := Label.new()
-	help.text = "WASD moverse · Shift correr · Espacio saltar · E interactuar · T Ancla · I inventario · Esc pausa"
+	help.text = "WASD moverse · Shift correr · Espacio saltar · E interactuar · F hacer algo · T Ancla · I inventario · Esc pausa"
 	help.anchor_top = 1.0
 	help.anchor_bottom = 1.0
 	help.offset_top = -34
@@ -256,7 +243,8 @@ func _on_interact(target: Node) -> void:
 	if target is TownNPC:
 		_ui.block(true)
 		target.face(_player.global_position)
-		_dialogue.scene_context = _scene_context()
+		target.talking = true
+		_dialogue.scene_context = _scene_context() + "\n" + WorldClock.describe() if not StationBuilder.is_space(_def) else _scene_context()
 		_dialogue.open(target.npc_id)
 	elif target is Pickup:
 		Inventory.add(target.item_id)
@@ -275,6 +263,7 @@ func _on_interact(target: Node) -> void:
 func _on_dialogue_closed(npc_id: String) -> void:
 	_ui.block(false)
 	if _npcs.has(npc_id):
+		_npcs[npc_id].talking = false
 		_npcs[npc_id].refresh_name(WorldDB.get_entity("npc", npc_id))
 	Quests.notify("talk_npc", npc_id)
 
@@ -298,8 +287,7 @@ func _on_beacon_entered(body: Node3D, poi_index: int) -> void:
 ## Con mucha inestabilidad el mundo se desatura (el GameplayUI añade los fallos de imagen).
 func _apply_instability() -> void:
 	var instability := GameState.get_stat("instability")
-	_env.adjustment_enabled = instability > 50
-	_env.adjustment_saturation = remap(clampf(instability, 50, 100), 50, 100, 1.0, 0.3)
+	_env.adjustment_saturation = remap(clampf(instability, 50, 100), 50, 100, 1.12, 0.3)
 
 
 func _scene_context() -> String:
@@ -311,6 +299,41 @@ func _scene_context() -> String:
 		ctx += "\nMisión de este lugar (%s): «%s» — %s. La pidió %s. Objetivo: %s." % [
 			"completada" if q.status == "done" else "en curso", q.title, q.description, giver, Quests.objective_text(q)]
 	return ctx
+
+
+## Contexto para "Hacer algo": el lugar, la hora y qué tiene cerca el jugador.
+func _action_context() -> String:
+	var near := "campo abierto"
+	var best := 25.0
+	for name in _places:
+		var d: float = _places[name].distance_to(_player.global_position)
+		if d < best:
+			near = name
+			best = d
+	var ctx := _scene_context() + "\nEl jugador está cerca de: %s." % near
+	if not StationBuilder.is_space(_def):
+		ctx += " " + WorldClock.describe()
+	return ctx
+
+
+## Lo que un PNJ decide en una conversación se ve en el mundo: te sigue o va a un sitio.
+func _on_npc_action(npc_id: String, action: Dictionary) -> void:
+	if not _npcs.has(npc_id):
+		return
+	var npc: TownNPC = _npcs[npc_id]
+	match action.get("type", ""):
+		"follow_player":
+			npc.follow(_player)
+		"stop_following":
+			npc.stop()
+		"go_to":
+			var t := str(action.get("target", "")).to_lower()
+			var dest := Vector3(randf_range(-20, 20), 0, randf_range(-20, 20))
+			for name in _places:
+				if name.to_lower().contains(t) or t.contains(name.to_lower()):
+					dest = _places[name]
+			if not NPCMemory.is_following(npc_id):
+				npc.walk_to(dest)
 
 
 func _era_label(era: String) -> String:

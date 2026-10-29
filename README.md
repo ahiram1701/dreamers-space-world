@@ -65,7 +65,11 @@ Si la IA no está disponible, el juego usa contenido de respaldo y **nunca se qu
 | ✅ | **Final** escrito para tu partida, con 3 desenlaces, epílogo y créditos con el resumen de tu multiverso |
 | ✅ | Inventario y objetos usables, inestabilidad con fallos visuales, desanclaje y recuperación |
 | ✅ | Siguiente destino pregenerado en segundo plano, túnel de salto y sonido ambiental procedural |
-| ✅ | Menú de pausa, ajustes (IA, ratón, volumen) y gestión de partidas |
+| ✅ | **Lo que se dice, pasa**: los PNJs dan, prestan, reciben, acompañan, curan, encargan favores y revelan lugares de verdad |
+| ✅ | **Hacer algo** (<kbd>F</kbd>): describe cualquier acción y la IA narra qué ocurre en el mundo |
+| ✅ | Ciclo de día y noche, rutinas de los vecinos, diario y encargos |
+| ✅ | Modelos 3D CC0 animados, mar con olas, hierba con viento e iluminación con SSAO, glow y niebla |
+| ✅ | Menú de pausa, ajustes (IA, ratón, volumen, calidad gráfica, personaje) y gestión de partidas |
 
 ## 🚀 Jugar
 
@@ -96,8 +100,9 @@ Desde la **v0.2.0**, el juego comprueba al arrancar si hay una versión estable 
 | Saltar | <kbd>Espacio</kbd> |
 | Cámara | Ratón |
 | Hablar / recoger | <kbd>E</kbd> |
+| Hacer algo (acción libre) | <kbd>F</kbd> |
 | Ancla (saltar) | <kbd>T</kbd> |
-| Inventario | <kbd>I</kbd> |
+| Inventario, encargos y diario | <kbd>I</kbd> |
 | Pausa | <kbd>Esc</kbd> |
 
 ## 🏗️ Arquitectura
@@ -116,13 +121,18 @@ Desde la **v0.2.0**, el juego comprueba al arrancar si hay una versión estable 
 | [`GameState`](autoload/GameState.gd) | Salud, energía, inestabilidad, fragmentos, compañero y final |
 | [`TimelineManager`](autoload/TimelineManager.gd) | Árbol de líneas temporales (muchos mundos: nada se reescribe) |
 | [`Travel`](autoload/Travel.gd) | Saltos, generación de mundos y pregeneración en segundo plano |
-| [`Inventory`](autoload/Inventory.gd) / [`Quests`](autoload/Quests.gd) | Objetos usables y misiones generadas |
+| [`Inventory`](autoload/Inventory.gd) / [`Quests`](autoload/Quests.gd) | Objetos usables, préstamos y misiones generadas |
+| [`Actions`](autoload/Actions.gd) / [`Journal`](autoload/Journal.gd) | Hace real lo que la IA decide (dar, acompañar, curar…) y el diario |
+| [`WorldClock`](autoload/WorldClock.gd) | Hora del mundo, día y noche |
 
 ```
+assets/        Modelos 3D CC0 (ver assets/CREDITS.md)
 autoload/      Sistemas globales (IA, mundo, memoria, narrativa)
 data/          Reglas del multiverso, piezas, PNJs base y contenido de respaldo
 scenes/        Menú principal, Acto 0, UI y herramientas de desarrollo
-scripts/       Jugador y PNJs
+procgen/       Terreno, decoración y elección de modelos por arquetipo
+scripts/       Jugador, PNJs (animación por código), entorno y día/noche
+shaders/       Agua, suelo y hierba
 tests/         Pruebas unitarias y smoke test
 .github/       CI y publicación automática
 ```
@@ -135,6 +145,7 @@ godot --headless --path . -s tests/test_validator.gd   # pruebas del validador
 godot --headless --path . -s tests/test_semver.gd      # pruebas de versiones (actualizador)
 godot --headless --path . -s tests/test_awakening_flow.gd  # El Despertar y los saltos
 godot --headless --path . -s tests/test_full_game.gd   # partida completa: misiones, fragmentos y final
+godot --headless --path . -s tests/test_actions.gd     # lo que los PNJs aceptan hacer pasa de verdad
 bash tests/smoke.sh                                    # arranca las escenas y busca errores de script
 ```
 
@@ -152,3 +163,5 @@ El workflow de [release](.github/workflows/release.yml) pasa las pruebas, export
 ## 📄 Licencia
 
 © 2026 ahiram1701. **Todos los derechos reservados.** El código se publica solo para consulta; consulta [LICENSE](LICENSE).
+
+Los modelos 3D de `assets/models/` son de [Quaternius](https://quaternius.com) con licencia CC0 (dominio público); ver [assets/CREDITS.md](assets/CREDITS.md).

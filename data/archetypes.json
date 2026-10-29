@@ -1,6 +1,7 @@
 {
 	"_comment": "Biblioteca de piezas que el motor sabe construir. La IA solo puede elegir valores de estas listas.",
 	"npc_body": ["slim", "average", "sturdy", "tall", "short", "elderly", "child"],
+	"npc_figure": ["masculine", "feminine"],
 	"npc_outfit": ["casual", "work_uniform", "lab_coat", "street", "formal", "ragged", "futuristic", "ancient", "military", "robe"],
 	"location_kind": ["town", "city", "wilderness", "space_station", "planet_surface", "ruins", "ship_interior", "anomaly_zone"],
 	"biome": ["temperate", "desert", "ice", "jungle", "ocean", "volcanic", "crystal", "barren", "urban", "void"],
@@ -14,5 +15,7 @@
 	"awakening_consequence": ["jump_alone", "jump_with_companion", "seal_behind"],
 	"anchor_base": ["marina_watch", "samir_radio", "teo_notebook", "none"],
 	"quest_objective": ["visit_poi", "talk_npc", "bring_item"],
-	"ending": ["close_the_loop", "return_home", "keep_traveling"]
+	"ending": ["close_the_loop", "return_home", "keep_traveling"],
+	"npc_action": ["give_item", "take_item", "follow_player", "stop_following", "go_to", "change_stat", "reveal_place", "give_quest", "complete_quest", "refuse_contact", "journal"],
+	"stat": ["health", "energy", "instability"]
 }

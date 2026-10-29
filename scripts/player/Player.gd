@@ -27,6 +27,7 @@ var _body: Node3D
 var _cam: Camera3D
 var _shake_time := 0.0
 var _shake_strength := 0.0
+var _rig: HumanoidRig
 
 
 func _ready() -> void:
@@ -37,17 +38,22 @@ func _ready() -> void:
 
 	_body = Node3D.new()
 	add_child(_body)
-	var mesh := MeshInstance3D.new()
-	mesh.mesh = CapsuleMesh.new()
-	mesh.position.y = 0.9
-	mesh.material_override = _mat(Color("#e8d5b5"))
-	_body.add_child(mesh)
-	var nose := MeshInstance3D.new()  # para ver hacia dónde mira
-	nose.mesh = BoxMesh.new()
-	nose.mesh.size = Vector3(0.18, 0.12, 0.25)
-	nose.position = Vector3(0, 1.5, 0.48)
-	nose.material_override = _mat(Color("#3b6ea5"))
-	_body.add_child(nose)
+	var look := {"outfit": "casual", "primary_color": "#3b6ea5", "secondary_color": "#2b2f3a"}
+	if not Settings.player_figure.is_empty():
+		look["figure"] = Settings.player_figure
+	var model := AssetLibrary.character(look, hash(WorldDB.world_id) + 7)
+	if model:
+		AssetLibrary.place(_body, model, Vector3.ZERO, 1.78, 0.0, false)
+		_rig = HumanoidRig.new()
+		model.add_child(_rig)
+		if not _rig.setup(model):
+			_rig = null
+	else:
+		var mesh := MeshInstance3D.new()
+		mesh.mesh = CapsuleMesh.new()
+		mesh.position.y = 0.9
+		mesh.material_override = _mat(Color("#e8d5b5"))
+		_body.add_child(mesh)
 
 	_yaw = Node3D.new()
 	_yaw.position.y = 1.6
@@ -117,6 +123,8 @@ func _physics_process(delta: float) -> void:
 		velocity.x = move_toward(velocity.x, 0, speed * 8.0 * delta)
 		velocity.z = move_toward(velocity.z, 0, speed * 8.0 * delta)
 	move_and_slide()
+	if _rig:
+		_rig.speed = Vector2(velocity.x, velocity.z).length() if is_on_floor() else 0.5
 
 
 func _key(k: Key) -> float:

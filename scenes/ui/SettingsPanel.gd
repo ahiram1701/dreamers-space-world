@@ -10,6 +10,8 @@ var _mock: CheckBox
 var _updates: CheckBox
 var _sens: HSlider
 var _volume: HSlider
+var _quality: OptionButton
+var _figure: OptionButton
 var _status: Label
 
 
@@ -48,6 +50,11 @@ func _ready() -> void:
 	_sens = _slider(box, "Sensibilidad del ratón", 0.3, 3.0, Settings.mouse_sensitivity)
 	_volume = _slider(box, "Volumen", 0.0, 1.0, Settings.volume)
 	_volume.value_changed.connect(func(v): AudioServer.set_bus_volume_db(0, linear_to_db(maxf(v, 0.0001))))
+
+	_section(box, "Imagen y personaje")
+	_quality = _option(box, "Calidad gráfica", ["Baja (PCs modestos)", "Media", "Alta"], Settings.graphics_quality)
+	_figure = _option(box, "Tu personaje", ["Lo decide el mundo", "Hombre", "Mujer"],
+		["", "masculine", "feminine"].find(Settings.player_figure))
 
 	_section(box, "Actualizaciones")
 	_updates = _check(box, "Buscar actualizaciones al iniciar", Settings.auto_check_updates)
@@ -102,6 +109,8 @@ func _save() -> void:
 	Settings.auto_check_updates = _updates.button_pressed
 	Settings.mouse_sensitivity = _sens.value
 	Settings.volume = _volume.value
+	Settings.graphics_quality = _quality.selected
+	Settings.player_figure = ["", "masculine", "feminine"][maxi(_figure.selected, 0)]
 	Settings.save_settings()
 	_status.text = "Guardado."
 	_close()
@@ -135,6 +144,22 @@ func _check(parent: Node, text: String, value: bool) -> CheckBox:
 	c.button_pressed = value
 	parent.add_child(c)
 	return c
+
+
+func _option(parent: Node, text: String, items: Array, selected: int) -> OptionButton:
+	var row := HBoxContainer.new()
+	parent.add_child(row)
+	var l := Label.new()
+	l.text = text
+	l.custom_minimum_size.x = 200
+	row.add_child(l)
+	var o := OptionButton.new()
+	for it in items:
+		o.add_item(it)
+	o.selected = maxi(selected, 0)
+	o.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(o)
+	return o
 
 
 func _slider(parent: Node, text: String, min_v: float, max_v: float, value: float) -> HSlider:

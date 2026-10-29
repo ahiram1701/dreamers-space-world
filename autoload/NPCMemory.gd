@@ -8,7 +8,39 @@ const MAX_HISTORY := 12  # líneas sueltas; lo importante debería haber quedado
 
 func get_mem(npc_id: String) -> Dictionary:
 	var all: Dictionary = WorldDB.get_state("memories", {})
-	return all.get(npc_id, _empty())
+	var m: Dictionary = all.get(npc_id, {})
+	m.merge(_empty())  # las partidas antiguas no tienen los campos nuevos
+	return m
+
+
+## Cambia campos sueltos (posesiones, si te sigue, si está enfadado…).
+func set_fields(npc_id: String, fields: Dictionary) -> void:
+	var all: Dictionary = WorldDB.get_state("memories", {})
+	var m := get_mem(npc_id)
+	m.merge(fields, true)
+	all[npc_id] = m
+	WorldDB.set_state("memories", all)
+
+
+func is_following(npc_id: String) -> bool:
+	return bool(get_mem(npc_id).following)
+
+
+## Segundos que le quedan al PNJ sin querer hablarte (0 si habla).
+func refusal_left(npc_id: String) -> int:
+	return maxi(0, int(get_mem(npc_id).refuse_until) - int(Time.get_unix_time_from_system()))
+
+
+## Lo que el PNJ tiene de ti y lo que te ha dejado, para el prompt.
+func describe_possessions(npc_id: String) -> String:
+	var m := get_mem(npc_id)
+	var names := func(ids: Array) -> String:
+		var out := PackedStringArray()
+		for id in ids:
+			out.append(WorldDB.get_entity("item", id).get("name", "?"))
+		return "nada" if out.is_empty() else ", ".join(out)
+	return "Objetos que el jugador te ha dado (los tienes tú): %s.\nObjetos que le has prestado (son tuyos, puedes pedírselos): %s." % [
+		names.call(m.possessions), names.call(m.lent)]
 
 
 ## Aplica un turno de conversación ya validado por StoryDirector.
@@ -67,4 +99,5 @@ func describe(npc_id: String) -> String:
 
 
 func _empty() -> Dictionary:
-	return {"met": false, "relationship": 0, "conversations": 0, "facts": [], "history": []}
+	return {"met": false, "relationship": 0, "conversations": 0, "facts": [], "history": [],
+		"possessions": [], "lent": [], "following": false, "refuse_until": 0}

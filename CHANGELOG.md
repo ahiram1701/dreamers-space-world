@@ -3,6 +3,20 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.4.0] - 2026-10-29
+
+### Añadido
+- **Lo que se dice, pasa.** Los PNJs pueden actuar de verdad en una conversación: dar o prestar objetos, aceptar los que les das, acompañarte, ir a un sitio, curarte, hablarte de lugares nuevos (que se convierten en destinos), pedirte favores y darlos por cumplidos, anotar pistas en tu diario o negarse a hablarte un rato si les enfadas. Deciden según su personalidad y su relación contigo.
+- Botón **Dar objeto** en el diálogo, y objetos prestados que los PNJs recuerdan y te pueden pedir de vuelta.
+- **Hacer algo** (tecla <kbd>F</kbd>): describe con tus palabras lo que haces en el mundo (buscar, examinar, descansar, construir…) y la IA narra qué ocurre; si encuentras algo o descubres una pista, pasa de verdad.
+- **Diario** y **encargos** en el panel de inventario (<kbd>I</kbd>).
+- **Ciclo de día y noche** (un día dura 24 minutos): el sol se mueve, salen las estrellas y se encienden farolas y ventanas. Los vecinos del pueblo siguen una **rutina** según la hora.
+- **Gráficos nuevos**: personas, casas, árboles, rocas, farolas, barcas y equipamiento espacial con modelos 3D CC0 de Quaternius ([créditos](assets/CREDITS.md)), animados por código; terreno con playa y colinas, mar con olas y espuma, hierba con viento, iluminación con SSAO, glow y niebla.
+- Ajustes de **calidad gráfica** (baja, media, alta) y de **aspecto de tu personaje**.
+
+### Cambiado
+- Los PNJs caminan, te siguen y se giran hacia ti al hablar.
+
 ## [0.3.1] - 2026-10-29
 
 ### Corregido

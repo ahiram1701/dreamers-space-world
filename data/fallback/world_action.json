@@ -1,0 +1,4 @@
+{
+	"narration": "Te tomas un momento. El aire huele a sal y a hierro mojado; nada parece fuera de su sitio, aunque por un instante juras que el reloj de la plaza se ha saltado un segundo.",
+	"actions": [{"type": "journal", "text": "El reloj de la plaza pareció saltarse un segundo."}]
+}

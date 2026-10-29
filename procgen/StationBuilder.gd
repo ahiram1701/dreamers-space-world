@@ -29,6 +29,30 @@ static func build(def: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 		var size := Vector3(rng.randf_range(3, 8), rng.randf_range(2.5, 6), rng.randf_range(3, 8))
 		PropsBuilder._box(root, p + Vector3(0, size.y / 2, 0), size, metal.lightened(rng.randf() * 0.2), true)
 		PropsBuilder._emissive_box(root, p + Vector3(0, size.y + 0.05, 0), Vector3(size.x * 0.6, 0.1, 0.2), Color("#f2a65a"))
+	# Equipamiento: cápsulas, ordenadores, cajas, teletransportadores (modelos CC0)
+	var props := ["Props_Capsule", "Props_Computer", "Props_ComputerSmall", "Props_ContainerFull", "Props_Crate",
+		"Props_CrateLong", "Props_Pod", "Props_Shelf", "Props_Shelf_Tall", "Props_Teleporter_1", "Props_Vessel", "Props_Vessel_Tall", "Props_Base"]
+	for i in 26:
+		var p := Vector3(rng.randf_range(-32, 32), 0, rng.randf_range(-32, 32))
+		if Vector2(p.x, p.z).length() < 9.0:
+			continue
+		var name: String = props[rng.randi() % props.size()]
+		var model := AssetLibrary.instance("modular_sci_fi", name)
+		if model:
+			var b := AssetLibrary.bounds(model)
+			AssetLibrary.place(root, model, p, b.size.y * 2.2, rng.randf() * TAU, true)
+	for i in 8:  # columnas con luz
+		var a := TAU * i / 8.0
+		var col := AssetLibrary.instance("modular_sci_fi", "Column_1")
+		var cp := Vector3(cos(a), 0, sin(a)) * 20.0
+		if col:
+			AssetLibrary.place(root, col, cp, 9.0, a, true)
+		var lamp := OmniLight3D.new()
+		lamp.light_color = Color("#9fd8ff") if i % 2 == 0 else Color("#f2a65a")
+		lamp.omni_range = 14.0
+		lamp.light_energy = 1.4
+		lamp.position = cp + Vector3(0, 6.0, 0)
+		root.add_child(lamp)
 	# Barandillas invisibles para no caer al vacío
 	for side in [Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 0, 1), Vector3(0, 0, -1)]:
 		var wall := StaticBody3D.new()

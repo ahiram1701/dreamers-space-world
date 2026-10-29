@@ -60,10 +60,7 @@ static func build(definition: Dictionary) -> Dictionary:
 	var body := StaticBody3D.new()
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
-	var mat := StandardMaterial3D.new()
-	mat.vertex_color_use_as_albedo = true
-	mat.roughness = 0.95
-	mi.material_override = mat
+	mi.material_override = Decor.ground_material()
 	body.add_child(mi)
 	var shape := CollisionShape3D.new()
 	shape.shape = mesh.create_trimesh_shape()

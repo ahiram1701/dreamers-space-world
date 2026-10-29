@@ -157,6 +157,9 @@ func _next_hint() -> String:
 		var hint: String = WorldDB.get_state("awakening", {}).get("destination_hint", "")
 		if not hint.is_empty():
 			return hint
+	var told := Actions.take_revealed_place()  # un lugar del que alguien te habló
+	if not told.is_empty():
+		return "%s: %s" % [told.name, told.hint]
 	return "Un lugar nuevo en otra rama del multiverso, coherente con todo lo vivido. Cuanto más lejos ha llegado el jugador, más exótico y espacial puede ser (planetas, estaciones, futuros lejanos)."
 
 

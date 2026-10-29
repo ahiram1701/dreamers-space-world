@@ -1,7 +1,7 @@
 class_name GameplayUI
 extends Node
 ## Toda la interfaz de juego compartida por el pueblo y los mundos generados:
-## stats, misión y coordenadas, Ancla (T), inventario (I), pausa (Esc), avisos,
+## stats, misión y coordenadas, Ancla (T), inventario (I), hacer algo (F), pausa (Esc), hora, avisos,
 ## fallos visuales por inestabilidad y desanclaje. Bloquea al jugador mientras hay un panel abierto.
 
 const GLITCH_SHADER := preload("res://scenes/ui/glitch.gdshader")
@@ -12,10 +12,14 @@ const CRITICAL := 90
 var player: Player
 ## Devuelve los ids de los PNJs de la escena (objetos de secretos/confianza).
 var nearby_npcs: Callable = func(): return []
+## Dónde está el jugador y qué tiene cerca (para "Hacer algo"). Lo asigna la escena.
+var scene_context: Callable = func(): return ""
 
 var anchor: AnchorPanel
 var inventory: InventoryPanel
 var pause: PauseMenu
+var actions: ActionPanel
+var _clock: Label
 var _hud: CanvasLayer
 var _tracker: Label
 var _toast: Label
@@ -62,7 +66,14 @@ func _ready() -> void:
 	add_child(inventory)
 	pause = PauseMenu.new()
 	add_child(pause)
-	for panel in [anchor, inventory, pause]:
+	actions = ActionPanel.new()
+	actions.context = func(): return scene_context.call()
+	add_child(actions)
+	_clock = _label(Vector2.ZERO, 18, Color(1, 1, 1, 0.85))
+	_clock.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 16)
+	_clock.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_clock.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	for panel in [anchor, inventory, pause, actions]:
 		panel.opened.connect(block.bind(true))
 		panel.closed.connect(block.bind(false))
 	inventory.message.connect(toast)
@@ -112,7 +123,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	match event.physical_keycode:
 		KEY_ESCAPE:
-			if inventory.is_open():
+			if actions.is_open():
+				actions.close()
+			elif inventory.is_open():
 				inventory.close()
 			elif anchor.is_open():
 				anchor.close()
@@ -123,9 +136,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			if not pause.is_open():
 				inventory.toggle()
 				get_viewport().set_input_as_handled()
+		KEY_F:
+			if _blocks == 0:
+				actions.open()
+				get_viewport().set_input_as_handled()
 
 
 func _process(delta: float) -> void:
+	_clock.text = WorldClock.text()
 	if not GameState.is_awakened() or _unanchoring or _blocks > 0:
 		return
 	var instability := GameState.get_stat("instability")

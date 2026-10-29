@@ -16,6 +16,10 @@ var use_mock: bool = false
 var auto_check_updates: bool = true
 var mouse_sensitivity: float = 1.0  # multiplicador
 var volume: float = 0.8             # 0..1, volumen general
+## 0 baja, 1 media, 2 alta (lo aplica EnvironmentFX al entrar en cada escena).
+var graphics_quality: int = 1
+## Aspecto del protagonista: "masculine", "feminine" o "" (lo decide el mundo).
+var player_figure: String = ""
 
 
 func _ready() -> void:
@@ -38,6 +42,8 @@ func load_settings() -> void:
 	auto_check_updates = cfg.get_value("game", "auto_check_updates", true)
 	mouse_sensitivity = cfg.get_value("game", "mouse_sensitivity", 1.0)
 	volume = cfg.get_value("game", "volume", 0.8)
+	graphics_quality = cfg.get_value("game", "graphics_quality", 1)
+	player_figure = cfg.get_value("game", "player_figure", "")
 	_apply_volume()
 
 
@@ -51,6 +57,8 @@ func save_settings() -> void:
 	cfg.set_value("game", "auto_check_updates", auto_check_updates)
 	cfg.set_value("game", "mouse_sensitivity", mouse_sensitivity)
 	cfg.set_value("game", "volume", volume)
+	cfg.set_value("game", "graphics_quality", graphics_quality)
+	cfg.set_value("game", "player_figure", player_figure)
 	_apply_volume()
 	var err := cfg.save_encrypted_pass(PATH, _passphrase())
 	if err != OK:

@@ -1,6 +1,6 @@
 class_name InventoryPanel
 extends CanvasLayer
-## Inventario (tecla I): lo que llevas encima, de dónde salió y para qué sirve.
+## Inventario (tecla I): lo que llevas encima, los encargos que te han hecho y tu diario.
 
 signal opened
 signal closed
@@ -27,7 +27,7 @@ func _ready() -> void:
 	box.add_theme_constant_override("separation", 10)
 	_panel.add_child(box)
 	var title := Label.new()
-	title.text = "Inventario"
+	title.text = "Inventario y diario"
 	title.add_theme_font_size_override("font_size", 24)
 	box.add_child(title)
 	var scroll := ScrollContainer.new()
@@ -70,11 +70,7 @@ func _rebuild() -> void:
 		c.queue_free()
 	var ids := Inventory.items()
 	if ids.is_empty():
-		var empty := Label.new()
-		empty.text = "No llevas nada. Los objetos brillan en los puntos de interés de cada mundo."
-		empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_list.add_child(empty)
-		return
+		_text("No llevas nada. Puedes encontrar cosas buscando (F) o pidiéndoselas a la gente.")
 	for id in ids:
 		var item := WorldDB.get_entity("item", id)
 		var row := HBoxContainer.new()
@@ -83,14 +79,45 @@ func _rebuild() -> void:
 		info.bbcode_enabled = true
 		info.fit_content = true
 		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		info.text = "[b]%s[/b]  [color=#9fd8ff]%s[/color]\n[i]%s[/i]" % [
-			item.get("name", "?"), Inventory.EFFECT_LABELS.get(item.get("effect", "none"), ""), item.get("lore", "")]
+		var lent := Inventory.lent_label(id)
+		info.text = "[b]%s[/b]  [color=#9fd8ff]%s[/color]%s\n[i]%s[/i]" % [
+			item.get("name", "?"), Inventory.EFFECT_LABELS.get(item.get("effect", "none"), ""),
+			"  [color=#f2a65a](%s)[/color]" % lent if not lent.is_empty() else "", item.get("lore", "")]
 		row.add_child(info)
 		if Inventory.is_usable(id):
 			var use := Button.new()
 			use.text = "Usar"
 			use.pressed.connect(_use.bind(id))
 			row.add_child(use)
+
+	var errands := Quests.active_custom()
+	if not errands.is_empty():
+		_heading("Encargos")
+		for q in errands:
+			_text("[b]%s[/b] — %s\n[i]%s[/i]" % [q.title, WorldDB.get_entity("npc", q.giver).get("name", "?"), q.description])
+	var notes := Journal.entries()
+	if not notes.is_empty():
+		_heading("Diario")
+		for i in range(notes.size() - 1, -1, -1):  # lo más reciente arriba
+			var who: String = WorldDB.get_entity("npc", notes[i].by).get("name", "") if not notes[i].by.is_empty() else ""
+			_text("• %s%s" % [notes[i].text, "  [color=gray](%s)[/color]" % who if not who.is_empty() else ""])
+
+
+func _heading(text: String) -> void:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", 20)
+	l.add_theme_color_override("font_color", Color("#f2a65a"))
+	_list.add_child(l)
+
+
+func _text(bbcode: String) -> void:
+	var t := RichTextLabel.new()
+	t.bbcode_enabled = true
+	t.fit_content = true
+	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	t.text = bbcode
+	_list.add_child(t)
 
 
 func _use(item_id: String) -> void:

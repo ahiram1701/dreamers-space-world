@@ -1,47 +1,164 @@
 [
 	{
 		"id": "npc_marina",
-		"position": [38, 0, -24],
+		"position": [
+			38,
+			0,
+			-24
+		],
 		"entity": {
 			"name": "Marina Ortega",
 			"age": 67,
 			"occupation": "Guardiana del faro",
-			"personality": ["observadora", "amable", "reservada"],
-			"goals": ["Entender por qué el faro se enciende solo a las 3:33 aunque esté desconectado", "Proteger a su nieto"],
+			"personality": [
+				"observadora",
+				"amable",
+				"reservada"
+			],
+			"goals": [
+				"Entender por qué el faro se enciende solo a las 3:33 aunque esté desconectado",
+				"Proteger a su nieto"
+			],
 			"secret": "Tiene recuerdos nítidos de una versión del pueblo con un segundo faro al otro lado de la bahía, que nunca existió aquí. Sospecha que no está perdiendo la cabeza.",
 			"greeting": "Otra vez tú... ¿o es la primera vez? Últimamente me cuesta distinguirlo.",
-			"appearance": {"body": "elderly", "outfit": "work_uniform", "primary_color": "#2f4a6d", "secondary_color": "#d9c9a3"},
-			"tags": ["act0", "faro", "anomalía"]
-		}
+			"appearance": {
+				"figure": "feminine",
+				"body": "elderly",
+				"outfit": "work_uniform",
+				"primary_color": "#2f4a6d",
+				"secondary_color": "#d9c9a3"
+			},
+			"tags": [
+				"act0",
+				"faro",
+				"anomalía"
+			]
+		},
+		"schedule": [
+			[
+				0,
+				"faro"
+			],
+			[
+				8,
+				"cafetería"
+			],
+			[
+				10,
+				"playa"
+			],
+			[
+				13,
+				"faro"
+			]
+		]
 	},
 	{
 		"id": "npc_teo",
-		"position": [24, 0, 6],
+		"position": [
+			24,
+			0,
+			6
+		],
 		"entity": {
 			"name": "Teo Vidal",
 			"age": 29,
 			"occupation": "Barista de la cafetería del muelle",
-			"personality": ["bromista", "imaginativo", "inquieto"],
-			"goals": ["Ahorrar para irse del pueblo", "Terminar la novela de ciencia ficción que nunca enseña a nadie"],
+			"personality": [
+				"bromista",
+				"imaginativo",
+				"inquieto"
+			],
+			"goals": [
+				"Ahorrar para irse del pueblo",
+				"Terminar la novela de ciencia ficción que nunca enseña a nadie"
+			],
 			"secret": "Desde hace semanas tiene flashes de un cielo con dos lunas, tan nítidos como recuerdos, y los dibuja en servilletas. Los dibujos coinciden entre sí con precisión astronómica.",
 			"greeting": "¡Hombre! ¿Lo de siempre? Bueno, tú no tienes 'lo de siempre'... todavía.",
-			"appearance": {"body": "slim", "outfit": "casual", "primary_color": "#a0522d", "secondary_color": "#f4f1de"},
-			"tags": ["act0", "muelle", "filtraciones"]
-		}
+			"appearance": {
+				"figure": "masculine",
+				"body": "slim",
+				"outfit": "casual",
+				"primary_color": "#a0522d",
+				"secondary_color": "#f4f1de"
+			},
+			"tags": [
+				"act0",
+				"muelle",
+				"filtraciones"
+			]
+		},
+		"schedule": [
+			[
+				0,
+				"calle principal"
+			],
+			[
+				7,
+				"cafetería"
+			],
+			[
+				22,
+				"muelle"
+			]
+		]
 	},
 	{
 		"id": "npc_samir",
-		"position": [-34, 0, 22],
+		"position": [
+			-34,
+			0,
+			22
+		],
 		"entity": {
 			"name": "Samir Haddad",
 			"age": 41,
 			"occupation": "Mecánico que repara radios en la estación de tren abandonada",
-			"personality": ["metódico", "escéptico", "leal"],
-			"goals": ["Descifrar una transmisión de radio estructurada que se repite cada noche", "Que el tren vuelva a parar en el pueblo"],
+			"personality": [
+				"metódico",
+				"escéptico",
+				"leal"
+			],
+			"goals": [
+				"Descifrar una transmisión de radio estructurada que se repite cada noche",
+				"Que el tren vuelva a parar en el pueblo"
+			],
 			"secret": "Ha decodificado parte de la transmisión: contiene su nombre, el del jugador y unas coordenadas que apuntan al faro.",
 			"greeting": "Cuidado con los cables. ¿Buscas algo o solo curioseas?",
-			"appearance": {"body": "sturdy", "outfit": "work_uniform", "primary_color": "#4a5d23", "secondary_color": "#c8a951"},
-			"tags": ["act0", "estación", "señal"]
-		}
+			"appearance": {
+				"figure": "masculine",
+				"body": "sturdy",
+				"outfit": "work_uniform",
+				"primary_color": "#4a5d23",
+				"secondary_color": "#c8a951"
+			},
+			"tags": [
+				"act0",
+				"estación",
+				"señal"
+			]
+		},
+		"schedule": [
+			[
+				0,
+				"estación"
+			],
+			[
+				10,
+				"calle principal"
+			],
+			[
+				12,
+				"estación"
+			],
+			[
+				20,
+				"vías del tren"
+			],
+			[
+				22,
+				"estación"
+			]
+		]
 	}
 ]

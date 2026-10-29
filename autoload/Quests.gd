@@ -68,6 +68,42 @@ La misión debe ayudar al jugador a seguir la transmisión que le trajo hasta aq
 	return quest
 
 
+## Encargo personal que un PNJ hace en una conversación ("tráeme café", "busca a mi hermano").
+## No tiene objetivo comprobable por el motor: lo da por cumplido el propio PNJ (complete_quest).
+func create_custom(giver: String, title: String, description: String) -> Dictionary:
+	var all: Dictionary = WorldDB.get_state("quests", {})
+	for q in all.values():
+		if q.giver == giver and q.status == "active" and q.objective == "custom":
+			return {}  # un encargo pendiente por persona
+	var quest := {
+		"id": "q%d" % (all.size() + 1), "location_id": GameState.current_location(), "giver": giver,
+		"title": title, "description": description, "objective": "custom", "target": "",
+		"target_name": "", "completion_text": "", "status": "active",
+	}
+	all[quest.id] = quest
+	WorldDB.set_state("quests", all)
+	quest_added.emit(quest)
+	return quest
+
+
+## El PNJ que hizo el encargo lo da por cumplido. Devuelve la misión o {}.
+func complete_custom(giver: String) -> Dictionary:
+	for q in all_quests():
+		if q.giver == giver and q.status == "active" and q.objective == "custom":
+			var all: Dictionary = WorldDB.get_state("quests", {})
+			q.status = "done"
+			all[q.id] = q
+			WorldDB.set_state("quests", all)
+			NPCMemory.add_facts(giver, ["El jugador cumplió tu encargo «%s»." % q.title], 15)
+			quest_completed.emit(q, "%s confía más en ti" % WorldDB.get_entity("npc", giver).get("name", "?"))
+			return q
+	return {}
+
+
+func active_custom() -> Array:
+	return all_quests().filter(func(q): return q.objective == "custom" and q.status == "active")
+
+
 func get_quest(quest_id: String) -> Dictionary:
 	return WorldDB.get_state("quests", {}).get(quest_id, {})
 
@@ -88,6 +124,8 @@ func objective_text(q: Dictionary) -> String:
 		return "Completada: %s" % q.title
 	var giver: String = WorldDB.get_entity("npc", q.giver).get("name", "?")
 	match q.objective:
+		"custom":
+			return "%s — Encargo de %s" % [q.title, giver]
 		"visit_poi":
 			return "%s — Ve a: %s" % [q.title, q.target_name]
 		"talk_npc":

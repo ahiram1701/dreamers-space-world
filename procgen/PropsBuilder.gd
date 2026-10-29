@@ -50,6 +50,15 @@ static func _settlement(parent: Node3D, def: Dictionary, height_at: Callable, rn
 		var w := rng.randf_range(4.0, 7.0)
 		var wall := Color(style.walls[rng.randi() % style.walls.size()])
 		var roof := Color(style.roof)
+		if style.shape in ["house", "factory"] or (style.shape == "tower" and rng.randf() < 0.5):
+			var size_class := "city" if count > 15 or style.shape != "house" else ("town" if rng.randf() < 0.4 else "small")
+			var model := AssetLibrary.building(size_class, rng, wall)
+			if model:
+				var b := AssetLibrary.bounds(model)
+				AssetLibrary.place(parent, model, p + Vector3(0, 0.25, 0), b.size.y * rng.randf_range(2.4, 3.0),
+					atan2(hub.x - p.x, hub.y - p.z), true)  # mirando a la plaza
+				avoid.append(p)
+				continue
 		match style.shape:
 			"hut":
 				_cylinder(parent, p + Vector3(0, h / 2, 0), w * 0.4, w * 0.45, h, wall, true)
@@ -76,6 +85,11 @@ static func _settlement(parent: Node3D, def: Dictionary, height_at: Callable, rn
 
 static func _ruins(parent: Node3D, height_at: Callable, rng: RandomNumberGenerator, avoid: Array) -> void:
 	var stone := Color("#a39e93")
+	for i in 12:
+		var rp := _free_spot(rng, avoid, Vector2.ZERO, 14.0, 70.0)
+		var rock := AssetLibrary.nature("barren", 2, rng)
+		if rp != Vector3.INF and rock:
+			AssetLibrary.place(parent, rock, rp + Vector3(0, height_at.call(rp.x, rp.z) - 0.2, 0), rng.randf_range(0.8, 2.5), rng.randf() * TAU, true)
 	for i in 26:
 		var p := _free_spot(rng, avoid, Vector2.ZERO, 14.0, 65.0)
 		if p == Vector3.INF:
@@ -106,29 +120,38 @@ static func _nature(parent: Node3D, biome: String, height_at: Callable, rng: Ran
 	var pal := TerrainBuilder.palette(biome)
 	var n := int(40 * density)
 	match biome:
-		"temperate", "jungle":
-			var canopy := Color("#3f7a35") if biome == "temperate" else Color("#2d6b2a")
-			for i in (n * 2 if biome == "jungle" else n):
-				var p := _free_spot(rng, avoid, Vector2.ZERO, 14.0, 75.0)
-				if p == Vector3.INF:
-					continue
-				p.y = height_at.call(p.x, p.z)
-				var h := rng.randf_range(3.0, 7.0) * (1.4 if biome == "jungle" else 1.0)
-				_cylinder(parent, p + Vector3(0, h / 2, 0), 0.2, 0.35, h, Color("#5a4030"), true)
-				_sphere(parent, p + Vector3(0, h + 0.8, 0), rng.randf_range(1.5, 2.8), canopy.darkened(rng.randf() * 0.25), false)
+		"temperate", "jungle", "urban", "ocean":
+			var trees := n * (2 if biome == "jungle" else 1) / (2 if biome == "urban" else 1)
+			for i in trees:
+				_model_at(parent, biome, 0, height_at, rng, avoid, rng.randf_range(5.0, 9.0) * (1.4 if biome == "jungle" else 1.0), true)
+			for i in n:
+				_model_at(parent, biome, 1, height_at, rng, avoid, rng.randf_range(0.5, 1.4), false)
+			for i in n / 3:
+				_model_at(parent, biome, 2, height_at, rng, avoid, rng.randf_range(0.6, 2.2), true)
+			if biome == "ocean":
+				Decor.water(parent, Vector3(0, -0.45, 0), Vector2(TerrainBuilder.SIZE * 2, TerrainBuilder.SIZE * 2))
 		"desert", "barren", "volcanic":
 			for i in n:
-				var p := _free_spot(rng, avoid, Vector2.ZERO, 14.0, 75.0)
-				if p == Vector3.INF:
-					continue
-				p.y = height_at.call(p.x, p.z)
-				var rock := _sphere(parent, p, rng.randf_range(0.6, 2.4), Color(pal.low).darkened(0.2), true)
-				rock.scale = Vector3(1.0, rng.randf_range(0.4, 0.9), rng.randf_range(0.7, 1.3))
+				var big := rng.randf() < 0.3
+				_model_at(parent, biome, 2, height_at, rng, avoid, rng.randf_range(2.0, 5.0) if big else rng.randf_range(0.5, 1.8), true, Color(pal.low))
 				if biome == "volcanic" and rng.randf() < 0.3:
-					_emissive_sphere(parent, p + Vector3(rng.randf_range(-2, 2), 0.05, rng.randf_range(-2, 2)), 0.8, Color("#ff5a1f"))
+					var p := _free_spot(rng, avoid, Vector2.ZERO, 14.0, 75.0)
+					if p != Vector3.INF:
+						_emissive_sphere(parent, p + Vector3(0, height_at.call(p.x, p.z) + 0.05, 0), 0.8, Color("#ff5a1f"))
+			if biome == "desert":
+				for i in n / 2:
+					_model_at(parent, biome, 0, height_at, rng, avoid, rng.randf_range(1.5, 3.5), true)
+			if biome == "barren":
+				for i in n / 6:
+					_model_at(parent, biome, 0, height_at, rng, avoid, rng.randf_range(3.0, 6.0), true)
 		"ice", "crystal":
 			var tint := Color("#bfe6f5") if biome == "ice" else Color("#a7e0f0").lerp(Color("#c77dff"), rng.randf())
-			for i in n:
+			if biome == "ice":
+				for i in n / 2:
+					_model_at(parent, biome, 0, height_at, rng, avoid, rng.randf_range(4.0, 8.0), true)
+				for i in n / 3:
+					_model_at(parent, biome, 2, height_at, rng, avoid, rng.randf_range(0.8, 2.6), true)
+			for i in (n if biome == "crystal" else n / 2):
 				var p := _free_spot(rng, avoid, Vector2.ZERO, 14.0, 75.0)
 				if p == Vector3.INF:
 					continue
@@ -136,25 +159,38 @@ static func _nature(parent: Node3D, biome: String, height_at: Callable, rng: Ran
 				var h := rng.randf_range(1.5, 6.0)
 				var spike := _cone(parent, p + Vector3(0, h / 2, 0), rng.randf_range(0.3, 1.0), h, tint)
 				spike.rotation_degrees = Vector3(rng.randf_range(-15, 15), rng.randf() * 360.0, rng.randf_range(-15, 15))
+				var m: StandardMaterial3D = spike.material_override
+				m.roughness = 0.15
+				m.metallic = 0.3
 				if biome == "crystal":
-					var m: StandardMaterial3D = spike.material_override
 					m.emission_enabled = true
 					m.emission = tint
-					m.emission_energy_multiplier = 0.6
-		"ocean":
-			var water := MeshInstance3D.new()
-			water.mesh = PlaneMesh.new()
-			water.mesh.size = Vector2(TerrainBuilder.SIZE * 2, TerrainBuilder.SIZE * 2)
-			var wm := StandardMaterial3D.new()
-			wm.albedo_color = Color(0.17, 0.42, 0.56, 0.8)
-			wm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			wm.metallic = 0.4
-			wm.roughness = 0.08
-			water.material_override = wm
-			water.position.y = -0.4  # las zonas bajas del terreno quedan bajo el agua
-			parent.add_child(water)
+					m.emission_energy_multiplier = 0.8
 		"void":
 			_floating_rocks(parent, rng, biome)
+
+
+## Coloca un modelo de naturaleza del bioma (árbol 0, planta 1, roca 2) en un punto libre.
+## `tint`: si tiene alfa, oscurece las rocas hacia el color del suelo del bioma.
+static func _model_at(parent: Node3D, biome: String, kind: int, height_at: Callable, rng: RandomNumberGenerator,
+		avoid: Array, height: float, collide: bool, tint: Color = Color(0, 0, 0, 0)) -> void:
+	var p := _free_spot(rng, avoid, Vector2.ZERO, 14.0 if kind != 1 else 6.0, 76.0)
+	if p == Vector3.INF:
+		return
+	var model := AssetLibrary.nature(biome, kind, rng)
+	if model == null:
+		if kind == 0:
+			_cylinder(parent, p + Vector3(0, height_at.call(p.x, p.z) + height / 2, 0), 0.2, 0.35, height, Color("#5a4030"), true)
+		return
+	var root := AssetLibrary.place(parent, model, p + Vector3(0, height_at.call(p.x, p.z) - 0.1, 0), height, rng.randf() * TAU, collide)
+	if tint.a > 0.0:
+		for mi in AssetLibrary._meshes(root):
+			for i in mi.mesh.get_surface_count():
+				var src := mi.mesh.surface_get_material(i) as StandardMaterial3D
+				if src:
+					var m := src.duplicate() as StandardMaterial3D
+					m.albedo_color = src.albedo_color.lerp(tint, 0.55)
+					mi.set_surface_override_material(i, m)
 
 
 ## Un punto libre dentro del anillo [min_r, max_r] alrededor de `hub`, lejos de lo ya colocado.

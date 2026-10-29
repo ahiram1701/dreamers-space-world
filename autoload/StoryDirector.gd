@@ -28,6 +28,8 @@ func talk(npc_id: String, player_input: String, scene_context: String) -> Dictio
 	var turn: Dictionary = res.data if res.ok else _fallback_turn(npc, res.errors)
 	turn["ok"] = true
 	turn["source"] = "ai" if res.ok else "fallback"
+	# Lo que el PNJ hace (dar, acompañar, curar…) ocurre de verdad, no solo se dice
+	turn["notes"] = Actions.execute(npc_id, turn.get("actions", [])) if res.ok else []
 
 	# Un respaldo no es algo que el PNJ haya "dicho": no ensucia su memoria (salvo presentarse)
 	if res.ok or not NPCMemory.get_mem(npc_id).met:
@@ -36,6 +38,42 @@ func talk(npc_id: String, player_input: String, scene_context: String) -> Dictio
 		PlayerProfile.apply_signals(turn.get("trait_signals", []))
 	turn_finished.emit(npc_id, turn)
 	return turn
+
+
+## Acciones que tienen sentido sin un PNJ delante.
+const WORLD_ACTIONS := ["give_item", "change_stat", "journal", "reveal_place"]
+const MAX_FINDS_PER_PLACE := 3  # rebuscar sin parar no llena el inventario
+
+
+## El jugador hace algo libre en el mundo (tecla F): la IA narra qué ocurre y, si encuentra
+## algo, se hace daño o descubre una pista, pasa de verdad.
+## Devuelve { ok, narration, notes, error }.
+func act(what: String, scene_context: String) -> Dictionary:
+	var messages := [
+		{"role": "system", "content": ContentGenerator.world_rules_prompt() + """
+
+Eres el narrador del mundo. El jugador describe algo que hace con su cuerpo o con lo que le rodea. Cuenta en segunda persona, de forma breve (1 a 4 frases) y realista, qué ocurre. Sé justo: no todo sale bien ni siempre aparece algo útil, y lo que encuentre tiene que tener sentido en ese lugar. No controlas a otras personas: si el jugador quiere algo de alguien, que hable con esa persona.
+"actions" (lista, puede ir vacía): si encuentra o fabrica un objeto, give_item (con "item_name", "item_description" y, si sirve para algo, "item_effect"); si se hace daño o descansa, change_stat ("target": health/energy/instability, "amount" de -30 a 30); si descubre una pista, journal ("text"); si descubre un lugar al que ir, reveal_place ("target", "text")."""},
+		{"role": "user", "content": "ESCENA: %s\nQUIÉN ES EL JUGADOR: %s\nLLEVA ENCIMA: %s\n\nLO QUE HACE: %s" % [
+			scene_context, PlayerProfile.describe(), _inventory_text(), what]},
+	]
+	var res := await ContentGenerator.request_valid("world_action", messages)
+	if not res.ok:
+		var reason := str(res.errors[0]) if not res.errors.is_empty() else "sin respuesta"
+		return {"ok": false, "narration": "", "notes": [], "error": reason.left(140)}
+	var place := GameState.current_location()
+	var finds: Dictionary = WorldDB.get_state("finds", {})
+	var allowed := []
+	for a in res.data.get("actions", []):
+		if not (a.type in WORLD_ACTIONS):
+			continue
+		if a.type == "give_item":
+			if int(finds.get(place, 0)) >= MAX_FINDS_PER_PLACE:
+				continue
+			finds[place] = int(finds.get(place, 0)) + 1
+		allowed.append(a)
+	WorldDB.set_state("finds", finds)
+	return {"ok": true, "narration": res.data.narration, "notes": Actions.execute("", allowed), "error": ""}
 
 
 func end_conversation(npc_id: String) -> void:
@@ -140,6 +178,7 @@ func apply_awakening(data: Dictionary, choice_index: int) -> Dictionary:
 
 	if not companion.is_empty():
 		NPCMemory.add_facts(companion, ["Decidió cruzar la brecha junto al jugador en El Despertar."], 15)
+		NPCMemory.set_fields(companion, {"following": true})
 	TimelineManager.create_root("El Despertar", GameState.HOME, "present")
 	return {"consequence": consequence, "companion": companion, "anchor_id": anchor_id}
 
@@ -216,6 +255,11 @@ Secreto (no lo reveles a la ligera; solo si hay mucha confianza o motivo): %s
 TU MEMORIA SOBRE EL JUGADOR:
 %s
 
+OBJETOS:
+%s
+El jugador lleva encima: %s.
+%s
+
 QUIÉN ES EL JUGADOR (según cómo ha jugado):
 %s
 
@@ -228,16 +272,45 @@ CÓMO RESPONDER (JSON):
 - "new_facts": 0 a 2 cosas importantes que acabas de aprender del jugador o que acaban de pasar (en tercera persona).
 - "relationship_delta": cuánto mejora o empeora tu opinión del jugador por lo que acaba de decir.
 - "trait_signals": qué rasgos ha mostrado el jugador con su ÚLTIMO mensaje (vacío si no aplica).
-- "end_conversation": true solo si la conversación termina de forma natural.""" % [
+- "end_conversation": true solo si la conversación termina de forma natural.
+- "actions": lo que HACES de verdad en el mundo en este turno. Eres una persona real: puedes aceptar o negarte según tu personalidad, tu relación con el jugador y lo que tengas. PERO si en "line" aceptas hacer algo, DEBES incluir la acción; si no la incluyes, NO ocurre en el juego. Lista vacía si solo hablas.
+%s""" % [
 		ContentGenerator.world_rules_prompt(),
 		npc.name, int(npc.age), npc.occupation,
 		", ".join(PackedStringArray(npc.personality)),
 		"; ".join(PackedStringArray(npc.goals)),
 		npc.secret,
 		NPCMemory.describe(npc.id),
+		NPCMemory.describe_possessions(npc.id),
+		_inventory_text(),
+		"Ahora mismo vas caminando con el jugador (le acompañas)." if NPCMemory.is_following(npc.id) else "",
 		PlayerProfile.describe(),
 		scene_context,
+		ACTIONS_GUIDE,
 	]
+
+
+const ACTIONS_GUIDE := """  Tipos de acción ("type") y sus campos:
+  · give_item: das o prestas algo tuyo. "item_name" (nombre concreto), "item_description" (cómo es), "lent": true si es un préstamo, "item_effect" si sirve para algo (heal, restore_temporal_energy, reduce_paradox, reveal_secret, unlock_location, boost_reputation o none).
+  · take_item: aceptas algo que el jugador te ofrece y lleva encima. "target": nombre del objeto.
+  · follow_player / stop_following: empiezas o dejas de acompañarle.
+  · go_to: te vas a un sitio. "target": el lugar.
+  · change_stat: le curas, le cansas… "target": health, energy o instability; "amount": de -30 a 30.
+  · reveal_place: le hablas de un lugar que puede visitar. "target": nombre, "text": cómo es o cómo llegar.
+  · give_quest: le pides un favor. "target": título corto, "text": qué tiene que hacer.
+  · complete_quest: das por cumplido el favor que le pediste.
+  · refuse_contact: estás tan molesto/a que no quieres hablarle durante un rato. "amount": minutos.
+  · journal: algo que el jugador debería apuntar (pista, cita, dirección). "text".
+  Ejemplo, si te piden prestada la radio y aceptas: "actions": [{"type": "give_item", "item_name": "Radio de onda corta", "item_description": "Una radio vieja con el dial gastado.", "lent": true}]"""
+
+
+func _inventory_text() -> String:
+	var names := PackedStringArray()
+	for id in Inventory.items():
+		var item := WorldDB.get_entity("item", id)
+		var lent := Inventory.lent_label(id)
+		names.append(item.get("name", "?") + (" (%s)" % lent if not lent.is_empty() else ""))
+	return "nada" if names.is_empty() else ", ".join(names)
 
 
 func _opening(npc_id: String) -> String:

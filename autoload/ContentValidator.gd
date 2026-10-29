@@ -15,6 +15,19 @@ extends Node
 
 const ARCHETYPES_PATH := "res://data/archetypes.json"
 
+## Algo que ocurre de verdad en el mundo (lo ejecuta Actions.gd). Campos planos y opcionales:
+## a los modelos les cuesta menos acertar con un objeto plano que con uno por tipo de acción.
+const ACTION := {"t": "object", "fields": {
+	"type": {"t": "enum", "from": "npc_action"},
+	"item_name": {"t": "string", "min": 2, "max": 70, "opt": true},
+	"item_description": {"t": "string", "min": 5, "max": 300, "opt": true},
+	"item_effect": {"t": "enum", "from": "item_effect", "default": "none"},
+	"lent": {"t": "bool", "default": false},
+	"target": {"t": "string", "min": 1, "max": 80, "opt": true},
+	"amount": {"t": "int", "min": -30, "max": 30, "default": 0},
+	"text": {"t": "string", "min": 3, "max": 300, "opt": true},
+}}
+
 const SPECS := {
 	"npc": {
 		"name": {"t": "string", "min": 2, "max": 40},
@@ -25,6 +38,7 @@ const SPECS := {
 		"secret": {"t": "string", "min": 3, "max": 200},
 		"greeting": {"t": "string", "min": 2, "max": 240},
 		"appearance": {"t": "object", "default": {}, "fields": {
+			"figure": {"t": "enum", "from": "npc_figure", "opt": true},
 			"body": {"t": "enum", "from": "npc_body", "default": "average"},
 			"outfit": {"t": "enum", "from": "npc_outfit", "default": "casual"},
 			"primary_color": {"t": "color", "default": "#5a6f8a"},
@@ -67,6 +81,12 @@ const SPECS := {
 			"delta": {"t": "int", "min": -3, "max": 3, "default": 1},
 		}}},
 		"end_conversation": {"t": "bool", "default": false},
+		"actions": {"t": "array", "min": 0, "max": 3, "opt": true, "lenient": true, "items": ACTION},
+	},
+	# El jugador hace algo libre en el mundo ("busco en el cajón", "pesco en el muelle").
+	"world_action": {
+		"narration": {"t": "string", "min": 5, "max": 800},
+		"actions": {"t": "array", "min": 0, "max": 2, "opt": true, "lenient": true, "items": ACTION},
 	},
 	# El momento en que el jugador descubre la brecha. Una vez por partida.
 	"awakening": {
@@ -126,6 +146,17 @@ const SYNONYMS := {
 	"sarcastico": "sarcastic", "irónico": "sarcastic", "curiosidad": "curiosity", "empatía": "empathy",
 	"empatia": "empathy", "valentía": "courage", "valentia": "courage", "coraje": "courage",
 	"escepticismo": "skepticism", "escéptico": "skepticism", "ambición": "ambition", "ambicion": "ambition",
+	"dar": "give_item", "dar_objeto": "give_item", "prestar": "give_item", "entregar": "give_item",
+	"regalar": "give_item", "lend_item": "give_item", "lend": "give_item", "recibir": "take_item",
+	"recibir_objeto": "take_item", "tomar": "take_item", "coger": "take_item", "receive_item": "take_item",
+	"seguir": "follow_player", "seguir_jugador": "follow_player", "acompañar": "follow_player",
+	"follow": "follow_player", "accompany": "follow_player", "dejar_de_seguir": "stop_following",
+	"ir_a": "go_to", "ir": "go_to", "move_to": "go_to", "curar": "change_stat", "heal": "change_stat",
+	"revelar_lugar": "reveal_place", "dar_mision": "give_quest", "misión": "give_quest", "mision": "give_quest",
+	"completar_mision": "complete_quest", "negarse": "refuse_contact", "diario": "journal", "nota": "journal",
+	"pista": "journal", "salud": "health", "vida": "health", "energía": "energy", "energia": "energy",
+	"inestabilidad": "instability", "masculino": "masculine", "hombre": "masculine", "male": "masculine",
+	"femenino": "feminine", "mujer": "feminine", "female": "feminine",
 }
 
 var _archetypes: Dictionary = {}

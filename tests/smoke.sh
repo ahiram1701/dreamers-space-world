@@ -11,7 +11,8 @@ SCENES=(
 	"res://scenes/dev/AITestScene.tscn"
 	"res://scenes/generated_location/GeneratedLocation.tscn"
 )
-IGNORE='Parameter "m" is null'  # mesh_get_surface_count en servers/rendering/dummy
+# mesh_get_surface_count y material_get_instance_shader_parameters en servers/rendering/dummy
+IGNORE='Parameter "(m|material)" is null'
 status=0
 
 for scene in "${SCENES[@]}"; do

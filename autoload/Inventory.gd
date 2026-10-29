@@ -35,6 +35,48 @@ func remove(item_id: String) -> void:
 	changed.emit()
 
 
+## Busca un objeto del jugador por nombre aproximado ("la radio" → "Radio de onda corta").
+func find_by_name(text: String) -> String:
+	var wanted := _words(text)
+	if wanted.is_empty():
+		return ""
+	var best := ""
+	var best_hits := 0
+	for id in items():
+		var name_words := _words(WorldDB.get_entity("item", id).get("name", ""))
+		var hits := 0
+		for w in wanted:
+			for n in name_words:
+				if n.begins_with(w) or w.begins_with(n):
+					hits += 1
+					break
+		if hits > best_hits:
+			best = id
+			best_hits = hits
+	return best
+
+
+## El Ancla no se puede regalar ni perder: sin ella no hay viaje.
+func is_anchor(item_id: String) -> bool:
+	return item_id == WorldDB.get_state("awakening", {}).get("anchor_id", "")
+
+
+## "Prestado por Samir" o "" si es tuyo.
+func lent_label(item_id: String) -> String:
+	var owner: String = WorldDB.get_entity("item", item_id).get("lent_by", "")
+	if owner.is_empty():
+		return ""
+	return "prestado por %s" % WorldDB.get_entity("npc", owner).get("name", "alguien")
+
+
+func _words(text: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	for w in text.to_lower().replace("«", " ").replace("»", " ").replace(",", " ").replace(".", " ").split(" ", false):
+		if w.length() >= 3 and not (w in ["del", "las", "los", "una", "uno", "con", "para", "mi", "tu", "the"]):
+			out.append(w)
+	return out
+
+
 func is_usable(item_id: String) -> bool:
 	return WorldDB.get_entity("item", item_id).get("effect", "none") != "none"
 
