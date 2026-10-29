@@ -22,6 +22,9 @@ NPCMemory="*res://autoload/NPCMemory.gd"
 PlayerProfile="*res://autoload/PlayerProfile.gd"
 StoryDirector="*res://autoload/StoryDirector.gd"
 Updater="*res://autoload/Updater.gd"
+GameState="*res://autoload/GameState.gd"
+TimelineManager="*res://autoload/TimelineManager.gd"
+Travel="*res://autoload/Travel.gd"
 
 [display]
 

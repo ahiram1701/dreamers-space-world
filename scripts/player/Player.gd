@@ -17,11 +17,16 @@ var controls_enabled := true:
 
 ## Lo rellena el Area3D de cada PNJ al entrar/salir.
 var interact_target: Node = null
+## Gravedad del lugar respecto a la Tierra (la define la IA en cada location).
+var gravity_scale := 1.0
 
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _yaw: Node3D
 var _spring: SpringArm3D
 var _body: Node3D
+var _cam: Camera3D
+var _shake_time := 0.0
+var _shake_strength := 0.0
 
 
 func _ready() -> void:
@@ -53,9 +58,9 @@ func _ready() -> void:
 	_spring.rotation.x = -0.35
 	_spring.add_excluded_object(get_rid())
 	_yaw.add_child(_spring)
-	var cam := Camera3D.new()
-	cam.fov = 70
-	_spring.add_child(cam)
+	_cam = Camera3D.new()
+	_cam.fov = 70
+	_spring.add_child(_cam)
 
 	controls_enabled = true
 
@@ -76,9 +81,25 @@ func _unhandled_input(event: InputEvent) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
+## Temblor de cámara (el pulso del faro, los saltos).
+func shake(duration: float, strength: float) -> void:
+	_shake_time = duration
+	_shake_strength = strength
+
+
+func _process(delta: float) -> void:
+	if _shake_time > 0.0:
+		_shake_time -= delta
+		_cam.h_offset = randf_range(-_shake_strength, _shake_strength)
+		_cam.v_offset = randf_range(-_shake_strength, _shake_strength)
+	elif _cam.h_offset != 0.0 or _cam.v_offset != 0.0:
+		_cam.h_offset = 0.0
+		_cam.v_offset = 0.0
+
+
 func _physics_process(delta: float) -> void:
 	if not is_on_floor():
-		velocity.y -= _gravity * delta
+		velocity.y -= _gravity * gravity_scale * delta
 
 	var input := Vector2.ZERO
 	if controls_enabled:

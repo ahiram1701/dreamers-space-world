@@ -85,7 +85,7 @@ func _on_new() -> void:
 
 func _on_continue() -> void:
 	if WorldDB.load_world(WorldDB.last_world_id()):
-		get_tree().change_scene_to_file(TOWN)
+		get_tree().change_scene_to_file(Travel.scene_for(GameState.current_location()))
 	else:
 		_status.text = "No se pudo cargar la última partida."
 

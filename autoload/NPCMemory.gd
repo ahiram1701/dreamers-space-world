@@ -33,6 +33,20 @@ func record_turn(npc_id: String, player_said: String, npc_said: String, new_fact
 	WorldDB.set_state("memories", all)
 
 
+## Hechos que el PNJ vive fuera de una conversación (p. ej. acompañarte a través de la brecha).
+func add_facts(npc_id: String, facts: Array, relationship_delta: int = 0) -> void:
+	var all: Dictionary = WorldDB.get_state("memories", {})
+	var m: Dictionary = all.get(npc_id, _empty())
+	for fact in facts:
+		if not (fact in m.facts):
+			m.facts.append(fact)
+	while m.facts.size() > MAX_FACTS:
+		m.facts.pop_front()
+	m.relationship = clampi(int(m.relationship) + relationship_delta, -100, 100)
+	all[npc_id] = m
+	WorldDB.set_state("memories", all)
+
+
 ## Marca el fin de una conversación (la próxima empezará con historial limpio).
 func end_conversation(npc_id: String) -> void:
 	var all: Dictionary = WorldDB.get_state("memories", {})

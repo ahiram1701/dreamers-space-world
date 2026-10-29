@@ -8,7 +8,7 @@ var _failed := 0
 func _init() -> void:
 	var v = load("res://autoload/ContentValidator.gd").new()
 
-	for type in ["npc", "location", "item", "dialogue_turn"]:
+	for type in ["npc", "location", "item", "dialogue_turn", "awakening"]:
 		var data = JSON.parse_string(FileAccess.get_file_as_string("res://data/fallback/%s.json" % type))
 		var r: Dictionary = v.validate(type, data)
 		_expect(r.ok, "%s de respaldo es válido %s" % [type, r.errors])

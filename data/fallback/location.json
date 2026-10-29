@@ -1,12 +1,12 @@
 {
-	"name": "Bahía de las Horas",
-	"kind": "town",
-	"biome": "temperate",
-	"era": "present",
-	"description": "Un pueblo costero donde las mareas a veces llegan antes que la luna. Casas blancas, un faro antiguo y un muelle que cruje al anochecer.",
-	"gravity": 1.0,
-	"seed": 3330333,
-	"sky_color": "#f2a65a",
-	"points_of_interest": ["El faro", "La cafetería del muelle", "La estación de tren abandonada"],
-	"tags": ["inicio", "tierra", "costa"]
+	"name": "Llanura de Hesperia",
+	"kind": "planet_surface",
+	"biome": "barren",
+	"era": "far_future",
+	"description": "Una llanura de polvo rojizo bajo un cielo color cobre. Restos de una estación de investigación asoman entre dunas bajas, y en el horizonte parpadea la baliza de una brecha estable.",
+	"gravity": 0.8,
+	"seed": 4420442,
+	"sky_color": "#c9774a",
+	"points_of_interest": ["Estación de investigación abandonada", "Baliza de la brecha", "Campo de paneles solares rotos"],
+	"tags": ["respaldo", "planeta", "futuro"]
 }

@@ -1,15 +1,24 @@
 {
 	"title": "Dreamer's Space World",
-	"premise": "El jugador es una persona común de la Tierra actual que descubre que puede cruzar entre universos y épocas. Cada decisión puede crear nuevas ramas de la realidad.",
+	"premise": "El jugador es una persona común de la Tierra actual que descubre una brecha entre ramas del multiverso y aprende a viajar entre universos y épocas. Cada decisión crea nuevas ramas de la realidad.",
+	"science": [
+		"Interpretación de muchos mundos: los sucesos cuánticos relevantes ramifican la realidad; cada rama es un universo real que convive con los demás.",
+		"Brechas: puntos donde dos ramas se tocan. Son microagujeros de gusano que necesitan energía exótica para mantenerse abiertos.",
+		"Viajar al pasado no cambia el propio pasado: crea una rama nueva. No existe la paradoja del abuelo, pero cada salto tiene un coste.",
+		"Inestabilidad: cada salto acumula decoherencia en el cuerpo y el equipo del viajero. Mucha inestabilidad provoca fallos perceptivos, daño y riesgo de desanclarse.",
+		"Filtraciones de memoria: quien vive cerca de una brecha recibe fragmentos de recuerdos de sus versiones en otras ramas (déjà vu, imágenes intrusivas). No son sueños proféticos.",
+		"El Ancla: dispositivo que mantiene coherente el estado cuántico del viajero entre saltos. Sin Ancla no se puede viajar.",
+		"Soñador: término que usan los viajeros para quien percibe filtraciones de otras ramas."
+	],
 	"rules": [
-		"Viajar en el tiempo o entre universos consume energía temporal.",
-		"Cambiar el pasado genera paradoja; demasiada paradoja desestabiliza la realidad alrededor del jugador.",
-		"Las personas pueden existir en varios universos con vidas distintas; a veces conservan ecos de recuerdos de otras versiones.",
+		"Todo tiene explicación física, aunque sea especulativa. PROHIBIDO explicar algo con magia, espíritus, dioses, destino o lo sobrenatural.",
+		"Saltar entre ramas o épocas consume energía del Ancla y aumenta la inestabilidad.",
+		"Las personas pueden existir en varias ramas con vidas distintas.",
 		"Nada de lo que ya es canon puede contradecirse: solo puede reinterpretarse o tener consecuencias nuevas."
 	],
-	"tone": "Ciencia ficción con asombro y misterio, momentos humanos y cotidianos, sin gore explícito.",
+	"tone": "Ciencia ficción: ciencia seria y cotidiana en la Tierra que se abre a aventura espacial cuanto más se aleja el jugador. Asombro científico, momentos humanos, nada sobrenatural, sin gore explícito.",
 	"start": {
-		"place": "Un pueblo costero tranquilo en el presente",
+		"place": "Bahía de las Horas, un pueblo costero tranquilo en el presente",
 		"player": "Una persona común con un trabajo normal y una vida sencilla"
 	}
 }

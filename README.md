@@ -56,9 +56,11 @@ Si la IA no está disponible, el juego usa contenido de respaldo y **nunca se qu
 | ✅ | **Acto 0 — Bahía de las Horas**: pueblo 3D, jugador en tercera persona, 3 vecinos |
 | ✅ | Conversaciones generadas por IA con opciones **o texto libre** |
 | ✅ | Memoria de PNJs (hechos, relación) y perfil del jugador inferido de sus decisiones |
-| 🔜 | El Despertar, árbol de líneas temporales y primer salto |
-| 🔜 | Generación procedural de lugares, planetas y PNJs a partir de las definiciones de la IA |
-| 🔜 | Nave, espacio, pregeneración en segundo plano y efectos de paradoja |
+| ✅ | **El Despertar** (ciencia ficción): la IA elige el origen científico de tu Ancla según cómo jugaste, con canon permanente y una decisión que ramifica la historia |
+| ✅ | Árbol de líneas temporales, energía, inestabilidad y saltos con el Ancla (<kbd>T</kbd>) |
+| ✅ | **Mundos generados**: cada salto a lo desconocido crea un lugar 3D nuevo (terreno, cielo, gravedad, balizas) con sus habitantes |
+| 🔜 | Más variedad procedural: asentamientos, estaciones espaciales, interiores |
+| 🔜 | Misiones, inventario, nave, espacio y pregeneración en segundo plano |
 
 ## 🚀 Jugar
 

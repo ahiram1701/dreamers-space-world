@@ -9,12 +9,16 @@ const SPAWN := Vector3(-6, 0.5, -4)
 const LIGHTHOUSE_POS := Vector3(44, 0, -30)
 const SCENE_CONTEXT := """Acto 0. Bahía de las Horas: pueblo costero tranquilo en el presente, al atardecer.
 El jugador es un/a vecino/a corriente del pueblo con una vida normal. Aún no sabe nada de multiversos.
-Últimamente pasan cosas pequeñas y raras (el faro se enciende solo a las 3:33, sueños compartidos, una señal de radio)."""
+Últimamente pasan cosas pequeñas y raras con explicación física aún desconocida: un pulso electromagnético a las 3:33 que enciende el faro desconectado y para relojes, vecinos con flashes de recuerdos que no son suyos, una transmisión de radio estructurada."""
 
 var _player: Player
 var _dialogue: DialoguePanel
 var _objective: Label
 var _beacon: OmniLight3D
+var _sun: DirectionalLight3D
+var _env: Environment
+var _sky_mat: ProceduralSkyMaterial
+var _awakening: AwakeningSequence
 var _npcs: Dictionary = {}  # npc_id -> TownNPC
 
 
@@ -46,6 +50,11 @@ func _ready() -> void:
 	_dialogue.scene_context = SCENE_CONTEXT
 	add_child(_dialogue)
 	_dialogue.closed.connect(_on_dialogue_closed)
+	add_child(StatsHUD.new())
+	var anchor := AnchorPanel.new()
+	add_child(anchor)
+	anchor.opened.connect(func(): _player.controls_enabled = false)
+	anchor.closed.connect(func(): _player.controls_enabled = true)
 	_update_objective()
 
 
@@ -53,6 +62,8 @@ func _process(_delta: float) -> void:
 	if _player.position.y < -10.0:  # cayó al mar o fuera del mapa
 		_player.position = SPAWN
 		_player.velocity = Vector3.ZERO
+	if _awakening != null:
+		return  # la secuencia controla el faro
 	# El faro "respira"; cuando el Despertar está cerca, parpadea nervioso.
 	var t := Time.get_ticks_msec() / 1000.0
 	if _progress().get("awakening_ready", false):
@@ -102,15 +113,29 @@ func _on_dialogue_closed(npc_id: String) -> void:
 
 func _update_objective() -> void:
 	var p := _progress()
-	if p.awakening_ready:
-		_objective.text = "Son casi las 3:33. El faro te llama."
+	if GameState.is_awakened():
+		_objective.text = "Bahía de las Horas · Pulsa T para usar el Ancla"
+	elif p.awakening_ready:
+		_objective.text = "Son casi las 3:33. Ve al faro."
 	else:
 		_objective.text = "Habla con tus vecinos (%d/%d)" % [p.talked.size(), _npcs.size()]
 
 
 func _on_lighthouse_entered(body: Node3D) -> void:
-	if body is Player and _progress().get("awakening_ready", false):
-		_objective.text = "La luz del faro se dobla sobre sí misma… (El Despertar llegará en la próxima versión.)"
+	if not (body is Player) or _awakening != null or GameState.is_awakened():
+		return
+	if not _progress().get("awakening_ready", false):
+		return
+	_objective.text = "3:33"
+	_awakening = AwakeningSequence.new()
+	_awakening.player = _player
+	_awakening.sun = _sun
+	_awakening.env = _env
+	_awakening.sky_mat = _sky_mat
+	_awakening.beacon = _beacon
+	_awakening.breach_position = LIGHTHOUSE_POS + Vector3(-3.5, 1.6, 3.5)  # junto a la puerta del faro
+	add_child(_awakening)
+	_awakening.play()
 
 
 # --- Construcción del mundo -----------------------------------------------------------
@@ -121,9 +146,11 @@ func _build_environment() -> void:
 	sky_mat.sky_horizon_color = Color("#f2a65a")
 	sky_mat.ground_horizon_color = Color("#f2a65a")
 	sky_mat.ground_bottom_color = Color("#1d2a3a")
+	_sky_mat = sky_mat
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 	var env := Environment.new()
+	_env = env
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
@@ -141,6 +168,7 @@ func _build_environment() -> void:
 	sun.shadow_enabled = true
 	sun.rotation_degrees = Vector3(-18, -60, 0)  # sol bajo de atardecer
 	add_child(sun)
+	_sun = sun
 
 
 func _build_terrain() -> void:

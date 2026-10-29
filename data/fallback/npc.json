@@ -1,11 +1,11 @@
 {
-	"name": "Marina Ortega",
-	"age": 67,
-	"occupation": "Guardiana del faro",
-	"personality": ["observadora", "amable", "reservada"],
-	"goals": ["Descubrir por qué el faro se enciende solo a las 3:33", "Proteger a su nieto"],
-	"secret": "Recuerda una versión del pueblo que nunca existió.",
-	"greeting": "Otra vez tú... ¿o es la primera vez? Últimamente me cuesta distinguirlo.",
-	"appearance": {"body": "elderly", "outfit": "work_uniform", "primary_color": "#2f4a6d", "secondary_color": "#d9c9a3"},
-	"tags": ["pueblo", "faro", "anomalía"]
+	"name": "Iris Navarro",
+	"age": 38,
+	"occupation": "Cartógrafa de brechas",
+	"personality": ["meticulosa", "irónica", "solitaria"],
+	"goals": ["Completar el mapa de brechas estables de esta región", "Encontrar la rama de la que salió hace once años"],
+	"secret": "Su Ancla está dañada: cada salto le borra un recuerdo pequeño, y lleva un diario para no olvidar quién es.",
+	"greeting": "Otro viajero. Se te nota en los ojos: todavía no te has acostumbrado al tirón del salto.",
+	"appearance": {"body": "average", "outfit": "futuristic", "primary_color": "#3d5a80", "secondary_color": "#ee6c4d"},
+	"tags": ["viajera", "brechas", "respaldo"]
 }

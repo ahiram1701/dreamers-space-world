@@ -3,6 +3,6 @@
 	"kind": "artifact",
 	"effect": "restore_temporal_energy",
 	"power": 15,
-	"lore": "Marca siempre las 3:33. Cuando lo sostienes, oyes un segundo latido que no es el tuyo.",
-	"tags": ["tiempo", "misterio"]
+	"lore": "Se paró a las 3:33. Su cristal de cuarzo sigue vibrando a la misma frecuencia que el pulso electromagnético del faro.",
+	"tags": ["tiempo", "faro"]
 }

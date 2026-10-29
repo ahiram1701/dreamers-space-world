@@ -60,6 +60,24 @@ const SPECS := {
 		}}},
 		"end_conversation": {"t": "bool"},
 	},
+	# El momento en que el jugador descubre la brecha. Una vez por partida.
+	"awakening": {
+		"origin": {"t": "enum", "from": "awakening_origin"},
+		"title": {"t": "string", "min": 2, "max": 60},
+		"narration": {"t": "string", "min": 80, "max": 1500},
+		"source_description": {"t": "string", "min": 20, "max": 400},
+		"anchor": {"t": "object", "fields": {
+			"name": {"t": "string", "min": 2, "max": 40},
+			"description": {"t": "string", "min": 10, "max": 300},
+			"base": {"t": "enum", "from": "anchor_base"},
+		}},
+		"canon_facts": {"t": "array", "min": 2, "max": 3, "items": {"t": "string", "min": 10, "max": 200}},
+		"choices": {"t": "array", "min": 2, "max": 3, "items": {"t": "object", "fields": {
+			"text": {"t": "string", "min": 5, "max": 140},
+			"consequence": {"t": "enum", "from": "awakening_consequence"},
+		}}},
+		"destination_hint": {"t": "string", "min": 10, "max": 300},
+	},
 }
 
 ## Tipos que se guardan en WorldDB (el resto de SPECS son respuestas efímeras).

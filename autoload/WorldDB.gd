@@ -86,6 +86,25 @@ func add_entity(type: String, data: Dictionary, origin: String, forced_id: Strin
 	return id
 
 
+## Añade o cambia campos de una entidad existente (p. ej. los PNJs que viven en un lugar).
+func update_entity(type: String, id: String, fields: Dictionary) -> void:
+	var entity: Dictionary = _data.get("entities", {}).get(type, {}).get(id, {})
+	if entity.is_empty():
+		return
+	entity.merge(fields, true)
+	save()
+
+
+## Borra un mundo del disco (lo usan las pruebas para no dejar basura).
+func delete_world(id: String) -> void:
+	var dir := ROOT + id
+	DirAccess.remove_absolute(_path(id))
+	DirAccess.remove_absolute(dir)
+	if id == world_id:
+		world_id = ""
+		_data = {}
+
+
 func get_entity(type: String, id: String) -> Dictionary:
 	return _data.get("entities", {}).get(type, {}).get(id, {})
 
@@ -131,6 +150,10 @@ func save() -> void:
 
 func _path(id: String) -> String:
 	return ROOT + id + "/world.json"
+
+
+func set_last_world_id(id: String) -> void:
+	_remember_last(id)
 
 
 func _remember_last(id: String) -> void:

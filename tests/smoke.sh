@@ -9,6 +9,7 @@ SCENES=(
 	"res://scenes/main_menu/MainMenu.tscn"
 	"res://scenes/act0_town/Act0Town.tscn"
 	"res://scenes/dev/AITestScene.tscn"
+	"res://scenes/generated_location/GeneratedLocation.tscn"
 )
 IGNORE='Parameter "m" is null'  # mesh_get_surface_count en servers/rendering/dummy
 status=0

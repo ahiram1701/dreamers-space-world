@@ -2,12 +2,15 @@
 	"_comment": "Biblioteca de piezas que el motor sabe construir. La IA solo puede elegir valores de estas listas.",
 	"npc_body": ["slim", "average", "sturdy", "tall", "short", "elderly", "child"],
 	"npc_outfit": ["casual", "work_uniform", "lab_coat", "street", "formal", "ragged", "futuristic", "ancient", "military", "robe"],
-	"location_kind": ["town", "city", "wilderness", "space_station", "planet_surface", "ruins", "ship_interior", "dreamscape"],
+	"location_kind": ["town", "city", "wilderness", "space_station", "planet_surface", "ruins", "ship_interior", "anomaly_zone"],
 	"biome": ["temperate", "desert", "ice", "jungle", "ocean", "volcanic", "crystal", "barren", "urban", "void"],
 	"item_kind": ["tool", "artifact", "technology", "consumable", "key", "relic", "data"],
 	"item_effect": ["none", "heal", "restore_temporal_energy", "reduce_paradox", "reveal_secret", "unlock_location", "boost_reputation"],
-	"era": ["prehistory", "ancient", "medieval", "industrial", "present", "near_future", "far_future", "post_time"],
+	"era": ["prehistory", "ancient", "medieval", "industrial", "present", "near_future", "far_future", "deep_future"],
 	"emotion": ["neutral", "happy", "sad", "worried", "angry", "curious", "scared", "amused", "mysterious"],
 	"tone": ["friendly", "curious", "sarcastic", "honest", "evasive", "bold", "kind", "cold"],
-	"player_trait": ["curiosity", "empathy", "courage", "skepticism", "ambition"]
+	"player_trait": ["curiosity", "empathy", "courage", "skepticism", "ambition"],
+	"awakening_origin": ["future_probe", "failed_experiment", "branch_transmission", "alien_artifact", "natural_anomaly"],
+	"awakening_consequence": ["jump_alone", "jump_with_companion", "seal_behind"],
+	"anchor_base": ["marina_watch", "samir_radio", "teo_notebook", "none"]
 }
