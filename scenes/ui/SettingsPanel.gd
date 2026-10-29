@@ -39,6 +39,10 @@ func _ready() -> void:
 	_key = _line(box, "API key de Ollama Cloud", Settings.api_key, true)
 	_model = _line(box, "Modelo (por defecto %s)" % Settings.DEFAULT_MODEL, Settings.model, false)
 	_mock = _check(box, "Modo sin conexión (respuestas predefinidas, sin IA)", Settings.use_mock)
+	var test := Button.new()
+	test.text = "Probar conexión con la IA"
+	test.pressed.connect(_test_connection.bind(test))
+	box.add_child(test)
 
 	_section(box, "Controles y sonido")
 	_sens = _slider(box, "Sensibilidad del ratón", 0.3, 3.0, Settings.mouse_sensitivity)
@@ -49,6 +53,8 @@ func _ready() -> void:
 	_updates = _check(box, "Buscar actualizaciones al iniciar", Settings.auto_check_updates)
 
 	_status = Label.new()
+	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_status.custom_minimum_size.x = 480
 	_status.add_theme_color_override("font_color", Color("#9fd8ff"))
 	box.add_child(_status)
 	var row := HBoxContainer.new()
@@ -62,6 +68,30 @@ func _ready() -> void:
 	save.text = "Guardar"
 	save.pressed.connect(_save)
 	row.add_child(save)
+
+
+## Prueba la key y el modelo escritos (aunque no estén guardados) con un turno de diálogo real.
+func _test_connection(button: Button) -> void:
+	var saved := [Settings.api_key, Settings.model, Settings.use_mock]
+	Settings.api_key = _key.text.strip_edges()
+	var model := _model.text.strip_edges()
+	Settings.model = model if not model.is_empty() else Settings.DEFAULT_MODEL
+	Settings.use_mock = false
+	button.disabled = true
+	_status.text = "Probando %s…" % Settings.model
+	var t0 := Time.get_ticks_msec()
+	var r := await ContentGenerator.request_valid("dialogue_turn", [
+		{"role": "system", "content": "Eres un personaje de un videojuego de ciencia ficción."},
+		{"role": "user", "content": "Saluda al jugador en una frase."}])
+	var ms := Time.get_ticks_msec() - t0
+	Settings.api_key = saved[0]
+	Settings.model = saved[1]
+	Settings.use_mock = saved[2]
+	button.disabled = false
+	if r.ok:
+		_status.text = "Conexión correcta (%.1f s): «%s»  — pulsa Guardar para usar este modelo." % [ms / 1000.0, str(r.data.line).left(80)]
+	else:
+		_status.text = "No funciona: %s" % str(r.errors[0] if not r.errors.is_empty() else "sin respuesta").left(160)
 
 
 func _save() -> void:

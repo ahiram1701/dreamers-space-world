@@ -38,20 +38,40 @@ func generate(type: String, hint: String, origin: String, context: Dictionary = 
 ## Devuelve { ok, data, errors }.
 func request_valid(spec_type: String, messages: Array) -> Dictionary:
 	var schema := ContentValidator.to_json_schema(spec_type)
+	# No todos los modelos respetan "format": el formato también va escrito en el prompt
+	messages = messages.duplicate(true)
+	var format_text := "\n\nFORMATO DE RESPUESTA: un único objeto JSON con estas claves (claves y valores de lista EXACTAMENTE como aparecen, en inglés; los textos, en español):\n" \
+		+ ContentValidator.describe_format(spec_type)
+	if not messages.is_empty() and messages[0].role == "system":
+		messages[0].content += format_text
+	else:
+		messages.push_front({"role": "system", "content": format_text.strip_edges()})
 	var errors: Array = []
 	for _attempt in 2:
 		var res := await AIClient.chat(messages, schema, spec_type)
 		if not res.ok:
 			errors.append(res.error)
 			break  # error de red/API: reintentar no ayuda, AIClient ya reintentó
+		if typeof(res.data) != TYPE_DICTIONARY:
+			res.data = _extract_json(res.text)  # algunos modelos envuelven el JSON en texto
 		var check := ContentValidator.validate(spec_type, res.data)
 		if check.ok:
-			return {"ok": true, "data": check.data, "errors": errors}
+			return {"ok": true, "data": check.data, "errors": errors, "warnings": check.warnings}
 		errors.append_array(check.errors)
 		messages.append({"role": "assistant", "content": res.text})
 		messages.append({"role": "user", "content":
 			"Tu JSON tiene estos errores, corrígelos y responde solo con el JSON:\n- " + "\n- ".join(PackedStringArray(check.errors))})
+	push_warning("IA (%s) sin respuesta válida: %s" % [spec_type, errors])
 	return {"ok": false, "data": null, "errors": errors}
+
+
+## Saca el primer objeto JSON de un texto ("Aquí tienes: ```json {...} ```" → {...}).
+func _extract_json(text: String) -> Variant:
+	var start := text.find("{")
+	var end := text.rfind("}")
+	if start == -1 or end <= start:
+		return null
+	return JSON.parse_string(text.substr(start, end - start + 1))
 
 
 ## Reglas fijas del multiverso + canon de ESTE mundo. Base de todos los prompts de sistema.

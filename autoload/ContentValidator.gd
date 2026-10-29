@@ -1,90 +1,98 @@
 extends Node
 ## Única fuente de verdad sobre la forma de cada entidad del mundo.
-## De SPECS sale tanto el JSON schema que se envía a Ollama como la validación posterior.
+## De SPECS sale el JSON schema que se envía a Ollama, la descripción del formato que se pone
+## en el prompt y la validación posterior.
 ##
 ## Tipos de campo: string, int, float, bool, color (#rrggbb), enum (valores de archetypes.json),
-## array (items + min/max), object (fields). "opt": true marca un campo opcional.
+## array (items + min/max), object (fields).
+## - "opt": true      → campo opcional.
+## - "default": valor → si falta o no es válido se usa este valor (aviso, no error).
+## - "lenient": true  → en un array, los elementos inválidos se descartan en vez de fallar.
+##
+## Filosofía: los modelos no siempre respetan el esquema (traducen valores al español, devuelven
+## texto donde va un objeto…). Lo esencial (frases, nombres, descripciones) es obligatorio; los
+## detalles se reparan con sinónimos y valores por defecto para no tirar una respuesta buena.
 
 const ARCHETYPES_PATH := "res://data/archetypes.json"
 
 const SPECS := {
 	"npc": {
 		"name": {"t": "string", "min": 2, "max": 40},
-		"age": {"t": "int", "min": 5, "max": 900},
+		"age": {"t": "int", "min": 5, "max": 900, "default": 35},
 		"occupation": {"t": "string", "min": 2, "max": 80},
-		"personality": {"t": "array", "min": 1, "max": 5, "items": {"t": "string", "min": 2, "max": 30}},
-		"goals": {"t": "array", "min": 1, "max": 3, "items": {"t": "string", "min": 3, "max": 120}},
+		"personality": {"t": "array", "min": 1, "max": 5, "lenient": true, "items": {"t": "string", "min": 2, "max": 30}},
+		"goals": {"t": "array", "min": 1, "max": 3, "lenient": true, "items": {"t": "string", "min": 3, "max": 120}},
 		"secret": {"t": "string", "min": 3, "max": 200},
 		"greeting": {"t": "string", "min": 2, "max": 240},
-		"appearance": {"t": "object", "fields": {
-			"body": {"t": "enum", "from": "npc_body"},
-			"outfit": {"t": "enum", "from": "npc_outfit"},
-			"primary_color": {"t": "color"},
-			"secondary_color": {"t": "color"},
+		"appearance": {"t": "object", "default": {}, "fields": {
+			"body": {"t": "enum", "from": "npc_body", "default": "average"},
+			"outfit": {"t": "enum", "from": "npc_outfit", "default": "casual"},
+			"primary_color": {"t": "color", "default": "#5a6f8a"},
+			"secondary_color": {"t": "color", "default": "#c9b48a"},
 		}},
-		"tags": {"t": "array", "min": 0, "max": 6, "items": {"t": "string", "min": 2, "max": 24}, "opt": true},
+		"tags": {"t": "array", "min": 0, "max": 6, "opt": true, "lenient": true, "items": {"t": "string", "min": 2, "max": 24}},
 	},
 	"location": {
-		"name": {"t": "string", "min": 2, "max": 50},
-		"kind": {"t": "enum", "from": "location_kind"},
-		"biome": {"t": "enum", "from": "biome"},
-		"era": {"t": "enum", "from": "era"},
+		"name": {"t": "string", "min": 2, "max": 80},
+		"kind": {"t": "enum", "from": "location_kind", "default": "wilderness"},
+		"biome": {"t": "enum", "from": "biome", "default": "barren"},
+		"era": {"t": "enum", "from": "era", "default": "far_future"},
 		"description": {"t": "string", "min": 10, "max": 500},
-		"gravity": {"t": "float", "min": 0.1, "max": 3.0},
-		"seed": {"t": "int", "min": 0, "max": 2147483647},
-		"sky_color": {"t": "color"},
-		"points_of_interest": {"t": "array", "min": 1, "max": 6, "items": {"t": "string", "min": 2, "max": 60}},
-		"tags": {"t": "array", "min": 0, "max": 6, "items": {"t": "string", "min": 2, "max": 24}, "opt": true},
+		"gravity": {"t": "float", "min": 0.1, "max": 3.0, "default": 1.0},
+		"seed": {"t": "int", "min": 0, "max": 2147483647, "default": 7},
+		"sky_color": {"t": "color", "default": "#7090c0"},
+		"points_of_interest": {"t": "array", "min": 1, "max": 6, "lenient": true, "items": {"t": "string", "min": 2, "max": 60}},
+		"tags": {"t": "array", "min": 0, "max": 6, "opt": true, "lenient": true, "items": {"t": "string", "min": 2, "max": 24}},
 	},
 	"item": {
-		"name": {"t": "string", "min": 2, "max": 40},
-		"kind": {"t": "enum", "from": "item_kind"},
-		"effect": {"t": "enum", "from": "item_effect"},
-		"power": {"t": "int", "min": 0, "max": 100},
+		"name": {"t": "string", "min": 2, "max": 70},
+		"kind": {"t": "enum", "from": "item_kind", "default": "artifact"},
+		"effect": {"t": "enum", "from": "item_effect", "default": "none"},
+		"power": {"t": "int", "min": 0, "max": 100, "default": 20},
 		"lore": {"t": "string", "min": 5, "max": 300},
-		"tags": {"t": "array", "min": 0, "max": 6, "items": {"t": "string", "min": 2, "max": 24}, "opt": true},
+		"tags": {"t": "array", "min": 0, "max": 6, "opt": true, "lenient": true, "items": {"t": "string", "min": 2, "max": 24}},
 	},
 	# No es una entidad del mundo: es la respuesta de un PNJ en una conversación.
 	"dialogue_turn": {
 		"line": {"t": "string", "min": 1, "max": 600},
-		"emotion": {"t": "enum", "from": "emotion"},
-		"choices": {"t": "array", "min": 2, "max": 4, "items": {"t": "object", "fields": {
+		"emotion": {"t": "enum", "from": "emotion", "default": "neutral"},
+		"choices": {"t": "array", "min": 2, "max": 4, "lenient": true, "items": {"t": "object", "fields": {
 			"text": {"t": "string", "min": 2, "max": 120},
-			"tone": {"t": "enum", "from": "tone"},
+			"tone": {"t": "enum", "from": "tone", "default": "friendly"},
 		}}},
-		"new_facts": {"t": "array", "min": 0, "max": 2, "items": {"t": "string", "min": 3, "max": 160}, "opt": true},
-		"relationship_delta": {"t": "int", "min": -10, "max": 10},
-		"trait_signals": {"t": "array", "min": 0, "max": 3, "opt": true, "items": {"t": "object", "fields": {
+		"new_facts": {"t": "array", "min": 0, "max": 2, "opt": true, "lenient": true, "items": {"t": "string", "min": 3, "max": 160}},
+		"relationship_delta": {"t": "int", "min": -10, "max": 10, "default": 0},
+		"trait_signals": {"t": "array", "min": 0, "max": 3, "opt": true, "lenient": true, "items": {"t": "object", "fields": {
 			"trait": {"t": "enum", "from": "player_trait"},
-			"delta": {"t": "int", "min": -3, "max": 3},
+			"delta": {"t": "int", "min": -3, "max": 3, "default": 1},
 		}}},
-		"end_conversation": {"t": "bool"},
+		"end_conversation": {"t": "bool", "default": false},
 	},
 	# El momento en que el jugador descubre la brecha. Una vez por partida.
 	"awakening": {
-		"origin": {"t": "enum", "from": "awakening_origin"},
+		"origin": {"t": "enum", "from": "awakening_origin", "default": "natural_anomaly"},
 		"title": {"t": "string", "min": 2, "max": 60},
 		"narration": {"t": "string", "min": 80, "max": 1500},
 		"source_description": {"t": "string", "min": 20, "max": 400},
 		"anchor": {"t": "object", "fields": {
 			"name": {"t": "string", "min": 2, "max": 40},
 			"description": {"t": "string", "min": 10, "max": 300},
-			"base": {"t": "enum", "from": "anchor_base"},
+			"base": {"t": "enum", "from": "anchor_base", "default": "none"},
 		}},
-		"canon_facts": {"t": "array", "min": 2, "max": 3, "items": {"t": "string", "min": 10, "max": 200}},
-		"choices": {"t": "array", "min": 2, "max": 3, "items": {"t": "object", "fields": {
+		"canon_facts": {"t": "array", "min": 2, "max": 3, "lenient": true, "items": {"t": "string", "min": 10, "max": 200}},
+		"choices": {"t": "array", "min": 2, "max": 3, "lenient": true, "items": {"t": "object", "fields": {
 			"text": {"t": "string", "min": 5, "max": 140},
-			"consequence": {"t": "enum", "from": "awakening_consequence"},
+			"consequence": {"t": "enum", "from": "awakening_consequence", "default": ""},
 		}}},
-		"destination_hint": {"t": "string", "min": 10, "max": 300},
+		"destination_hint": {"t": "string", "min": 10, "max": 300, "default": "Un lugar en otra rama del multiverso."},
 	},
 	# Misión local. El motor resuelve target_index contra las listas reales del lugar
 	# (puntos de interés, PNJs u objetos), así la IA no puede inventar objetivos imposibles.
 	"quest": {
 		"title": {"t": "string", "min": 3, "max": 60},
 		"description": {"t": "string", "min": 10, "max": 300},
-		"objective": {"t": "enum", "from": "quest_objective"},
-		"target_index": {"t": "int", "min": 0, "max": 5},
+		"objective": {"t": "enum", "from": "quest_objective", "default": "visit_poi"},
+		"target_index": {"t": "int", "min": 0, "max": 5, "default": 0},
 		"completion_text": {"t": "string", "min": 5, "max": 300},
 	},
 	# El origen de la señal: revelación final y los tres finales con su epílogo.
@@ -92,9 +100,9 @@ const SPECS := {
 		"title": {"t": "string", "min": 2, "max": 60},
 		"revelation": {"t": "string", "min": 80, "max": 1500},
 		"source_voice": {"t": "string", "min": 10, "max": 400},
-		"choices": {"t": "array", "min": 3, "max": 3, "items": {"t": "object", "fields": {
+		"choices": {"t": "array", "min": 3, "max": 3, "lenient": true, "items": {"t": "object", "fields": {
 			"text": {"t": "string", "min": 5, "max": 140},
-			"ending": {"t": "enum", "from": "ending"},
+			"ending": {"t": "enum", "from": "ending", "default": ""},
 			"epilogue": {"t": "string", "min": 40, "max": 900},
 		}}},
 	},
@@ -102,6 +110,23 @@ const SPECS := {
 
 ## Tipos que se guardan en WorldDB (el resto de SPECS son respuestas efímeras).
 const ENTITY_TYPES := ["npc", "location", "item"]
+
+## Traducciones habituales que hacen los modelos al escribir en español.
+const SYNONYMS := {
+	"neutro": "neutral", "neutra": "neutral", "feliz": "happy", "alegre": "happy", "contento": "happy",
+	"contenta": "happy", "animado": "happy", "animada": "happy", "entusiasmado": "happy", "triste": "sad",
+	"preocupado": "worried", "preocupada": "worried", "nervioso": "worried", "nerviosa": "worried",
+	"enfadado": "angry", "enfadada": "angry", "enojado": "angry", "enojada": "angry", "curioso": "curious",
+	"curiosa": "curious", "intrigado": "curious", "intrigada": "curious", "asustado": "scared",
+	"asustada": "scared", "divertido": "amused", "divertida": "amused", "bromista": "amused",
+	"misterioso": "mysterious", "misteriosa": "mysterious", "enigmático": "mysterious",
+	"amigable": "friendly", "amistoso": "friendly", "cordial": "friendly", "honesto": "honest",
+	"sincero": "honest", "directo": "honest", "evasivo": "evasive", "audaz": "bold", "atrevido": "bold",
+	"valiente": "bold", "amable": "kind", "frío": "cold", "frio": "cold", "sarcástico": "sarcastic",
+	"sarcastico": "sarcastic", "irónico": "sarcastic", "curiosidad": "curiosity", "empatía": "empathy",
+	"empatia": "empathy", "valentía": "courage", "valentia": "courage", "coraje": "courage",
+	"escepticismo": "skepticism", "escéptico": "skepticism", "ambición": "ambition", "ambicion": "ambition",
+}
 
 var _archetypes: Dictionary = {}
 
@@ -119,76 +144,167 @@ func archetypes() -> Dictionary:
 	return _archetypes
 
 
-## Devuelve { ok, data (normalizada: ints convertidos, números acotados), errors: Array[String] }.
-## Errores "blandos" (número fuera de rango, texto largo) se corrigen; los "duros" invalidan.
+## Devuelve { ok, data (normalizada y reparada), errors: [String], warnings: [String] }.
+## errors: falta algo esencial → la respuesta no sirve. warnings: detalles reparados.
 func validate(type: String, data: Variant) -> Dictionary:
 	if not SPECS.has(type):
-		return {"ok": false, "data": null, "errors": ["Tipo desconocido: %s" % type]}
+		return {"ok": false, "data": null, "errors": ["Tipo desconocido: %s" % type], "warnings": []}
 	var errors: Array[String] = []
-	var clean = _check({"t": "object", "fields": SPECS[type]}, data, type, errors)
-	return {"ok": errors.is_empty(), "data": clean, "errors": errors}
+	var warnings: Array[String] = []
+	var clean = _check({"t": "object", "fields": SPECS[type]}, data, type, errors, warnings)
+	return {"ok": errors.is_empty(), "data": clean, "errors": errors, "warnings": warnings}
 
 
 func to_json_schema(type: String) -> Dictionary:
 	return _schema({"t": "object", "fields": SPECS[type]})
 
 
-func _check(spec: Dictionary, value: Variant, path: String, errors: Array[String]) -> Variant:
+## Descripción legible del formato para el prompt: los modelos que no respetan "format"
+## sí suelen respetar una lista explícita de claves y valores permitidos.
+func describe_format(type: String) -> String:
+	var lines := PackedStringArray()
+	for key in SPECS[type]:
+		lines.append("- \"%s\": %s" % [key, _describe(SPECS[type][key])])
+	return "\n".join(lines)
+
+
+func _describe(spec: Dictionary) -> String:
+	var opt := " (opcional)" if spec.get("opt", false) else ""
+	match spec.t:
+		"string":
+			return "texto en español" + opt
+		"int":
+			return "número entero entre %d y %d%s" % [spec.min, spec.max, opt]
+		"float":
+			return "número entre %s y %s%s" % [spec.min, spec.max, opt]
+		"bool":
+			return "true o false" + opt
+		"color":
+			return "color hexadecimal \"#rrggbb\"" + opt
+		"enum":
+			return "EXACTAMENTE uno de %s (en inglés, tal cual)%s" % [JSON.stringify(archetypes().get(spec.from, [])), opt]
+		"array":
+			return "lista de %d a %d elementos; cada uno: %s%s" % [spec.min, spec.max, _describe(spec.items), opt]
+		"object":
+			var parts := PackedStringArray()
+			for k in spec.fields:
+				parts.append("\"%s\": %s" % [k, _describe(spec.fields[k])])
+			return "objeto { %s }%s" % [", ".join(parts), opt]
+	return ""
+
+
+func _check(spec: Dictionary, value: Variant, path: String, errors: Array[String], warnings: Array[String]) -> Variant:
 	match spec.t:
 		"string":
 			if typeof(value) != TYPE_STRING:
-				errors.append("%s: se esperaba texto" % path)
-				return null
+				if value == null or typeof(value) == TYPE_DICTIONARY or typeof(value) == TYPE_ARRAY:
+					return _fallback(spec, path, "se esperaba texto", errors, warnings)
+				value = str(value)
 			var s: String = value.strip_edges()
 			if s.length() < spec.get("min", 0):
-				errors.append("%s: texto demasiado corto" % path)
+				return _fallback(spec, path, "texto demasiado corto", errors, warnings)
 			return s.left(spec.get("max", 10000))
 		"int", "float":
+			if typeof(value) == TYPE_STRING and (value as String).is_valid_float():
+				value = (value as String).to_float()
 			if typeof(value) != TYPE_INT and typeof(value) != TYPE_FLOAT:
-				errors.append("%s: se esperaba un número" % path)
-				return null
+				return _fallback(spec, path, "se esperaba un número", errors, warnings)
 			var n = clampf(float(value), spec.min, spec.max)
-			return int(n) if spec.t == "int" else n
+			return roundi(n) if spec.t == "int" else n
 		"bool":
+			if typeof(value) == TYPE_STRING:
+				value = (value as String).to_lower() in ["true", "sí", "si", "yes"]
 			if typeof(value) != TYPE_BOOL:
-				errors.append("%s: se esperaba true/false" % path)
-			return bool(value)
+				return _fallback(spec, path, "se esperaba true/false", errors, warnings)
+			return value
 		"color":
 			if typeof(value) != TYPE_STRING or not Color.html_is_valid(value):
-				errors.append("%s: color inválido (usa #rrggbb)" % path)
-				return null
+				return _fallback(spec, path, "color inválido (usa #rrggbb)", errors, warnings)
 			return "#" + Color.html(value).to_html(false)
 		"enum":
 			var allowed: Array = archetypes().get(spec.from, [])
-			if not (value in allowed):
-				errors.append("%s: '%s' no es válido, usa uno de %s" % [path, value, allowed])
-				return null
-			return value
+			var matched := _match_enum(value, allowed)
+			if matched.is_empty():
+				return _fallback(spec, path, "'%s' no es válido, usa uno de %s" % [value, allowed], errors, warnings)
+			if matched != str(value):
+				warnings.append("%s: '%s' → '%s'" % [path, value, matched])
+			return matched
 		"array":
 			if typeof(value) != TYPE_ARRAY:
-				errors.append("%s: se esperaba una lista" % path)
-				return []
+				return _fallback(spec, path, "se esperaba una lista", errors, warnings) if not spec.get("opt", false) else []
 			var out := []
-			for i in mini(value.size(), spec.max):
-				out.append(_check(spec.items, value[i], "%s[%d]" % [path, i], errors))
+			for i in value.size():
+				if out.size() >= spec.max:
+					break
+				var item_errors: Array[String] = []
+				var item = _check(spec.items, value[i], "%s[%d]" % [path, i], item_errors, warnings)
+				if item_errors.is_empty():
+					out.append(item)
+				elif spec.get("lenient", false):
+					warnings.append("%s[%d] descartado: %s" % [path, i, "; ".join(item_errors)])
+				else:
+					errors.append_array(item_errors)
 			if out.size() < spec.min:
-				errors.append("%s: se necesitan al menos %d elementos" % [path, spec.min])
+				errors.append("%s: se necesitan al menos %d elementos válidos" % [path, spec.min])
 			return out
 		"object":
+			# Muchos modelos devuelven "opción" como texto en lugar de {"text": "opción", ...}
+			if typeof(value) == TYPE_STRING and spec.fields.has("text"):
+				value = {"text": value}
 			if typeof(value) != TYPE_DICTIONARY:
-				errors.append("%s: se esperaba un objeto" % path)
-				return {}
+				return _fallback(spec, path, "se esperaba un objeto", errors, warnings)
 			var out := {}
 			for key in spec.fields:
 				var field: Dictionary = spec.fields[key]
-				if not value.has(key):
-					if not field.get("opt", false):
+				if not value.has(key) or value[key] == null:
+					if field.has("default"):
+						out[key] = _default_of(field)
+						warnings.append("%s.%s: falta, se usa el valor por defecto" % [path, key])
+					elif not field.get("opt", false):
 						errors.append("%s.%s: falta" % [path, key])
 					continue
-				out[key] = _check(field, value[key], "%s.%s" % [path, key], errors)
+				out[key] = _check(field, value[key], "%s.%s" % [path, key], errors, warnings)
 			return out  # las claves desconocidas se descartan a propósito
 	errors.append("%s: spec con tipo desconocido '%s'" % [path, spec.t])
 	return null
+
+
+## Un valor inválido: si el campo tiene "default" se repara (aviso); si no, es un error.
+func _fallback(spec: Dictionary, path: String, msg: String, errors: Array[String], warnings: Array[String]) -> Variant:
+	if spec.has("default"):
+		warnings.append("%s: %s (se usa el valor por defecto)" % [path, msg])
+		return _default_of(spec)
+	errors.append("%s: %s" % [path, msg])
+	return null
+
+
+## Para objetos con default {} se construye el objeto con los defaults de sus campos.
+func _default_of(spec: Dictionary) -> Variant:
+	if spec.t == "object":
+		var out := {}
+		for k in spec.fields:
+			out[k] = _default_of(spec.fields[k]) if spec.fields[k].has("default") else null
+		return out
+	var d = spec.default
+	return d.duplicate(true) if d is Dictionary or d is Array else d
+
+
+## Acepta el valor exacto, mayúsculas/espacios distintos, sinónimos en español o un prefijo claro.
+func _match_enum(value: Variant, allowed: Array) -> String:
+	if typeof(value) != TYPE_STRING:
+		return ""
+	if value in allowed:
+		return value
+	var v: String = (value as String).strip_edges().to_lower().replace(" ", "_").replace("-", "_")
+	if v in allowed:
+		return v
+	var syn: String = SYNONYMS.get(v, "")
+	if syn in allowed:
+		return syn
+	for a in allowed:
+		if v.begins_with(a) or (a.length() >= 4 and a.begins_with(v) and v.length() >= 4):
+			return a
+	return ""
 
 
 func _schema(spec: Dictionary) -> Dictionary:

@@ -21,14 +21,34 @@ func _init() -> void:
 
 	var npc = JSON.parse_string(FileAccess.get_file_as_string("res://data/fallback/npc.json"))
 	npc.age = 99999.0                 # fuera de rango y float → se acota a int
-	npc.appearance.body = "dragon"    # no existe en archetypes → error duro
-	npc.erase("secret")               # campo requerido ausente
+	npc.appearance.body = "dragon"    # no existe en archetypes → se repara con el valor por defecto
+	npc.erase("secret")               # campo esencial ausente → error duro
 	npc["hack"] = "x"                 # clave desconocida → se descarta
 	var r: Dictionary = v.validate("npc", npc)
 	_expect(not r.ok, "detecta npc inválido")
 	_expect(r.data.age == 900 and typeof(r.data.age) == TYPE_INT, "acota age a int 900")
 	_expect(not r.data.has("hack"), "descarta claves desconocidas")
-	_expect(r.errors.size() == 2, "exactamente 2 errores duros (body, secret): %s" % [r.errors])
+	_expect(r.errors.size() == 1 and "secret" in r.errors[0], "solo lo esencial es error duro: %s" % [r.errors])
+	_expect(r.data.appearance.body == "average", "enum inválido → valor por defecto")
+
+	# Lo que devuelve un modelo real (gpt-oss en Ollama Cloud): valores traducidos, opciones como
+	# texto, decimales y rasgos como texto. Debe aceptarse reparado, no tirarse entero.
+	var real := {
+		"line": "¡Hey! Soy Teo.", "emotion": "animado", "relationship_delta": 0.2, "end_conversation": "false",
+		"choices": ["¿Qué me recomiendas?", {"text": "Me voy ya.", "tone": "curioso"}, {"text": "¿Viste algo raro?", "tone": "Intrigado"}],
+		"trait_signals": ["curiosidad", {"trait": "Empatía", "delta": 2}],
+	}
+	r = v.validate("dialogue_turn", real)
+	_expect(r.ok, "acepta una respuesta real imperfecta %s" % [r.errors])
+	_expect(r.data.emotion == "happy" and r.data.choices[1].tone == "curious" and r.data.choices[2].tone == "curious", "traduce sinónimos en español")
+	_expect(r.data.choices.size() == 3 and r.data.choices[0].text == "¿Qué me recomiendas?", "convierte opciones de texto en objetos")
+	_expect(r.data.relationship_delta == 0 and r.data.end_conversation == false, "repara números y booleanos")
+	_expect(r.data.trait_signals.size() == 1 and r.data.trait_signals[0].trait == "empathy", "descarta rasgos inválidos y repara los demás")
+	_expect(not v.describe_format("dialogue_turn").is_empty(), "describe el formato para el prompt")
+
+	# Sin lo esencial no hay respuesta válida
+	r = v.validate("dialogue_turn", {"emotion": "happy", "choices": []})
+	_expect(not r.ok, "sin frase ni opciones, la respuesta se rechaza")
 
 	v.free()
 	print("\n%s" % ("TODO OK" if _failed == 0 else "%d FALLOS" % _failed))

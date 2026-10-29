@@ -17,18 +17,21 @@ func talk(npc_id: String, player_input: String, scene_context: String) -> Dictio
 
 	var messages := [{"role": "system", "content": _system_prompt(npc, scene_context)}]
 	for h in NPCMemory.get_mem(npc_id).history:
-		messages.append({"role": "user" if h.who == "player" else "assistant", "content": h.text})
+		# Las respuestas anteriores del PNJ van en JSON: si van como texto plano, algunos
+		# modelos (p. ej. DeepSeek) imitan ese estilo y dejan de responder en JSON.
+		var content: String = h.text if h.who == "player" else JSON.stringify({"line": h.text})
+		messages.append({"role": "user" if h.who == "player" else "assistant", "content": content})
 	var said := player_input.strip_edges()
 	messages.append({"role": "user", "content": said if not said.is_empty() else _opening(npc_id)})
 
 	var res := await ContentGenerator.request_valid("dialogue_turn", messages)
-	var turn: Dictionary = res.data if res.ok else ContentGenerator.load_fallback("dialogue_turn")
+	var turn: Dictionary = res.data if res.ok else _fallback_turn(npc, res.errors)
 	turn["ok"] = true
 	turn["source"] = "ai" if res.ok else "fallback"
-	if not res.ok:
-		push_warning("StoryDirector usó respaldo: %s" % [res.errors])
 
-	NPCMemory.record_turn(npc_id, said, turn.line, turn.get("new_facts", []), int(turn.relationship_delta))
+	# Un respaldo no es algo que el PNJ haya "dicho": no ensucia su memoria (salvo presentarse)
+	if res.ok or not NPCMemory.get_mem(npc_id).met:
+		NPCMemory.record_turn(npc_id, said, turn.line, turn.get("new_facts", []), int(turn.relationship_delta))
 	if not said.is_empty():  # solo lo que el jugador dice o elige revela su carácter
 		PlayerProfile.apply_signals(turn.get("trait_signals", []))
 	turn_finished.emit(npc_id, turn)
@@ -37,6 +40,34 @@ func talk(npc_id: String, player_input: String, scene_context: String) -> Dictio
 
 func end_conversation(npc_id: String) -> void:
 	NPCMemory.end_conversation(npc_id)
+
+
+## Sin IA: el PNJ al menos usa su propio saludo la primera vez, y el jugador ve por qué.
+func _fallback_turn(npc: Dictionary, errors: Array) -> Dictionary:
+	var turn := ContentGenerator.load_fallback("dialogue_turn")
+	if not NPCMemory.get_mem(npc.id).met:
+		turn.line = npc.get("greeting", turn.line)
+	var reason := str(errors[0]) if not errors.is_empty() else "sin respuesta"
+	turn["error"] = reason.replace("[", "(").replace("]", ")").left(140)  # se muestra con BBCode
+	return turn
+
+
+## Los modelos a veces repiten o inventan la consecuencia de una opción: se reparte
+## una de cada (en orden) entre las que falten, para que todas las ramas sean posibles.
+static func _ensure_distinct(choices: Array, field: String, allowed: Array) -> void:
+	var used := []
+	for c in choices:
+		if c[field] in allowed and not (c[field] in used):
+			used.append(c[field])
+		else:
+			c[field] = ""
+	for c in choices:
+		if c[field] == "":
+			for a in allowed:
+				if not (a in used):
+					c[field] = a
+					used.append(a)
+					break
 
 
 # --- El Despertar ---------------------------------------------------------------------
@@ -80,6 +111,7 @@ Crea su Despertar:
 	var res := await ContentGenerator.request_valid("awakening", messages)
 	var data: Dictionary = res.data if res.ok else ContentGenerator.load_fallback("awakening")
 	data["source"] = "ai" if res.ok else "fallback"
+	_ensure_distinct(data.choices, "consequence", ContentValidator.archetypes().awakening_consequence)
 	if not res.ok:
 		push_warning("El Despertar usó respaldo: %s" % [res.errors])
 	return data
@@ -146,6 +178,7 @@ Escribe:
 	var res := await ContentGenerator.request_valid("finale", messages)
 	var data: Dictionary = res.data if res.ok else ContentGenerator.load_fallback("finale")
 	data["source"] = "ai" if res.ok else "fallback"
+	_ensure_distinct(data.choices, "ending", ContentValidator.archetypes().ending)
 	return data
 
 

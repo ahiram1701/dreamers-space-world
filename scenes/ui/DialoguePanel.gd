@@ -107,6 +107,10 @@ func _send(text: String) -> void:
 
 	_speaker.text = "%s %s" % [_npc.name, EMOTION_LABEL.get(turn.emotion, "")]
 	_line.text = turn.line
+	if turn.source == "fallback":
+		# Que el jugador sepa que esto no es la IA (y por qué), en vez de ver frases repetidas
+		_line.text += "
+[color=#f2a65a][font_size=13](Sin respuesta de la IA: %s. Revisa la API key y el modelo en Ajustes.)[/font_size][/color]" % turn.get("error", "")
 	_line.visible_ratio = 0.0
 	create_tween().tween_property(_line, "visible_ratio", 1.0, clampf(turn.line.length() * 0.02, 0.3, 2.5))
 
