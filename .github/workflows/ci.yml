@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:  # release.yml la reutiliza: nunca se publica una build sin pasar las pruebas
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: "4.3"
+
+jobs:
+  test:
+    name: Pruebas y smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar JSON de datos
+        run: find data -name '*.json' -print0 | xargs -0 -n1 jq empty
+
+      - name: Caché de Godot
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-${{ env.GODOT_VERSION }}-linux
+
+      - name: Descargar Godot ${{ env.GODOT_VERSION }}
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/godot
+          curl -fsSL -o /tmp/godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d ~/godot
+          mv ~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64 ~/godot/godot
+
+      - run: echo "$HOME/godot" >> "$GITHUB_PATH"
+
+      - name: Importar proyecto
+        run: godot --headless --import --path .
+
+      - name: Pruebas unitarias
+        run: godot --headless --path . -s tests/test_validator.gd
+
+      - name: Smoke test de escenas
+        run: bash tests/smoke.sh

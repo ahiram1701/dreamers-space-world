@@ -1,8 +1,8 @@
 # Godot
 .godot/
 *.import
-export_presets.cfg
 /build/
+/*.zip
 
 # Secretos (la API key vive en user://, nunca en el repo)
 *.key

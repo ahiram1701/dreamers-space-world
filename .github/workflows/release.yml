@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+env:
+  GODOT_VERSION: "4.3"
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    name: Exportar y publicar
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Caché de Godot y plantillas
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-linux-templates
+
+      - name: Descargar Godot y plantillas de exportación
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          BASE="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          mkdir -p ~/godot
+          curl -fsSL -o /tmp/godot.zip "$BASE/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d ~/godot
+          mv ~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64 ~/godot/godot
+
+          curl -fsSL -o /tmp/templates.tpz "$BASE/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q /tmp/templates.tpz -d /tmp/tpl
+          DEST=~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          mkdir -p "$DEST"
+          # Solo las plantillas que usamos: el paquete completo pesa >1 GB
+          cp /tmp/tpl/templates/version.txt \
+             /tmp/tpl/templates/linux_*.x86_64 \
+             /tmp/tpl/templates/windows_*_x86_64*.exe "$DEST"/
+          ls -la "$DEST"
+
+      - run: echo "$HOME/godot" >> "$GITHUB_PATH"
+
+      - name: Aplicar versión del tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i "s|^config/version=.*|config/version=\"${VERSION}\"|" project.godot
+          grep '^config/version' project.godot
+
+      - name: Importar proyecto
+        run: godot --headless --import --path .
+
+      - name: Exportar Windows y Linux
+        run: |
+          mkdir -p build/windows build/linux
+          godot --headless --path . --export-release "Windows Desktop" build/windows/DreamersSpaceWorld.exe
+          godot --headless --path . --export-release "Linux" build/linux/DreamersSpaceWorld.x86_64
+          test -s build/windows/DreamersSpaceWorld.exe
+          test -s build/linux/DreamersSpaceWorld.x86_64
+
+      - name: Empaquetar
+        run: |
+          (cd build/windows && zip -qr "$GITHUB_WORKSPACE/DreamersSpaceWorld-${GITHUB_REF_NAME}-windows.zip" .)
+          (cd build/linux && zip -qr "$GITHUB_WORKSPACE/DreamersSpaceWorld-${GITHUB_REF_NAME}-linux.zip" .)
+          ls -la *.zip
+
+      - name: Publicar Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PRE=""
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then PRE="--prerelease"; fi
+          gh release create "$GITHUB_REF_NAME" DreamersSpaceWorld-*.zip \
+            --title "Dreamer's Space World ${GITHUB_REF_NAME}" \
+            --generate-notes $PRE
