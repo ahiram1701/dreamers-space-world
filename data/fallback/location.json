@@ -1,0 +1,12 @@
+{
+	"name": "Bahía de las Horas",
+	"kind": "town",
+	"biome": "temperate",
+	"era": "present",
+	"description": "Un pueblo costero donde las mareas a veces llegan antes que la luna. Casas blancas, un faro antiguo y un muelle que cruje al anochecer.",
+	"gravity": 1.0,
+	"seed": 3330333,
+	"sky_color": "#f2a65a",
+	"points_of_interest": ["El faro", "La cafetería del muelle", "La estación de tren abandonada"],
+	"tags": ["inicio", "tierra", "costa"]
+}

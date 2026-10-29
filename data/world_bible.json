@@ -1,0 +1,15 @@
+{
+	"title": "Dreamer's Space World",
+	"premise": "El jugador es una persona común de la Tierra actual que descubre que puede cruzar entre universos y épocas. Cada decisión puede crear nuevas ramas de la realidad.",
+	"rules": [
+		"Viajar en el tiempo o entre universos consume energía temporal.",
+		"Cambiar el pasado genera paradoja; demasiada paradoja desestabiliza la realidad alrededor del jugador.",
+		"Las personas pueden existir en varios universos con vidas distintas; a veces conservan ecos de recuerdos de otras versiones.",
+		"Nada de lo que ya es canon puede contradecirse: solo puede reinterpretarse o tener consecuencias nuevas."
+	],
+	"tone": "Ciencia ficción con asombro y misterio, momentos humanos y cotidianos, sin gore explícito.",
+	"start": {
+		"place": "Un pueblo costero tranquilo en el presente",
+		"player": "Una persona común con un trabajo normal y una vida sencilla"
+	}
+}

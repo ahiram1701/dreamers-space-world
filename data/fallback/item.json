@@ -1,0 +1,8 @@
+{
+	"name": "Reloj de bolsillo detenido",
+	"kind": "artifact",
+	"effect": "restore_temporal_energy",
+	"power": 15,
+	"lore": "Marca siempre las 3:33. Cuando lo sostienes, oyes un segundo latido que no es el tuyo.",
+	"tags": ["tiempo", "misterio"]
+}

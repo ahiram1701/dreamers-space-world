@@ -1,0 +1,13 @@
+{
+	"line": "Perdona... me he quedado en blanco un momento. Juraría que esta conversación ya la hemos tenido. ¿Qué me decías?",
+	"emotion": "curious",
+	"choices": [
+		{"text": "¿Tú también sientes que algo raro pasa en el pueblo?", "tone": "curious"},
+		{"text": "No te preocupes, a mí también me pasa.", "tone": "kind"},
+		{"text": "Tengo que irme, hablamos luego.", "tone": "friendly"}
+	],
+	"new_facts": [],
+	"relationship_delta": 1,
+	"trait_signals": [],
+	"end_conversation": false
+}

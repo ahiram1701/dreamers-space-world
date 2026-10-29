@@ -1,0 +1,13 @@
+{
+	"_comment": "Biblioteca de piezas que el motor sabe construir. La IA solo puede elegir valores de estas listas.",
+	"npc_body": ["slim", "average", "sturdy", "tall", "short", "elderly", "child"],
+	"npc_outfit": ["casual", "work_uniform", "lab_coat", "street", "formal", "ragged", "futuristic", "ancient", "military", "robe"],
+	"location_kind": ["town", "city", "wilderness", "space_station", "planet_surface", "ruins", "ship_interior", "dreamscape"],
+	"biome": ["temperate", "desert", "ice", "jungle", "ocean", "volcanic", "crystal", "barren", "urban", "void"],
+	"item_kind": ["tool", "artifact", "technology", "consumable", "key", "relic", "data"],
+	"item_effect": ["none", "heal", "restore_temporal_energy", "reduce_paradox", "reveal_secret", "unlock_location", "boost_reputation"],
+	"era": ["prehistory", "ancient", "medieval", "industrial", "present", "near_future", "far_future", "post_time"],
+	"emotion": ["neutral", "happy", "sad", "worried", "angry", "curious", "scared", "amused", "mysterious"],
+	"tone": ["friendly", "curious", "sarcastic", "honest", "evasive", "bold", "kind", "cold"],
+	"player_trait": ["curiosity", "empathy", "courage", "skepticism", "ambition"]
+}

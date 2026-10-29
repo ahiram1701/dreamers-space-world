@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/act0_town/Act0Town.gd" id="1"]
+
+[node name="Act0Town" type="Node3D"]
+script = ExtResource("1")

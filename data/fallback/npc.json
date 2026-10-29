@@ -1,0 +1,11 @@
+{
+	"name": "Marina Ortega",
+	"age": 67,
+	"occupation": "Guardiana del faro",
+	"personality": ["observadora", "amable", "reservada"],
+	"goals": ["Descubrir por qué el faro se enciende solo a las 3:33", "Proteger a su nieto"],
+	"secret": "Recuerda una versión del pueblo que nunca existió.",
+	"greeting": "Otra vez tú... ¿o es la primera vez? Últimamente me cuesta distinguirlo.",
+	"appearance": {"body": "elderly", "outfit": "work_uniform", "primary_color": "#2f4a6d", "secondary_color": "#d9c9a3"},
+	"tags": ["pueblo", "faro", "anomalía"]
+}

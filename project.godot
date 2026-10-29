@@ -1,0 +1,31 @@
+; Engine configuration file.
+; Godot 4.x
+
+config_version=5
+
+[application]
+
+config/name="Dreamer's Space World"
+config/description="Un multiverso que crece contigo: la IA genera el mundo según tus decisiones."
+run/main_scene="res://scenes/main_menu/MainMenu.tscn"
+config/features=PackedStringArray("4.3")
+
+[autoload]
+
+Settings="*res://autoload/Settings.gd"
+AIClient="*res://autoload/AIClient.gd"
+ContentValidator="*res://autoload/ContentValidator.gd"
+WorldDB="*res://autoload/WorldDB.gd"
+ContentGenerator="*res://autoload/ContentGenerator.gd"
+NPCMemory="*res://autoload/NPCMemory.gd"
+PlayerProfile="*res://autoload/PlayerProfile.gd"
+StoryDirector="*res://autoload/StoryDirector.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+
+[rendering]
+
+renderer/rendering_method="forward_plus"
