@@ -3,6 +3,25 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.5.0] - 2026-10-29
+
+### Añadido
+- **Tu personaje hace lo que escribes.** Con <kbd>F</kbd> se ve la acción (talar con un hacha, cavar con una pala, martillar, sentarse, dormir, pescar, beber, bailar…) y el mundo cambia de verdad: reparas o modificas tus objetos, gastas materiales, **talas árboles y rompes rocas** (no vuelven a crecer) y **construyes** balsas, botes, hogueras, tiendas, mesas, sillas, camas, vallas o carteles, que quedan en el mundo. Cada acción gasta el tiempo que tardaría de verdad.
+- **Edificios por dentro**: tu casa, la cafetería (con Teo detrás de la barra), la estación con el taller de Samir, el faro y las casas de los mundos generados, con muebles. Puedes sentarte en sillas y sofás y **dormir** hasta la mañana para recuperarte.
+- **Barcas**: súbete a las del muelle (o a las que construyas) y rema con WASD.
+- **Nadar** en el mar.
+- Los PNJs **gesticulan** según cómo se sienten, te **miran** cuando pasas cerca, te entregan las cosas con la mano y pueden arreglar tus objetos.
+- Ajuste de **duración del día** (24 min, 1 h, 2 h, 4 h o tiempo real).
+
+### Cambiado
+- Animación de los personajes mucho más natural: respiran, cambian el peso, giran cadera y hombros al andar, corren inclinados, saltan y llevan herramientas en la mano.
+- El día dura 2 horas por defecto (antes 24 minutos).
+- Se puede pasar bajo las copas de los árboles.
+
+### Corregido
+- Tras varios turnos, algunos modelos no devolvían opciones y la respuesta del PNJ se perdía («dialogue_turn.choices: falta»).
+- Un PNJ podía prestarte dos veces el mismo objeto.
+
 ## [0.4.0] - 2026-10-29
 
 ### Añadido

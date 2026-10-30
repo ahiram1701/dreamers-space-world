@@ -68,6 +68,9 @@ Si la IA no está disponible, el juego usa contenido de respaldo y **nunca se qu
 | ✅ | **Lo que se dice, pasa**: los PNJs dan, prestan, reciben, acompañan, curan, encargan favores y revelan lugares de verdad |
 | ✅ | **Hacer algo** (<kbd>F</kbd>): describe cualquier acción y la IA narra qué ocurre en el mundo |
 | ✅ | Ciclo de día y noche, rutinas de los vecinos, diario y encargos |
+| ✅ | **Tu personaje hace lo que escribes**: talar, construir, reparar, cavar, sentarse, dormir… y el mundo cambia (árboles talados, balsas, hogueras) |
+| ✅ | Edificios con interior, barcas que se manejan, nadar, dormir hasta la mañana |
+| ✅ | Animación procedural natural (locomoción, 20+ gestos, emociones, herramientas en la mano) |
 | ✅ | Modelos 3D CC0 animados, mar con olas, hierba con viento e iluminación con SSAO, glow y niebla |
 | ✅ | Menú de pausa, ajustes (IA, ratón, volumen, calidad gráfica, personaje) y gestión de partidas |
 
@@ -99,7 +102,7 @@ Desde la **v0.2.0**, el juego comprueba al arrancar si hay una versión estable 
 | Moverse / correr | <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / <kbd>Shift</kbd> |
 | Saltar | <kbd>Espacio</kbd> |
 | Cámara | Ratón |
-| Hablar / recoger | <kbd>E</kbd> |
+| Hablar / recoger / entrar / sentarse / subir a una barca | <kbd>E</kbd> |
 | Hacer algo (acción libre) | <kbd>F</kbd> |
 | Ancla (saltar) | <kbd>T</kbd> |
 | Inventario, encargos y diario | <kbd>I</kbd> |
@@ -124,6 +127,8 @@ Desde la **v0.2.0**, el juego comprueba al arrancar si hay una versión estable 
 | [`Inventory`](autoload/Inventory.gd) / [`Quests`](autoload/Quests.gd) | Objetos usables, préstamos y misiones generadas |
 | [`Actions`](autoload/Actions.gd) / [`Journal`](autoload/Journal.gd) | Hace real lo que la IA decide (dar, acompañar, curar…) y el diario |
 | [`WorldClock`](autoload/WorldClock.gd) | Hora del mundo, día y noche |
+
+Escenas y mundo: [`HumanoidRig`](scripts/npc/HumanoidRig.gd) (animación por código), [`InteriorManager`](scripts/world/InteriorManager.gd) e [`InteriorBuilder`](procgen/InteriorBuilder.gd) (edificios por dentro), [`Boat`](scripts/world/Boat.gd), [`Interactable`](scripts/world/Interactable.gd) y [`Decor`](scripts/world/Decor.gd) (agua, hierba, farolas y lo que construye el jugador).
 
 ```
 assets/        Modelos 3D CC0 (ver assets/CREDITS.md)

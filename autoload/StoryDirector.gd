@@ -41,8 +41,10 @@ func talk(npc_id: String, player_input: String, scene_context: String) -> Dictio
 
 
 ## Acciones que tienen sentido sin un PNJ delante.
-const WORLD_ACTIONS := ["give_item", "change_stat", "journal", "reveal_place"]
-const MAX_FINDS_PER_PLACE := 3  # rebuscar sin parar no llena el inventario
+const WORLD_ACTIONS := ["give_item", "change_stat", "journal", "reveal_place", "update_item", "remove_item",
+	"place_object", "affect_nearby", "play"]
+const MAX_FINDS_PER_PLACE := 6  # rebuscar sin parar no llena el inventario (fabricar no cuenta)
+const MAX_ACTION_MINUTES := 240
 
 
 ## El jugador hace algo libre en el mundo (tecla F): la IA narra qué ocurre y, si encuentra
@@ -52,10 +54,21 @@ func act(what: String, scene_context: String) -> Dictionary:
 	var messages := [
 		{"role": "system", "content": ContentGenerator.world_rules_prompt() + """
 
-Eres el narrador del mundo. El jugador describe algo que hace con su cuerpo o con lo que le rodea. Cuenta en segunda persona, de forma breve (1 a 4 frases) y realista, qué ocurre. Sé justo: no todo sale bien ni siempre aparece algo útil, y lo que encuentre tiene que tener sentido en ese lugar. No controlas a otras personas: si el jugador quiere algo de alguien, que hable con esa persona.
-"actions" (lista, puede ir vacía): si encuentra o fabrica un objeto, give_item (con "item_name", "item_description" y, si sirve para algo, "item_effect"); si se hace daño o descansa, change_stat ("target": health/energy/instability, "amount" de -30 a 30); si descubre una pista, journal ("text"); si descubre un lugar al que ir, reveal_place ("target", "text")."""},
+Eres el narrador del mundo. El jugador describe algo que hace con su cuerpo o con lo que le rodea. Cuenta en segunda persona, de forma breve (1 a 4 frases) y realista, qué ocurre. Sé justo y físico: no todo sale bien, hace falta lo necesario (herramientas, materiales, tiempo) y lo que encuentre tiene que tener sentido en ese lugar. No controlas a otras personas: si el jugador quiere algo de alguien, que hable con esa persona.
+
+MUY IMPORTANTE: el juego solo cambia con "actions". Todo lo que narres que ocurre de verdad (encontrar, fabricar, reparar, gastar, construir, talar…) DEBE tener su acción; si no la incluyes, no pasa.
+"actions" (lista, puede ir vacía):
+- play: el gesto que hace el personaje mientras tanto. "target": chop, hammer, dig, pick_up, search, crouch, sit, sleep, drink, eat, wave, point, fish, swim, dance, think. Inclúyelo casi siempre.
+- give_item: consigue o fabrica un objeto que se puede llevar encima ("item_name", "item_description", "item_effect" si sirve para algo).
+- update_item: repara, modifica o mejora algo que LLEVA ENCIMA. "target": nombre actual; "item_name": nombre nuevo (p. ej. "Radio de válvulas (reparada)"); "item_description": cómo queda.
+- remove_item: gasta, come, rompe o usa como material algo que lleva. "target": nombre.
+- place_object: construye o coloca algo grande en el mundo. "target": boat, raft, campfire, tent, shelter, table, chair, bed, fence, sign, torch, box, garden u other; "item_name": su nombre.
+- affect_nearby: tala, rompe, arranca o cosecha algo que tiene cerca. "target": tree, rock, bush o crop. Solo si está en "Cerca" de la escena.
+- change_stat ("target": health/energy/instability, "amount" de -30 a 30), journal ("text"), reveal_place ("target", "text").
+"minutes": cuánto tiempo tarda de verdad (talar un árbol ~30, construir una balsa ~180, buscar ~10).
+Ejemplo, si tala un árbol con un hacha que lleva: "actions": [{"type": "play", "target": "chop"}, {"type": "affect_nearby", "target": "tree"}, {"type": "give_item", "item_name": "Troncos de pino", "item_description": "Cuatro troncos recién cortados."}], "minutes": 40"""},
 		{"role": "user", "content": "ESCENA: %s\nQUIÉN ES EL JUGADOR: %s\nLLEVA ENCIMA: %s\n\nLO QUE HACE: %s" % [
-			scene_context, PlayerProfile.describe(), _inventory_text(), what]},
+			scene_context, PlayerProfile.describe(), _inventory_text(true), what]},
 	]
 	var res := await ContentGenerator.request_valid("world_action", messages)
 	if not res.ok:
@@ -63,17 +76,24 @@ Eres el narrador del mundo. El jugador describe algo que hace con su cuerpo o co
 		return {"ok": false, "narration": "", "notes": [], "error": reason.left(140)}
 	var place := GameState.current_location()
 	var finds: Dictionary = WorldDB.get_state("finds", {})
+	var crafting: bool = res.data.get("actions", []).any(func(a): return a.type in ["remove_item", "affect_nearby"])
 	var allowed := []
+	var gesture := ""
 	for a in res.data.get("actions", []):
 		if not (a.type in WORLD_ACTIONS):
 			continue
-		if a.type == "give_item":
+		if a.type == "give_item" and not crafting:
 			if int(finds.get(place, 0)) >= MAX_FINDS_PER_PLACE:
 				continue
 			finds[place] = int(finds.get(place, 0)) + 1
+		if a.type == "play":
+			gesture = ContentValidator._match_enum(str(a.get("target", "")), ContentValidator.archetypes().gesture)
 		allowed.append(a)
 	WorldDB.set_state("finds", finds)
-	return {"ok": true, "narration": res.data.narration, "notes": Actions.execute("", allowed), "error": ""}
+	var minutes := clampi(int(res.data.get("minutes", 5)), 0, MAX_ACTION_MINUTES)
+	WorldClock.advance(minutes)
+	return {"ok": true, "narration": res.data.narration, "notes": Actions.execute("", allowed), "error": "",
+		"gesture": gesture, "minutes": minutes}
 
 
 func end_conversation(npc_id: String) -> void:
@@ -301,16 +321,23 @@ const ACTIONS_GUIDE := """  Tipos de acción ("type") y sus campos:
   · complete_quest: das por cumplido el favor que le pediste.
   · refuse_contact: estás tan molesto/a que no quieres hablarle durante un rato. "amount": minutos.
   · journal: algo que el jugador debería apuntar (pista, cita, dirección). "text".
+  · update_item: arreglas o cambias algo que el jugador lleva encima. "target": nombre actual, "item_name": nombre nuevo, "item_description": cómo queda.
+  · play: un gesto tuyo mientras hablas. "target": wave, point, give, nod, shake_head, shrug, cross_arms, think, sit, drink, eat, hammer, search.
   Ejemplo, si te piden prestada la radio y aceptas: "actions": [{"type": "give_item", "item_name": "Radio de onda corta", "item_description": "Una radio vieja con el dial gastado.", "lent": true}]"""
 
 
-func _inventory_text() -> String:
+func _inventory_text(detailed: bool = false) -> String:
 	var names := PackedStringArray()
 	for id in Inventory.items():
 		var item := WorldDB.get_entity("item", id)
 		var lent := Inventory.lent_label(id)
-		names.append(item.get("name", "?") + (" (%s)" % lent if not lent.is_empty() else ""))
-	return "nada" if names.is_empty() else ", ".join(names)
+		var line: String = item.get("name", "?") + (" (%s)" % lent if not lent.is_empty() else "")
+		if detailed:
+			line += ": " + str(item.get("lore", "")).left(120)
+		names.append(line)
+	if names.is_empty():
+		return "nada"
+	return ("\n- " + "\n- ".join(names)) if detailed else ", ".join(names)
 
 
 func _opening(npc_id: String) -> String:

@@ -93,6 +93,47 @@ func _run() -> void:
 	actions.execute("npc_marina", r.data.actions)
 	_expect(game.get_stat("health") == 80, "Marina te cura (+30): %d" % game.get_stat("health"))
 
+	# Préstamo repetido: si ya te lo prestó y lo tienes, no aparece una copia
+	actions.execute("npc_samir", [{"type": "give_item", "item_name": "Radio de válvulas averiada", "lent": true, "item_effect": "none", "amount": 0}])
+	var before: int = inventory.items().size()
+	actions.execute("npc_samir", [{"type": "give_item", "item_name": "Radio de válvulas", "lent": true, "item_effect": "none", "amount": 0}])
+	_expect(inventory.items().size() == before, "no se duplica un préstamo")
+
+	# Reparar: el mismo objeto cambia de nombre y descripción (sigue siendo prestado)
+	var old_radio: String = inventory.find_by_name("radio")
+	r = validator.validate("world_action", {"narration": "Recolocas la válvula floja y la radio vuelve a sonar.", "minutes": "45",
+		"actions": [{"type": "reparar", "target": "la radio", "item_name": "Radio de válvulas (reparada)", "item_description": "Vuelve a captar la transmisión."}]})
+	_expect(r.ok and r.data.minutes == 45 and r.data.actions[0].type == "update_item", "repara 'reparar' y los minutos %s" % [r.errors])
+	actions.execute("", r.data.actions)
+	var fixed: Dictionary = db.get_entity("item", old_radio)
+	_expect(fixed.name == "Radio de válvulas (reparada)" and "transmisión" in fixed.lore, "la radio queda reparada: %s" % fixed.name)
+	_expect(inventory.lent_label(old_radio).contains("Samir"), "sigue siendo de Samir")
+
+	# Gastar materiales: si era prestado, el dueño lo sabe
+	actions.execute("", [{"type": "remove_item", "target": "radio"}])
+	_expect(not inventory.has(old_radio), "la radio se gasta")
+	_expect(memory.get_mem("npc_samir").facts.any(func(f): return "rompió" in f), "Samir sabe que rompiste su radio")
+
+	# Construir y talar: se guarda por lugar y se avisa a la escena
+	var placed := []
+	var removed := []
+	actions.object_placed.connect(func(e): placed.append(e))
+	actions.feature_removed.connect(func(id): removed.append(id))
+	actions.player_pose = func(): return {"pos": Vector3(10, 0, 5), "yaw": 0.0, "water": Vector3(40, -0.4, 5)}
+	actions.feature_finder = func(kind: String) -> String: return "tree_12_-30" if kind == "tree" else ""
+	r = validator.validate("world_action", {"narration": "Talas un pino y con los troncos atas una balsa.",
+		"actions": [{"type": "talar", "target": "árbol"}, {"type": "construir", "target": "balsa", "item_name": "Balsa de pino"},
+			{"type": "affect_nearby", "target": "rock"}]})
+	actions.execute("", r.data.actions)
+	_expect(removed == ["tree_12_-30"], "talar quita el árbol más cercano %s" % [removed])
+	_expect(actions.removed_here(game.current_location()) == ["tree_12_-30"], "el árbol talado se recuerda")
+	_expect(placed.size() == 1 and placed[0].kind == "raft" and placed[0].pos[0] == 40.0, "la balsa se bota en el agua %s" % [placed])
+	_expect(actions.placed_here(game.current_location()).size() == 1, "la balsa queda guardada en el lugar")
+
+	# Si el modelo no da opciones, el turno sigue valiendo
+	r = validator.validate("dialogue_turn", {"line": "Bueno, ya ves cómo está la cosa.", "emotion": "neutral"})
+	_expect(r.ok and r.data.choices.size() == 3, "turno sin opciones → opciones por defecto %s" % [r.errors])
+
 	# El Ancla no se regala
 	var anchor: String = db.add_entity("item", {"name": "Ancla", "kind": "technology", "effect": "none", "power": 100, "lore": "El dispositivo.", "tags": []}, "awakening")
 	db.set_state("awakening", {"anchor_id": anchor})

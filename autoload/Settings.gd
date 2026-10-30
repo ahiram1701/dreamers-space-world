@@ -18,6 +18,8 @@ var mouse_sensitivity: float = 1.0  # multiplicador
 var volume: float = 0.8             # 0..1, volumen general
 ## 0 baja, 1 media, 2 alta (lo aplica EnvironmentFX al entrar en cada escena).
 var graphics_quality: int = 1
+## Minutos reales que dura un día de juego (1440 = tiempo real).
+var day_minutes: float = 120.0
 ## Aspecto del protagonista: "masculine", "feminine" o "" (lo decide el mundo).
 var player_figure: String = ""
 
@@ -44,6 +46,7 @@ func load_settings() -> void:
 	volume = cfg.get_value("game", "volume", 0.8)
 	graphics_quality = cfg.get_value("game", "graphics_quality", 1)
 	player_figure = cfg.get_value("game", "player_figure", "")
+	day_minutes = cfg.get_value("game", "day_minutes", 120.0)
 	_apply_volume()
 
 
@@ -59,6 +62,7 @@ func save_settings() -> void:
 	cfg.set_value("game", "volume", volume)
 	cfg.set_value("game", "graphics_quality", graphics_quality)
 	cfg.set_value("game", "player_figure", player_figure)
+	cfg.set_value("game", "day_minutes", day_minutes)
 	_apply_volume()
 	var err := cfg.save_encrypted_pass(PATH, _passphrase())
 	if err != OK:

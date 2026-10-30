@@ -1,11 +1,10 @@
 extends Node
-## Hora del mundo. Un día de juego dura DAY_SECONDS reales (24 min: 1 minuto de juego por
-## segundo). Mueve el sol, enciende farolas y ventanas, y los PNJs siguen su rutina.
+## Hora del mundo. Un día de juego dura Settings.day_minutes reales (2 h por defecto; se puede
+## elegir hasta tiempo real). Mueve el sol, enciende farolas y ventanas, y los PNJs siguen su rutina.
 ## Se guarda en WorldDB ("clock"), así que cada mundo tiene su propia hora.
 
 signal hour_changed(hour: int)
 
-const DAY_SECONDS := 24.0 * 60.0
 const START_HOUR := 18.5     # el Acto 0 empieza al atardecer
 const SAVE_EVERY := 20.0     # segundos reales entre guardados
 
@@ -26,7 +25,7 @@ func _process(delta: float) -> void:
 		_last_hour = -1
 	if paused or get_tree().paused:
 		return
-	_minutes = fmod(_minutes + delta * (24.0 * 60.0 / DAY_SECONDS), 24.0 * 60.0)
+	_minutes = fmod(_minutes + delta * (24.0 / maxf(Settings.day_minutes, 1.0)), 24.0 * 60.0)
 	var h := int(_minutes / 60.0)
 	if h != _last_hour:
 		_last_hour = h
@@ -47,6 +46,11 @@ func set_hour(h: float) -> void:
 	if WorldDB.is_loaded():
 		WorldDB.set_state("clock", _minutes)
 	_last_hour = -1
+
+
+## Pasa el tiempo de golpe (una acción que dura, dormir…).
+func advance(minutes: float) -> void:
+	set_hour(hour() + maxf(minutes, 0.0) / 60.0)
 
 
 func text() -> String:

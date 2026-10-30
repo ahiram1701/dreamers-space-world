@@ -18,6 +18,9 @@ var _fx: EnvironmentFX
 var _npcs: Dictionary = {}
 var _places: Dictionary = {}  # nombre del punto de interés -> posición
 var _placed: Array = []  # posiciones ocupadas (balizas, objetos) para que la decoración no las tape
+var _interiors: InteriorManager
+var _extras := {"features": [], "buildings": [], "removed": []}  # lo que decora PropsBuilder
+var _water_level := -INF
 
 
 func _ready() -> void:
@@ -29,7 +32,12 @@ func _ready() -> void:
 		_def = ContentGenerator.load_fallback("location")  # vista previa sin partida (editor / smoke test)
 		_location_id = ""
 
+	_extras.removed = Actions.removed_here(GameState.current_location())
+	_interiors = InteriorManager.new()
+	add_child(_interiors)
 	var space := StationBuilder.is_space(_def)
+	if _def.get("biome", "") == "ocean" and not space:
+		_water_level = -0.45
 	var ground := StationBuilder.build(_def, _rng(0)) if space else TerrainBuilder.build(_def)
 	_height_at = ground.height_at
 	_limit = ground.get("limit", TerrainBuilder.SIZE / 2.0 - 4.0)
@@ -38,15 +46,24 @@ func _ready() -> void:
 	_build_points_of_interest()
 	_spawn_pickups()
 	if not space:
-		PropsBuilder.build(self, _def, _height_at, _rng(4), _placed)
+		PropsBuilder.build(self, _def, _height_at, _rng(4), _placed, _extras)
+		_add_doors()
 	elif _def.get("kind", "") == "anomaly_zone" or _def.get("finale", false):
 		PropsBuilder._floating_rocks(self, _rng(4), "void")
 
 	_player = Player.new()
 	_player.gravity_scale = float(_def.get("gravity", 1.0))
 	_player.position = SPAWN + Vector3(0, _height_at.call(0.0, 0.0), 0)
+	_player.water_level = _water_level
 	add_child(_player)
 	_player.interact_requested.connect(_on_interact)
+	_interiors.player = _player
+	for entry in Actions.placed_here(GameState.current_location()):
+		Decor.build_placed(self, entry, _height_at, _water_level, _on_placed_use)
+	Actions.player_pose = _player_pose
+	Actions.feature_finder = _find_feature
+	Actions.object_placed.connect(func(e): Decor.build_placed(self, e, _height_at, _water_level, _on_placed_use))
+	Actions.feature_removed.connect(_remove_feature)
 
 	_spawn_npcs()
 	_build_hud()
@@ -55,6 +72,9 @@ func _ready() -> void:
 	_ui.nearby_npcs = func(): return _npcs.keys()
 	_ui.scene_context = _action_context
 	add_child(_ui)
+	_interiors.message.connect(_ui.toast)
+	_interiors.entered.connect(func(_k, _id): _bring_followers())
+	_interiors.exited.connect(func(_k, _id): _bring_followers())
 	Actions.npc_action.connect(_on_npc_action)
 	for id in _npcs:  # quien aceptó acompañarte sigue contigo
 		if NPCMemory.is_following(id):
@@ -63,6 +83,7 @@ func _ready() -> void:
 	_dialogue.scene_context = _scene_context()
 	add_child(_dialogue)
 	_dialogue.closed.connect(_on_dialogue_closed)
+	_dialogue.turn_received.connect(_on_turn)
 	add_child(AmbientAudio.for_location(_def))
 	GameState.stat_changed.connect(func(_s, _v): _apply_instability())
 	_apply_instability()
@@ -80,12 +101,18 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	var p := _player.position
+	if _interiors.is_inside():
+		return
 	if p.y < -30.0:
 		_player.position = SPAWN + Vector3(0, _height_at.call(0.0, 0.0), 0)
 		_player.velocity = Vector3.ZERO
 	elif absf(p.x) > _limit or absf(p.z) > _limit:  # borde del mapa generado
 		_player.position.x = clampf(p.x, -_limit, _limit)
 		_player.position.z = clampf(p.z, -_limit, _limit)
+	var head := _player.global_position + Vector3(0, 1.6, 0)
+	for id in _npcs:  # te miran al pasar cerca
+		var npc: TownNPC = _npcs[id]
+		npc.look_at_target(head if npc.global_position.distance_to(head) < 7.0 else Vector3.INF)
 
 
 # --- Construcción ---------------------------------------------------------------------
@@ -244,8 +271,13 @@ func _on_interact(target: Node) -> void:
 		_ui.block(true)
 		target.face(_player.global_position)
 		target.talking = true
-		_dialogue.scene_context = _scene_context() + "\n" + WorldClock.describe() if not StationBuilder.is_space(_def) else _scene_context()
+		_player.face_towards(target.global_position)
+		_dialogue.scene_context = _action_context()
 		_dialogue.open(target.npc_id)
+	elif target is Interactable:
+		target.use(_player)
+	elif target is Boat:
+		target._on_use(_player)
 	elif target is Pickup:
 		Inventory.add(target.item_id)
 		if not _location_id.is_empty():
@@ -262,6 +294,7 @@ func _on_interact(target: Node) -> void:
 
 func _on_dialogue_closed(npc_id: String) -> void:
 	_ui.block(false)
+	_player.clear_look()
 	if _npcs.has(npc_id):
 		_npcs[npc_id].talking = false
 		_npcs[npc_id].refresh_name(WorldDB.get_entity("npc", npc_id))
@@ -310,10 +343,27 @@ func _action_context() -> String:
 		if d < best:
 			near = name
 			best = d
-	var ctx := _scene_context() + "\nEl jugador está cerca de: %s." % near
+	var ctx := _scene_context()
+	if _interiors.is_inside():
+		ctx += "\nEl jugador está DENTRO de %s (una habitación con muebles)." % _interiors.current_label()
+	else:
+		ctx += "\nEl jugador está cerca de: %s. Cerca: %s." % [near, _surroundings()]
 	if not StationBuilder.is_space(_def):
 		ctx += " " + WorldClock.describe()
 	return ctx
+
+
+func _surroundings() -> String:
+	var counts := {}
+	for f in _extras.features:
+		if is_instance_valid(f.node) and f.pos.distance_to(_player.global_position) < 8.0:
+			counts[f.kind] = counts.get(f.kind, 0) + 1
+	var parts := PackedStringArray()
+	for k in counts:
+		parts.append("%d × %s" % [counts[k], {"tree": "árbol", "rock": "roca", "bush": "arbusto"}.get(k, k)])
+	if _water_spot() != Vector3.INF:
+		parts.append("agua cerca")
+	return "nada especial" if parts.is_empty() else ", ".join(parts)
 
 
 ## Lo que un PNJ decide en una conversación se ve en el mundo: te sigue o va a un sitio.
@@ -326,6 +376,14 @@ func _on_npc_action(npc_id: String, action: Dictionary) -> void:
 			npc.follow(_player)
 		"stop_following":
 			npc.stop()
+		"give_item", "take_item":
+			npc.play_gesture("give", 2.5)
+		"update_item":
+			npc.play_gesture("hammer", 3.0)
+		"refuse_contact":
+			npc.play_gesture("cross_arms", 6.0)
+		"play":
+			npc.play_gesture(ContentValidator._match_enum(str(action.get("target", "")), ContentValidator.archetypes().gesture), 4.0)
 		"go_to":
 			var t := str(action.get("target", "")).to_lower()
 			var dest := Vector3(randf_range(-20, 20), 0, randf_range(-20, 20))
@@ -334,6 +392,87 @@ func _on_npc_action(npc_id: String, action: Dictionary) -> void:
 					dest = _places[name]
 			if not NPCMemory.is_following(npc_id):
 				npc.walk_to(dest)
+
+
+func _on_turn(npc_id: String, turn: Dictionary) -> void:
+	if _npcs.has(npc_id):
+		_npcs[npc_id].set_emotion(turn.get("emotion", "neutral"))
+
+
+## Quien te acompaña entra y sale contigo de los edificios.
+func _bring_followers() -> void:
+	for id in _npcs:
+		if NPCMemory.is_following(id):
+			_npcs[id].global_position = _player.global_position + Vector3(1.5, 0.3, 1.0)
+
+
+## Cada edificio de un asentamiento tiene puerta; el interior depende de la época.
+func _add_doors() -> void:
+	var era: String = _def.get("era", "present")
+	var futuristic := era in ["near_future", "far_future", "deep_future"]
+	var i := 0
+	for b in _extras.buildings:
+		var size: Vector3 = b.get_meta("size", Vector3(6, 4, 6))
+		var front: Vector3 = b.global_transform.basis.z.normalized()
+		var pos: Vector3 = b.position + front * (size.z / 2.0 + 0.6)
+		pos.y = _height_at.call(pos.x, pos.z)
+		i += 1
+		_interiors.add_door("edificio_%d" % i, pos, b.rotation.y, "scifi" if futuristic else "house", int(_def.get("seed", 1)) * 100 + i,
+			"un edificio" if futuristic else "una casa")
+
+
+func _player_pose() -> Dictionary:
+	return {"pos": _player.global_position, "yaw": _player.facing_yaw(), "water": _water_spot()}
+
+
+func _water_spot() -> Vector3:
+	if _water_level == -INF or _interiors.is_inside():
+		return Vector3.INF
+	var p := _player.global_position
+	for dist in [3.0, 6.0, 10.0, 15.0, 20.0, 25.0]:
+		for i in 12:
+			var a := TAU * i / 12.0
+			var q: Vector3 = p + Vector3(cos(a), 0, sin(a)) * dist
+			if _height_at.call(q.x, q.z) < _water_level - 0.5:
+				return Vector3(q.x, _water_level, q.z)
+	return Vector3.INF
+
+
+func _find_feature(kind: String) -> String:
+	var best := ""
+	var best_d := 6.0
+	for f in _extras.features:
+		if f.kind == kind and is_instance_valid(f.node):
+			var d: float = Vector2(f.pos.x - _player.global_position.x, f.pos.z - _player.global_position.z).length()
+			if d < best_d:
+				best = f.id
+				best_d = d
+	return best
+
+
+func _remove_feature(id: String) -> void:
+	for f in _extras.features:
+		if f.id == id and is_instance_valid(f.node):
+			var node: Node3D = f.node
+			for c in node.get_children():
+				if c is StaticBody3D:
+					c.queue_free()
+			var tw := node.create_tween()
+			if f.kind == "tree":
+				var away := (node.global_position - _player.global_position).normalized()
+				tw.tween_property(node, "rotation", Vector3(away.z * 1.5, node.rotation.y, -away.x * 1.5), 1.6).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+				tw.tween_interval(1.5)
+			tw.tween_property(node, "scale", Vector3(1, 0.01, 1), 0.6)
+			tw.tween_callback(node.queue_free)
+			_extras.features.erase(f)
+			return
+
+
+func _on_placed_use(kind: String, node: Node3D, _player_node: Player) -> void:
+	if kind == "bed":
+		_interiors.sleep(node)
+	else:
+		_interiors.sit(node)
 
 
 func _era_label(era: String) -> String:

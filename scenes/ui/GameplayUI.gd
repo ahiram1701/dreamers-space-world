@@ -68,6 +68,7 @@ func _ready() -> void:
 	add_child(pause)
 	actions = ActionPanel.new()
 	actions.context = func(): return scene_context.call()
+	actions.player = player
 	add_child(actions)
 	_clock = _label(Vector2.ZERO, 18, Color(1, 1, 1, 0.85))
 	_clock.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 16)

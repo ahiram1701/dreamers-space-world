@@ -5,6 +5,10 @@
 set -uo pipefail
 
 GODOT="${GODOT:-godot}"
+if ! command -v "$GODOT" >/dev/null 2>&1; then
+	echo "::error::No se encuentra Godot ($GODOT): las escenas no se han probado"
+	exit 1
+fi
 SCENES=(
 	"res://scenes/main_menu/MainMenu.tscn"
 	"res://scenes/act0_town/Act0Town.tscn"

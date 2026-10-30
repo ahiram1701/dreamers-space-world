@@ -9,6 +9,18 @@ signal closed
 
 ## Devuelve la descripción de dónde está el jugador y qué tiene cerca. Lo asigna la escena.
 var context: Callable = func(): return ""
+## El personaje que hace la acción (para verle hacerla).
+var player: Player
+
+## Palabras → gesto que empieza nada más pulsar "Hacer", mientras la IA decide qué pasa.
+const GUESS := [
+	[["talo", "talar", "tala ", "corto", "cortar", "hacha", "leña"], "chop"], [["constru", "arregl", "repar", "clav", "martill", "fabric", "monto", "ato"], "hammer"],
+	[["cav", "excav", "entierr", "pala", "plant"], "dig"], [["busc", "rebusc", "registr", "examin", "inspeccion", "rastre"], "search"],
+	[["recoj", "recog", "cojo", "agarr", "levant"], "pick_up"], [["siento", "sentar", "descans"], "sit"],
+	[["duerm", "dormir", "tumb", "acuest"], "sleep"], [["bebo", "beber", "trago"], "drink"], [["comer", "me como", "como algo", "almuerz", "ceno", "desayun"], "eat"], [["salud"], "wave"],
+	[["señal", "apunt"], "point"], [["pesc", "caña"], "fish"], [["nad"], "swim"], [["bail"], "dance"],
+	[["piens", "pensar", "medit", "reflexion"], "think"], [["agach", "escond"], "crouch"],
+]
 
 var _panel: PanelContainer
 var _text: RichTextLabel
@@ -19,10 +31,10 @@ var _busy := false
 
 func _ready() -> void:
 	layer = 12
-	_panel = PanelContainer.new()
-	_panel.anchor_left = 0.15
-	_panel.anchor_right = 0.85
-	_panel.anchor_top = 0.6
+	_panel = PanelContainer.new()  # a un lado: hay que ver al personaje hacerlo
+	_panel.anchor_left = 0.02
+	_panel.anchor_right = 0.42
+	_panel.anchor_top = 0.45
 	_panel.anchor_bottom = 0.95
 	_panel.visible = false
 	UIStyle.apply(_panel)
@@ -74,6 +86,15 @@ func close() -> void:
 	closed.emit()
 
 
+static func guess_gesture(text: String) -> String:
+	var t := " " + text.to_lower()
+	for entry in GUESS:
+		for k in entry[0]:
+			if t.contains(" " + k):
+				return entry[1]
+	return ""
+
+
 func _do() -> void:
 	var what := _input.text.strip_edges()
 	if what.is_empty() or _busy:
@@ -83,7 +104,21 @@ func _do() -> void:
 	_input.editable = false
 	_go.disabled = true
 	_text.text = "[color=#8fb3ff][i]%s[/i][/color]\n\n[color=gray]…[/color]" % what
+	var guess := guess_gesture(what)
+	if player and not guess.is_empty():
+		player.play_gesture(guess, 30.0)
 	var r := await StoryDirector.act(what, context.call())
+	if player:
+		var g: String = r.get("gesture", "")
+		if g.is_empty():
+			g = guess
+		if g.is_empty():
+			player.stop_gesture()
+		elif g in ["sit", "sleep", "crouch"]:
+			player.play_gesture(g)  # se queda así hasta que te muevas
+			player.hold_position = true
+		else:  # dura lo que tardó (acelerado): entre 3 y 8 segundos
+			player.play_gesture(g, clampf(float(r.get("minutes", 5)) / 6.0, 3.0, 8.0))
 	_busy = false
 	_input.editable = true
 	_go.disabled = false

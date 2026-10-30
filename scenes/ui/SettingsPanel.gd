@@ -4,6 +4,8 @@ extends CanvasLayer
 
 signal closed
 
+const DAY_OPTIONS := [24.0, 60.0, 120.0, 240.0, 1440.0]
+
 var _key: LineEdit
 var _model: LineEdit
 var _mock: CheckBox
@@ -12,6 +14,7 @@ var _sens: HSlider
 var _volume: HSlider
 var _quality: OptionButton
 var _figure: OptionButton
+var _day: OptionButton
 var _status: Label
 
 
@@ -55,6 +58,8 @@ func _ready() -> void:
 	_quality = _option(box, "Calidad gráfica", ["Baja (PCs modestos)", "Media", "Alta"], Settings.graphics_quality)
 	_figure = _option(box, "Tu personaje", ["Lo decide el mundo", "Hombre", "Mujer"],
 		["", "masculine", "feminine"].find(Settings.player_figure))
+	_day = _option(box, "Duración del día", ["24 minutos", "1 hora", "2 horas", "4 horas", "Tiempo real (24 h)"],
+		DAY_OPTIONS.find(Settings.day_minutes) if DAY_OPTIONS.has(Settings.day_minutes) else 2)
 
 	_section(box, "Actualizaciones")
 	_updates = _check(box, "Buscar actualizaciones al iniciar", Settings.auto_check_updates)
@@ -111,6 +116,7 @@ func _save() -> void:
 	Settings.volume = _volume.value
 	Settings.graphics_quality = _quality.selected
 	Settings.player_figure = ["", "masculine", "feminine"][maxi(_figure.selected, 0)]
+	Settings.day_minutes = DAY_OPTIONS[maxi(_day.selected, 0)]
 	Settings.save_settings()
 	_status.text = "Guardado."
 	_close()

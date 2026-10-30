@@ -70,7 +70,10 @@ const SPECS := {
 	"dialogue_turn": {
 		"line": {"t": "string", "min": 1, "max": 600},
 		"emotion": {"t": "enum", "from": "emotion", "default": "neutral"},
-		"choices": {"t": "array", "min": 2, "max": 4, "lenient": true, "items": {"t": "object", "fields": {
+		# Si el modelo no las da, el jugador siempre puede seguir: no se tira la frase del PNJ
+		"choices": {"t": "array", "min": 2, "max": 4, "lenient": true, "default": [
+				{"text": "Sigue, te escucho.", "tone": "friendly"}, {"text": "Cambiemos de tema.", "tone": "curious"},
+				{"text": "Tengo que irme, hasta luego.", "tone": "kind"}], "items": {"t": "object", "fields": {
 			"text": {"t": "string", "min": 2, "max": 120},
 			"tone": {"t": "enum", "from": "tone", "default": "friendly"},
 		}}},
@@ -81,12 +84,13 @@ const SPECS := {
 			"delta": {"t": "int", "min": -3, "max": 3, "default": 1},
 		}}},
 		"end_conversation": {"t": "bool", "default": false},
-		"actions": {"t": "array", "min": 0, "max": 3, "opt": true, "lenient": true, "items": ACTION},
+		"actions": {"t": "array", "min": 0, "max": 4, "opt": true, "lenient": true, "items": ACTION},
 	},
 	# El jugador hace algo libre en el mundo ("busco en el cajón", "pesco en el muelle").
 	"world_action": {
 		"narration": {"t": "string", "min": 5, "max": 800},
-		"actions": {"t": "array", "min": 0, "max": 2, "opt": true, "lenient": true, "items": ACTION},
+		"actions": {"t": "array", "min": 0, "max": 6, "opt": true, "lenient": true, "items": ACTION},
+		"minutes": {"t": "int", "min": 0, "max": 480, "default": 5},
 	},
 	# El momento en que el jugador descubre la brecha. Una vez por partida.
 	"awakening": {
@@ -155,7 +159,22 @@ const SYNONYMS := {
 	"revelar_lugar": "reveal_place", "dar_mision": "give_quest", "misión": "give_quest", "mision": "give_quest",
 	"completar_mision": "complete_quest", "negarse": "refuse_contact", "diario": "journal", "nota": "journal",
 	"pista": "journal", "salud": "health", "vida": "health", "energía": "energy", "energia": "energy",
-	"inestabilidad": "instability", "masculino": "masculine", "hombre": "masculine", "male": "masculine",
+	"inestabilidad": "instability", "reparar": "update_item", "arreglar": "update_item", "modificar": "update_item",
+	"mejorar": "update_item", "modify_item": "update_item", "repair_item": "update_item", "gastar": "remove_item",
+	"consumir": "remove_item", "consume_item": "remove_item", "use_item": "remove_item", "destroy_item": "remove_item",
+	"construir": "place_object", "colocar": "place_object", "fabricar": "place_object", "build": "place_object",
+	"build_object": "place_object", "craft": "place_object", "spawn_object": "place_object", "talar": "affect_nearby",
+	"cortar": "affect_nearby", "romper": "affect_nearby", "cosechar": "affect_nearby", "chop_tree": "affect_nearby",
+	"gesto": "play", "animación": "play", "animacion": "play", "animation": "play", "gesture": "play", "emote": "play",
+	"bote": "boat", "barca": "boat", "barco": "boat", "canoa": "boat", "balsa": "raft", "hoguera": "campfire",
+	"fogata": "campfire", "fuego": "campfire", "tienda": "tent", "carpa": "tent", "refugio": "shelter", "cabaña": "shelter",
+	"mesa": "table", "silla": "chair", "banco": "chair", "cama": "bed", "valla": "fence", "cerca": "fence",
+	"cartel": "sign", "letrero": "sign", "antorcha": "torch", "caja": "box", "cofre": "box", "huerto": "garden",
+	"árbol": "tree", "arbol": "tree", "roca": "rock", "piedra": "rock", "arbusto": "bush", "cultivo": "crop",
+	"saludar": "wave", "señalar": "point", "sentarse": "sit", "dormir": "sleep", "beber": "drink", "comer": "eat",
+	"pensar": "think", "bailar": "dance", "pescar": "fish", "remar": "row", "nadar": "swim", "excavar": "dig", "cavar": "dig",
+	"recoger": "pick_up", "buscar": "search", "agacharse": "crouch", "martillar": "hammer", "asentir": "nod",
+	"negar": "shake_head", "encogerse_de_hombros": "shrug", "cruzar_brazos": "cross_arms", "entregar_objeto": "give", "masculino": "masculine", "hombre": "masculine", "male": "masculine",
 	"femenino": "feminine", "mujer": "feminine", "female": "feminine",
 }
 
@@ -262,7 +281,9 @@ func _check(spec: Dictionary, value: Variant, path: String, errors: Array[String
 			return matched
 		"array":
 			if typeof(value) != TYPE_ARRAY:
-				return _fallback(spec, path, "se esperaba una lista", errors, warnings) if not spec.get("opt", false) else []
+				if spec.get("opt", false) and not spec.has("default"):
+					return []
+				return _fallback(spec, path, "se esperaba una lista", errors, warnings)
 			var out := []
 			for i in value.size():
 				if out.size() >= spec.max:
@@ -276,6 +297,9 @@ func _check(spec: Dictionary, value: Variant, path: String, errors: Array[String
 				else:
 					errors.append_array(item_errors)
 			if out.size() < spec.min:
+				if spec.has("default"):
+					warnings.append("%s: pocos elementos válidos, se usa el valor por defecto" % path)
+					return _default_of(spec)
 				errors.append("%s: se necesitan al menos %d elementos válidos" % [path, spec.min])
 			return out
 		"object":

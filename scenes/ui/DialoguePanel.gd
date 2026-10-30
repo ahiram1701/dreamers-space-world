@@ -4,6 +4,8 @@ extends CanvasLayer
 ## Escribir libremente es clave: es lo que hace que cada partida sea única.
 
 signal closed(npc_id: String)
+## Cada respuesta del PNJ (para que la escena le ponga la emoción y los gestos).
+signal turn_received(npc_id: String, turn: Dictionary)
 
 # Texto y no emojis: la fuente por defecto de Godot no los trae.
 const EMOTION_LABEL := {
@@ -118,6 +120,7 @@ func _send(text: String) -> void:
 		_line.text = "[color=red]%s[/color]" % turn.get("error", "Error")
 		return
 
+	turn_received.emit(_npc.id, turn)
 	_speaker.text = "%s %s" % [_npc.name, EMOTION_LABEL.get(turn.emotion, "")]
 	_line.text = turn.line
 	if turn.source == "fallback":

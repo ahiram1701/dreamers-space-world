@@ -9,6 +9,9 @@ const WALK_SPEED := 4.5
 const RUN_SPEED := 8.0
 const JUMP_VELOCITY := 4.5
 const MOUSE_SENSITIVITY := 0.0025
+const SWIM_SPEED := 2.2
+const SWIM_DEPTH := 1.1         # el agua cubre hasta el pecho: a partir de ahí se nada
+const FLOAT_DEPTH := 0.2        # nadando, el cuerpo flota justo bajo la superficie
 
 var controls_enabled := true:
 	set(value):
@@ -19,6 +22,13 @@ var controls_enabled := true:
 var interact_target: Node = null
 ## Gravedad del lugar respecto a la Tierra (la define la IA en cada location).
 var gravity_scale := 1.0
+## Altura del agua en este lugar (-INF si no hay): por debajo, el jugador nada.
+var water_level := -INF
+## Barca en la que va montado (la mueve ella; el jugador va sentado remando).
+var riding: Node3D = null
+## Sentado o tumbado: no cae ni se mueve hasta que el jugador camina.
+var hold_position := false
+var _swimming := false
 
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _yaw: Node3D
@@ -78,10 +88,55 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventKey and event.pressed and not event.echo:
 		match event.physical_keycode:
 			KEY_E:
-				if controls_enabled and interact_target != null:
+				if controls_enabled and riding != null:
+					interact_requested.emit(riding)  # bajarse de la barca
+				elif controls_enabled and interact_target != null:
 					interact_requested.emit(interact_target)
 	elif event is InputEventMouseButton and event.pressed and controls_enabled:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+## El personaje hace un gesto (talar, sentarse, saludar…). Ver HumanoidRig.
+func play_gesture(gesture: String, duration: float = -1.0) -> void:
+	if _rig:
+		_rig.play(gesture, duration)
+
+
+func stop_gesture() -> void:
+	if _rig:
+		_rig.stop_gesture()
+
+
+## Hacia dónde mira el cuerpo (para colocar lo que construye delante).
+func facing_yaw() -> float:
+	return _body.rotation.y
+
+
+func face_towards(point: Vector3) -> void:
+	var d := point - global_position
+	if Vector2(d.x, d.z).length() > 0.1:
+		_body.rotation.y = atan2(d.x, d.z)
+	if _rig:
+		_rig.look_at_point = point + Vector3(0, 1.5, 0)
+
+
+func clear_look() -> void:
+	if _rig:
+		_rig.look_at_point = Vector3.INF
+
+
+func is_swimming() -> bool:
+	# Solo cerca de la superficie: los interiores están muy por debajo del agua y no se nada en ellos
+	if water_level == -INF or riding != null or global_position.y < water_level - 8.0:
+		return false
+	# Se empieza a nadar cuando el agua cubre el pecho y se deja al hacer pie en la orilla
+	return global_position.y < water_level - (0.15 if _swimming else SWIM_DEPTH)
+
+
+## Gira la cámara para mirar en una dirección (al entrar o salir de un edificio).
+func look_direction(dir: Vector3) -> void:
+	_yaw.rotation.y = atan2(-dir.x, -dir.z)
+	_body.rotation.y = atan2(dir.x, dir.z)
 
 
 ## Temblor de cámara (el pulso del faro, los saltos).
@@ -101,20 +156,46 @@ func _process(delta: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if not is_on_floor():
+	if riding != null:  # sentado en la barca: ella se mueve, el jugador va encima
+		velocity = Vector3.ZERO
+		global_position = riding.call("seat_position")
+		_body.global_rotation.y = riding.global_rotation.y
+		if _rig:
+			_rig.speed = 0.0
+			_rig.airborne = false
+		return
+	if hold_position:
+		var wants_move := controls_enabled and (_key(KEY_W) + _key(KEY_A) + _key(KEY_S) + _key(KEY_D)) > 0.0
+		if not wants_move:
+			velocity = Vector3.ZERO
+			if _rig:
+				_rig.speed = 0.0
+				_rig.airborne = false
+			return
+		hold_position = false
+		stop_gesture()
+	var swimming := is_swimming()
+	_swimming = swimming
+	if swimming:
+		# Flotar: el agua empuja hacia la superficie y frena
+		var float_y := water_level - FLOAT_DEPTH
+		velocity.y = lerpf(velocity.y, (float_y - global_position.y) * 3.0, 6.0 * delta)
+	elif not is_on_floor():
 		velocity.y -= _gravity * gravity_scale * delta
 
 	var input := Vector2.ZERO
 	if controls_enabled:
 		input.x = _key(KEY_D) - _key(KEY_A)
 		input.y = _key(KEY_S) - _key(KEY_W)
-		if Input.is_physical_key_pressed(KEY_SPACE) and is_on_floor():
+		if Input.is_physical_key_pressed(KEY_SPACE) and is_on_floor() and not swimming:
 			velocity.y = JUMP_VELOCITY
 
 	var dir := (_yaw.global_basis * Vector3(input.x, 0, input.y))
 	dir.y = 0
 	dir = dir.normalized()
 	var speed := RUN_SPEED if Input.is_physical_key_pressed(KEY_SHIFT) else WALK_SPEED
+	if swimming:
+		speed = SWIM_SPEED
 	if dir != Vector3.ZERO:
 		velocity.x = dir.x * speed
 		velocity.z = dir.z * speed
@@ -124,7 +205,11 @@ func _physics_process(delta: float) -> void:
 		velocity.z = move_toward(velocity.z, 0, speed * 8.0 * delta)
 	move_and_slide()
 	if _rig:
-		_rig.speed = Vector2(velocity.x, velocity.z).length() if is_on_floor() else 0.5
+		_rig.speed = Vector2(velocity.x, velocity.z).length()
+		_rig.airborne = not is_on_floor() and not swimming and velocity.y > -12.0
+		_rig.swimming = swimming
+		if dir != Vector3.ZERO and _rig.gesture() in ["sit", "sleep", "crouch", "search", "chop", "hammer", "dig", "fish", "think"]:
+			_rig.stop_gesture()  # moverse interrumpe lo que estaba haciendo
 
 
 func _key(k: Key) -> float:

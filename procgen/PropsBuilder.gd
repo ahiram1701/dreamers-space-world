@@ -19,7 +19,14 @@ const ERA_STYLE := {
 }
 
 
-static func build(parent: Node3D, def: Dictionary, height_at: Callable, rng: RandomNumberGenerator, avoid: Array) -> void:
+## Lo que la escena necesita saber de la decoración (se rellena durante build()):
+##   features: [{id, kind, node, pos}] árboles, rocas y arbustos que se pueden talar o romper
+##   buildings: [Node3D] edificios con puerta; removed: ids que ya no existen (talados).
+static var _extras: Dictionary = {}
+
+
+static func build(parent: Node3D, def: Dictionary, height_at: Callable, rng: RandomNumberGenerator, avoid: Array, extras: Dictionary = {}) -> void:
+	_extras = extras
 	var kind: String = def.get("kind", "wilderness")
 	var biome: String = def.get("biome", "barren")
 	match kind:
@@ -55,10 +62,19 @@ static func _settlement(parent: Node3D, def: Dictionary, height_at: Callable, rn
 			var model := AssetLibrary.building(size_class, rng, wall)
 			if model:
 				var b := AssetLibrary.bounds(model)
-				AssetLibrary.place(parent, model, p + Vector3(0, 0.25, 0), b.size.y * rng.randf_range(2.4, 3.0),
+				var building := AssetLibrary.place(parent, model, p + Vector3(0, 0.25, 0), b.size.y * rng.randf_range(2.4, 3.0),
 					atan2(hub.x - p.x, hub.y - p.z), true)  # mirando a la plaza
+				if _extras.has("buildings"):
+					_extras.buildings.append(building)
 				avoid.append(p)
 				continue
+		if _extras.has("buildings"):  # también se entra en las cabañas, cúpulas y torres procedurales
+			var marker := Node3D.new()
+			marker.position = p
+			marker.rotation.y = atan2(hub.x - p.x, hub.y - p.z)
+			marker.set_meta("size", Vector3(w, h, w * (1.4 if style.shape == "dome" else 0.95)))
+			parent.add_child(marker)
+			_extras.buildings.append(marker)
 		match style.shape:
 			"hut":
 				_cylinder(parent, p + Vector3(0, h / 2, 0), w * 0.4, w * 0.45, h, wall, true)
@@ -178,11 +194,19 @@ static func _model_at(parent: Node3D, biome: String, kind: int, height_at: Calla
 	if p == Vector3.INF:
 		return
 	var model := AssetLibrary.nature(biome, kind, rng)
+	var fid := "%s_%d_%d" % [["tree", "bush", "rock"][kind], roundi(p.x), roundi(p.z)]
+	if fid in _extras.get("removed", []):  # lo talaste o rompiste: ya no está
+		if model:
+			model.free()
+		return
 	if model == null:
 		if kind == 0:
 			_cylinder(parent, p + Vector3(0, height_at.call(p.x, p.z) + height / 2, 0), 0.2, 0.35, height, Color("#5a4030"), true)
 		return
-	var root := AssetLibrary.place(parent, model, p + Vector3(0, height_at.call(p.x, p.z) - 0.1, 0), height, rng.randf() * TAU, collide)
+	var root := AssetLibrary.place(parent, model, p + Vector3(0, height_at.call(p.x, p.z) - 0.1, 0), height, rng.randf() * TAU,
+		("trunk" if kind == 0 else collide) if kind != 1 else false)
+	if _extras.has("features"):
+		_extras.features.append({"id": fid, "kind": ["tree", "bush", "rock"][kind], "node": root, "pos": p})
 	if tint.a > 0.0:
 		for mi in AssetLibrary._meshes(root):
 			for i in mi.mesh.get_surface_count():

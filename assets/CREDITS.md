@@ -12,5 +12,7 @@ Las copias en GLB se tomaron de [trebeljahr/quaternius-showcase](https://github.
 | `street_pack/` | Ultimate Street | Farolas y señales |
 | `ships_pack/` | Ships Pack | Barcas del muelle |
 | `modular_sci_fi/` | Modular Sci-Fi | Equipamiento de las estaciones espaciales |
+| `house_interior_pack/` | Ultimate House Interior | Muebles de los interiores |
+| `survival_pack/` | Survival Pack | Herramientas en la mano (hacha, pala, remo), balsa, hoguera, tienda, antorchas |
 
 La licencia "todos los derechos reservados" del proyecto ([LICENSE](../LICENSE)) cubre el código y el contenido propio, no estos modelos, que siguen siendo CC0.

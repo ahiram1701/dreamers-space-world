@@ -88,6 +88,23 @@ func face(target: Vector3) -> void:
 		_body.rotation.y = atan2(d.x, d.z)
 
 
+## Gesto (dar algo, saludar, talar…). Ver HumanoidRig.
+func play_gesture(gesture: String, duration: float = -1.0) -> void:
+	if _rig:
+		_rig.play(gesture, duration)
+
+
+func set_emotion(emotion: String) -> void:
+	if _rig:
+		_rig.emotion = emotion
+
+
+## Mira a quien tiene cerca (la cabeza sigue al jugador al pasar o al hablar).
+func look_at_target(point: Vector3) -> void:
+	if _rig:
+		_rig.look_at_point = point
+
+
 func walk_to(pos: Vector3) -> void:
 	_follow = null
 	_target = pos
@@ -151,6 +168,7 @@ func _physics_process(delta: float) -> void:
 			velocity.y = 2.5
 	if _rig:
 		_rig.speed = Vector2(velocity.x, velocity.z).length()
+		_rig.airborne = not is_on_floor() and velocity.y < -2.0
 
 
 func _on_body_entered(body: Node3D) -> void:

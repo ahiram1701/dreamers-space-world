@@ -149,9 +149,10 @@ static func bounds(node: Node3D) -> AABB:
 	return out
 
 
-## Pone el modelo en el mundo con la altura (o el ancho) pedidos y colisión de caja.
+## Pone el modelo en el mundo con la altura pedida. `collide`: false, true (caja) o "trunk"
+## (solo un cilindro fino en la base: se puede pasar bajo la copa de un árbol).
 ## Devuelve el nodo raíz (posición = base del modelo).
-static func place(parent: Node3D, model: Node3D, pos: Vector3, target_height: float, yaw: float, collide: bool) -> Node3D:
+static func place(parent: Node3D, model: Node3D, pos: Vector3, target_height: float, yaw: float, collide: Variant) -> Node3D:
 	var b := bounds(model)
 	var s := target_height / maxf(b.size.y, 0.01)
 	var root := Node3D.new()
@@ -160,7 +161,17 @@ static func place(parent: Node3D, model: Node3D, pos: Vector3, target_height: fl
 	model.scale = Vector3.ONE * s
 	model.position = -Vector3(b.get_center().x, b.position.y, b.get_center().z) * s
 	root.add_child(model)
-	if collide:
+	root.set_meta("size", b.size * s)
+	if collide is String and collide == "trunk":
+		var body := StaticBody3D.new()
+		var cs := CollisionShape3D.new()
+		cs.shape = CylinderShape3D.new()
+		cs.shape.radius = clampf(minf(b.size.x, b.size.z) * s * 0.08, 0.2, 0.45)
+		cs.shape.height = minf(target_height, 4.0)
+		cs.position.y = cs.shape.height / 2.0
+		body.add_child(cs)
+		root.add_child(body)
+	elif collide:
 		var body := StaticBody3D.new()
 		var cs := CollisionShape3D.new()
 		cs.shape = BoxShape3D.new()

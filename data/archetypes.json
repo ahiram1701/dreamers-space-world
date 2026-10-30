@@ -16,6 +16,9 @@
 	"anchor_base": ["marina_watch", "samir_radio", "teo_notebook", "none"],
 	"quest_objective": ["visit_poi", "talk_npc", "bring_item"],
 	"ending": ["close_the_loop", "return_home", "keep_traveling"],
-	"npc_action": ["give_item", "take_item", "follow_player", "stop_following", "go_to", "change_stat", "reveal_place", "give_quest", "complete_quest", "refuse_contact", "journal"],
-	"stat": ["health", "energy", "instability"]
+	"npc_action": ["give_item", "take_item", "follow_player", "stop_following", "go_to", "change_stat", "reveal_place", "give_quest", "complete_quest", "refuse_contact", "journal", "update_item", "remove_item", "place_object", "affect_nearby", "play"],
+	"stat": ["health", "energy", "instability"],
+	"placeable": ["boat", "raft", "campfire", "tent", "shelter", "table", "chair", "bed", "fence", "sign", "torch", "box", "garden", "other"],
+	"world_feature": ["tree", "rock", "bush", "crop"],
+	"gesture": ["chop", "hammer", "dig", "pick_up", "search", "crouch", "sit", "sleep", "drink", "eat", "wave", "point", "give", "fish", "row", "swim", "dance", "think", "cross_arms", "shrug", "nod", "shake_head"]
 }

@@ -124,3 +124,108 @@ static func bind_windows(fx: EnvironmentFX) -> void:
 static func _light_windows(n: float) -> void:
 	var m := AssetLibrary._windows()
 	m.emission_energy_multiplier = smoothstep(0.2, 0.7, n) * 2.5
+
+
+# --- Olas (las mismas que water.gdshader, para que las barcas floten con el agua) ---------
+
+const WAVE_HEIGHT := 0.22
+const WAVE_SPEED := 0.8
+
+
+static func wave_y(x: float, z: float, t: float) -> float:
+	var tt := t * WAVE_SPEED
+	var y := _gerstner_y(x, z, Vector2(1.0, 0.3), 0.18, 14.0, tt) + _gerstner_y(x, z, Vector2(0.6, 1.0), 0.14, 8.0, tt) \
+		+ _gerstner_y(x, z, Vector2(-0.4, 0.8), 0.10, 4.5, tt)
+	return y * WAVE_HEIGHT / 0.35
+
+
+static func _gerstner_y(x: float, z: float, dir: Vector2, steep: float, length: float, t: float) -> float:
+	var k := TAU / length
+	var c := sqrt(9.8 / k)
+	var d := dir.normalized()
+	return steep / k * sin(k * (d.dot(Vector2(x, z)) - c * t))
+
+
+# --- Lo que construye o coloca el jugador (Actions.place_object) -------------------------
+
+## Modelo de cada tipo: [pack, modelo, altura en m]. Las barcas se tratan aparte (Boat).
+const PLACED_MODELS := {
+	"campfire": ["survival_pack", "Bonfire_Fire", 0.8], "tent": ["survival_pack", "Tent", 2.2],
+	"shelter": ["survival_pack", "Tent", 3.0], "table": ["house_interior_pack", "Table_RoundSmall", 0.75],
+	"chair": ["house_interior_pack", "Chair_1", 0.9], "bed": ["house_interior_pack", "Bed_Single", 0.6],
+	"torch": ["survival_pack", "WoodenTorch_Fire", 1.6], "box": ["survival_pack", "Backpack", 0.6],
+}
+
+
+## Construye un objeto colocado. `on_use(kind, node)` se llama al usarlo con E (sentarse, dormir…).
+static func build_placed(parent: Node3D, entry: Dictionary, height_at: Callable, water_level: float, on_use: Callable) -> Node3D:
+	var pos := Vector3(entry.pos[0], entry.pos[1], entry.pos[2])
+	var kind: String = entry.kind
+	var yaw: float = float(entry.get("yaw", 0.0))
+	if kind in ["boat", "raft"]:
+		var boat := Boat.new()
+		boat.water_level = water_level
+		boat.ground_at = height_at
+		parent.add_child(boat)
+		boat.position = Vector3(pos.x, water_level, pos.z)
+		boat.rotation.y = yaw
+		if kind == "boat":
+			boat.setup("ships_pack", "Boat", 4.5, "Subir a %s" % entry.name)
+		else:
+			boat.setup("survival_pack", "Raft", 3.2, "Subir a %s" % entry.name)
+		return boat
+	pos.y = height_at.call(pos.x, pos.z)
+	var root: Node3D
+	if PLACED_MODELS.has(kind):
+		var spec: Array = PLACED_MODELS[kind]
+		var model := AssetLibrary.instance(spec[0], spec[1])
+		if model:
+			root = AssetLibrary.place(parent, model, pos, spec[2], yaw, kind in ["tent", "shelter", "table", "bed"])
+	if root == null:
+		root = _primitive_placed(parent, kind, pos, yaw)
+	if kind in ["campfire", "torch"]:
+		var light := OmniLight3D.new()
+		light.light_color = Color("#ff9a4a")
+		light.omni_range = 7.0 if kind == "campfire" else 5.0
+		light.light_energy = 1.6
+		light.position = Vector3(0, 0.8 if kind == "campfire" else 1.6, 0)
+		root.add_child(light)
+		var tw := light.create_tween().set_loops()  # el fuego parpadea
+		tw.tween_property(light, "light_energy", 1.1, 0.13)
+		tw.tween_property(light, "light_energy", 1.8, 0.17)
+	var label := Label3D.new()
+	label.text = entry.name
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.pixel_size = 0.005
+	label.font_size = 32
+	label.outline_size = 6
+	label.position.y = 2.0 if kind in ["tent", "shelter"] else 1.2
+	root.add_child(label)
+	if kind in ["chair", "bed", "campfire"]:
+		var prompt: String = {"chair": "Sentarse", "bed": "Dormir", "campfire": "Sentarse junto al fuego"}[kind]
+		Interactable.create(root, Vector3(0, 0.3, 0), 1.6, prompt, func(player): on_use.call(kind, root, player))
+	return root
+
+
+static func _primitive_placed(parent: Node3D, kind: String, pos: Vector3, yaw: float) -> Node3D:
+	var root := Node3D.new()
+	root.position = pos
+	root.rotation.y = yaw
+	parent.add_child(root)
+	var wood := Color("#8b6b4a")
+	match kind:
+		"fence":
+			for i in 5:
+				PropsBuilder._box(root, Vector3(i * 0.8 - 1.6, 0.5, 0), Vector3(0.1, 1.0, 0.1), wood, false)
+			PropsBuilder._box(root, Vector3(0, 0.75, 0), Vector3(3.4, 0.12, 0.06), wood, true)
+			PropsBuilder._box(root, Vector3(0, 0.35, 0), Vector3(3.4, 0.12, 0.06), wood, false)
+		"sign":
+			PropsBuilder._box(root, Vector3(0, 0.6, 0), Vector3(0.1, 1.2, 0.1), wood, true)
+			PropsBuilder._box(root, Vector3(0, 1.1, 0), Vector3(0.9, 0.5, 0.06), wood.lightened(0.2), false)
+		"garden":
+			PropsBuilder._box(root, Vector3(0, 0.08, 0), Vector3(2.4, 0.16, 1.6), Color("#4a3426"), false)
+			for i in 6:
+				PropsBuilder._sphere(root, Vector3((i % 3) * 0.7 - 0.7, 0.3, (i / 3) * 0.7 - 0.35), 0.22, Color("#4f8a3a"), false)
+		_:
+			PropsBuilder._box(root, Vector3(0, 0.4, 0), Vector3(0.9, 0.8, 0.9), wood, true)
+	return root
