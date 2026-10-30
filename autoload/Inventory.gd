@@ -9,7 +9,17 @@ const EFFECT_LABELS := {
 	"none": "Sin efecto", "heal": "Cura", "restore_temporal_energy": "Recarga el Ancla",
 	"reduce_paradox": "Reduce la inestabilidad", "reveal_secret": "Revela un secreto",
 	"unlock_location": "Coordenadas: próximo salto gratis", "boost_reputation": "Mejora la confianza de quien está cerca",
+	"light": "Da luz", "nourish": "Se come", "hydrate": "Se bebe", "phone": "Celular", "signal": "Capta señales",
+	"warmth": "Abriga", "tool": "Herramienta",
 }
+## Efectos que no gastan el objeto al usarlo (una linterna se enciende y se apaga, no desaparece).
+const KEEP := ["light", "phone", "signal", "warmth", "tool"]
+
+## Encender o apagar la luz que llevas (el jugador la muestra).
+signal light_toggled(on: bool)
+## Abrir el celular / pedir una acción con F ("Enciendo la radio y escucho").
+signal phone_requested
+signal action_requested(text: String)
 
 
 func items() -> Array:
@@ -108,8 +118,34 @@ func use(item_id: String, nearby_npcs: Array = []) -> String:
 			for npc_id in nearby_npcs:
 				NPCMemory.add_facts(npc_id, [], 15)
 			msg = "La gente de aquí te mira con otros ojos." if not nearby_npcs.is_empty() else "No hay nadie cerca a quien impresionar."
+		"nourish":
+			Body.change("hunger", clampf(power * 1.5, 20.0, 60.0))
+			msg = "Te comes %s." % item.get("name", "eso")
+		"hydrate":
+			Body.change("thirst", clampf(power * 2.0, 25.0, 70.0))
+			msg = "Te bebes %s." % item.get("name", "eso")
+		"light":
+			var on := not bool(WorldDB.get_state("light_on", false))
+			WorldDB.set_state("light_on", on)
+			light_toggled.emit(on)
+			msg = ("Enciendes %s." if on else "Apagas %s.") % item.get("name", "la luz")
+		"phone":
+			phone_requested.emit()
+			return ""
+		"signal":
+			action_requested.emit("Enciendo «%s» y busco alguna señal" % item.get("name", "la radio"))
+			return ""
+		"warmth":
+			var wearing := str(WorldDB.get_state("wearing", ""))
+			WorldDB.set_state("wearing", "" if wearing == item_id else item_id)
+			msg = ("Te quitas %s." if wearing == item_id else "Te pones %s.") % item.get("name", "eso")
+		"tool":
+			msg = "Llevas %s a mano: úsalo con F (\"corto…\", \"arreglo…\")." % item.get("name", "la herramienta")
 		_:
 			return "%s no tiene ningún uso ahora mismo." % item.get("name", "Este objeto")
+	if item.get("effect", "none") in KEEP:
+		used.emit(item_id, msg)
+		return msg
 	remove(item_id)
 	used.emit(item_id, msg)
 	return msg

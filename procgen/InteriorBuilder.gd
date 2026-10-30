@@ -15,9 +15,12 @@ const ROOMS := {
 	"home": {"size": Vector2(10, 8), "wall": "#d9cbb0", "floor": "#8a6a4a", "name": "Tu casa"},
 	"cafe": {"size": Vector2(14, 10), "wall": "#c98b6a", "floor": "#6e5038", "name": "Cafetería del Muelle"},
 	"station": {"size": Vector2(18, 10), "wall": "#8c8279", "floor": "#5e5a55", "name": "Estación"},
-	"lighthouse": {"size": Vector2(7, 7), "wall": "#e8e2d4", "floor": "#7a7468", "name": "Faro"},
+	"lighthouse": {"size": Vector2(10, 10), "wall": "#e8e2d4", "floor": "#7a7468", "name": "Faro"},
 	"house": {"size": Vector2(10, 8), "wall": "#e4d8c0", "floor": "#7d5f42", "name": "Casa"},
 	"scifi": {"size": Vector2(12, 10), "wall": "#4a5568", "floor": "#2d3340", "name": "Módulo"},
+	"shop": {"size": Vector2(12, 9), "wall": "#efe3c8", "floor": "#9c7b56", "name": "Tienda"},
+	"workshop": {"size": Vector2(12, 10), "wall": "#a39a8c", "floor": "#55524d", "name": "Taller"},
+	"office": {"size": Vector2(11, 9), "wall": "#dfe4e8", "floor": "#6f6a64", "name": "Oficina"},
 }
 
 
@@ -34,7 +37,7 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3) -> D
 	_shell(root, w, d, wall, Color(room.floor), kind == "scifi")
 
 	var out := {"root": root, "spawn": origin + Vector3(0, 0.1, d / 2.0 - 2.4), "exit": origin + Vector3(0, 0.1, d / 2.0 - 0.4),
-		"npc_spots": [], "seats": [], "beds": []}
+		"npc_spots": [], "seats": [], "beds": [], "uses": []}
 	match kind:
 		"home":
 			_put(root, "Bed_Single", Vector3(-w / 2 + 1.2, 0, -d / 2 + 1.3), 0.0, out.beds)
@@ -44,13 +47,14 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3) -> D
 			_put(root, "Table_RoundSmall", Vector3(-1.2, 0, 0.6), 0.0)
 			_put(root, "Chair_1", Vector3(-1.9, 0, 0.6), PI / 2, out.seats)
 			_put(root, "Chair_1", Vector3(-0.5, 0, 0.6), -PI / 2, out.seats)
-			_put(root, "Kitchen_Fridge", Vector3(w / 2 - 0.6, 0, 1.5), -PI / 2)
+			_use(root, "Kitchen_Fridge", Vector3(w / 2 - 0.6, 0, 1.5), -PI / 2, out, "eat", "Comer algo de la nevera")
 			_put(root, "Kitchen_3Drawers", Vector3(w / 2 - 0.5, 0, 0.4), -PI / 2)
-			_put(root, "Kitchen_Sink", Vector3(w / 2 - 0.5, 0, -0.5), -PI / 2)
+			_use(root, "Kitchen_Sink", Vector3(w / 2 - 0.5, 0, -0.5), -PI / 2, out, "drink", "Beber agua")
 			_put(root, "Bookshelf", Vector3(-w / 2 + 0.4, 0, 1.0), PI / 2)
-			_put(root, "Houseplant_1", Vector3(w / 2 - 0.6, 0, -d / 2 + 0.6), 0.0)
+			_use(root, "Bathroom_Shower1", Vector3(w / 2 - 0.8, 0, -d / 2 + 0.8), 0.0, out, "shower", "Ducharse")
+			_put(root, "Bathroom_Toilet", Vector3(w / 2 - 2.2, 0, -d / 2 + 0.45), 0.0)
 			_put(root, "Light_Floor1", Vector3(-w / 2 + 0.6, 0, -0.6), 0.0)
-			out.npc_spots = [origin + Vector3(1.0, 0, 1.0)]
+			out.npc_spots = [origin + Vector3(2.5, 0, -0.6)]
 		"cafe":
 			for i in 4:  # barra
 				_put(root, "Kitchen_2Drawers", Vector3(-3.0 + i * 0.75, 0, -d / 2 + 2.2), PI)
@@ -79,18 +83,20 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3) -> D
 					AssetLibrary.place(root, radio, Vector3(-4.6 + i * 0.6, 0.56, -d / 2 + 1.3), 0.32, rng.randf_range(-0.4, 0.4), false)
 			_put(root, "Light_Desk", Vector3(-3.2, 0.56, -d / 2 + 1.2), 0.0)
 			_put(root, "Trashcan_Large", Vector3(w / 2 - 0.6, 0, d / 2 - 1.5), 0.0)
-			out.npc_spots = [origin + Vector3(-4.0, 0, -d / 2 + 2.6), origin + Vector3(4.0, 0, 0)]
+			out.npc_spots = [origin + Vector3(-2.4, 0, -d / 2 + 2.6), origin + Vector3(4.0, 0, 0)]  # junto a su mesa, no encima de la silla
 		"lighthouse":
-			for i in 12:  # escalera de caracol hacia la linterna
+			# Escalera de caracol al fondo; la mesa de Marina a un lado, lejos de la puerta
+			for i in 12:
 				var a := TAU * i / 12.0
-				PropsBuilder._box(root, Vector3(cos(a) * 1.6, 0.25 + i * 0.25, sin(a) * 1.6) + Vector3(0, 0, -0.5),
+				PropsBuilder._box(root, Vector3(cos(a) * 1.6, 0.25 + i * 0.25, sin(a) * 1.6) + Vector3(-2.2, 0, -2.4),
 					Vector3(1.2, 0.08, 0.5), Color("#5a5048"), true).rotation.y = -a
-			PropsBuilder._cylinder(root, Vector3(0, HEIGHT / 2, -0.5), 0.12, 0.12, HEIGHT, Color("#3a3a3a"), true)
-			_put(root, "Table_RoundSmall", Vector3(2.2, 0, 1.6), 0.0)
-			_put(root, "Chair_4", Vector3(2.2, 0, 2.4), PI, out.seats)
-			_put(root, "Shelf_Small2", Vector3(-3.2, 1.2, 1.5), PI / 2)
-			_put(root, "Light_Stand1", Vector3(3.0, 0, -2.8), 0.0)
-			out.npc_spots = [origin + Vector3(1.6, 0, 1.0)]
+			PropsBuilder._cylinder(root, Vector3(-2.2, HEIGHT / 2, -2.4), 0.12, 0.12, HEIGHT, Color("#3a3a3a"), true)
+			_put(root, "Table_RoundSmall", Vector3(3.0, 0, -2.6), 0.0)
+			_put(root, "Chair_4", Vector3(3.0, 0, -1.8), PI, out.seats)
+			_put(root, "Shelf_Small2", Vector3(-w / 2 + 0.3, 1.2, 1.5), PI / 2)
+			_put(root, "Light_Stand1", Vector3(w / 2 - 0.6, 0, -d / 2 + 0.6), 0.0)
+			_put(root, "Bookshelf", Vector3(w / 2 - 0.4, 0, 0.6), -PI / 2)
+			out.npc_spots = [origin + Vector3(3.0, 0, -1.0)]
 		"scifi":
 			var props := ["Props_Computer", "Props_ComputerSmall", "Props_Shelf", "Props_Capsule", "Props_Crate", "Props_Pod", "Props_Vessel"]
 			for i in 8:
@@ -100,6 +106,38 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3) -> D
 					var sx := -w / 2 + 1.0 if i % 2 == 0 else w / 2 - 1.0
 					AssetLibrary.place(root, m, Vector3(sx, 0, -d / 2 + 1.2 + (i / 2) * 2.0), b.size.y * 2.0, PI / 2 if i % 2 == 0 else -PI / 2, true)
 			out.npc_spots = [origin + Vector3(0, 0, -1.0)]
+		"shop":  # mostrador, estanterías llenas y el dependiente detrás
+			for i in 4:
+				_put(root, "Kitchen_2Drawers", Vector3(-2.2 + i * 0.75, 0, -d / 2 + 2.0), PI)
+			for x in [-w / 2 + 0.5, w / 2 - 0.5]:
+				for z in [-1.0, 1.4]:
+					_put(root, "Shelf_Large", Vector3(x, 0, z), PI / 2 if x < 0 else -PI / 2)
+			_put(root, "Kitchen_Cabinet1", Vector3(2.6, 0, -d / 2 + 0.5), 0.0)
+			_put(root, "Kitchen_Fridge", Vector3(4.0, 0, -d / 2 + 0.5), 0.0)
+			_put(root, "Houseplant_4", Vector3(-w / 2 + 0.6, 0, d / 2 - 1.2), 0.0)
+			out.npc_spots = [origin + Vector3(-1.0, 0, -d / 2 + 1.1)]
+		"workshop":
+			_put(root, "Table_RoundLarge", Vector3(-3.0, 0, -1.5), 0.0)
+			_put(root, "Table_RoundLarge", Vector3(2.5, 0, -2.5), 0.0)
+			_put(root, "Shelf_Large", Vector3(-w / 2 + 0.4, 0, 0.5), PI / 2)
+			_put(root, "Drawer_3", Vector3(w / 2 - 0.5, 0, 0.5), -PI / 2)
+			_put(root, "Trashcan_Large", Vector3(w / 2 - 0.6, 0, d / 2 - 1.5), 0.0)
+			_put(root, "Chair_3", Vector3(-3.0, 0, -0.6), PI, out.seats)
+			for t in [["Axe_Small", Vector3(-3.3, 0.78, -1.5), 0.3], ["Battery_Big", Vector3(-2.6, 0.78, -1.7), 0.25],
+					["GasCan", Vector3(w / 2 - 1.2, 0, -d / 2 + 0.6), 0.5], ["Radio", Vector3(2.3, 0.78, -2.5), 0.3]]:
+				var m := AssetLibrary.instance("survival_pack", t[0])
+				if m:
+					AssetLibrary.place(root, m, t[1], t[2], rng.randf() * TAU, t[1].y < 0.1)
+			out.npc_spots = [origin + Vector3(2.5, 0, -1.4)]
+		"office":
+			for i in 2:
+				_put(root, "Table_RoundLarge", Vector3(-2.5 + i * 5.0, 0, -1.8), 0.0)
+				_put(root, "Chair_%d" % (1 + i), Vector3(-2.5 + i * 5.0, 0, -0.9), PI, out.seats)
+				_put(root, "Light_Desk", Vector3(-2.2 + i * 5.0, 0.78, -2.0), 0.0)
+			_put(root, "Bookshelf", Vector3(-w / 2 + 0.4, 0, 1.0), PI / 2)
+			_put(root, "Couch_Small1", Vector3(w / 2 - 0.8, 0, 1.6), -PI / 2, out.seats)
+			_put(root, "Houseplant_6", Vector3(w / 2 - 0.6, 0, -d / 2 + 0.6), 0.0)
+			out.npc_spots = [origin + Vector3(-2.5, 0, -2.8)]
 		_:  # casa de un vecino: muebles al azar pero siempre los mismos
 			if rng.randf() < 0.6:
 				_put(root, ["Bed_Single", "Bed_King"][rng.randi() % 2], Vector3(-w / 2 + 1.6, 0, -d / 2 + 1.3), 0.0, out.beds)
@@ -113,7 +151,7 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3) -> D
 			_put(root, "Houseplant_%d" % (1 + rng.randi() % 8), Vector3(-w / 2 + 0.6, 0, d / 2 - 1.6), 0.0)
 			_put(root, "Carpet_%s" % ["1", "2", "Round"][rng.randi() % 3], Vector3(1.5, 0, 0.2), 0.0)
 			_put(root, "Light_Floor%d" % (1 + rng.randi() % 4), Vector3(-w / 2 + 0.6, 0, 0.5), 0.0)
-			out.npc_spots = [origin + Vector3(0.5, 0, 1.5)]
+			out.npc_spots = [origin + Vector3(2.6, 0, -1.2)]
 	return out
 
 
@@ -153,6 +191,14 @@ static func _shell(root: Node3D, w: float, d: float, wall: Color, floor_color: C
 		_put(root, "Light_Ceiling1", Vector3(x, HEIGHT, 0), 0.0)
 
 
+## Un mueble que se usa con E (nevera, grifo, ducha): `what` dice qué hace al usarlo.
+static func _use(root: Node3D, model_name: String, pos: Vector3, yaw: float, out: Dictionary, what: String, prompt: String) -> void:
+	_put(root, model_name, pos, yaw, out.uses)
+	if not out.uses.is_empty() and out.uses[-1].name == model_name:
+		out.uses[-1]["what"] = what
+		out.uses[-1]["prompt"] = prompt
+
+
 ## Coloca un mueble del pack de interiores a su tamaño real. Si se pasa `list`, guarda su
 ## posición (asientos, camas) para poder usarlo con E.
 static func _put(root: Node3D, model_name: String, pos: Vector3, yaw: float, list: Variant = null) -> void:
@@ -160,9 +206,11 @@ static func _put(root: Node3D, model_name: String, pos: Vector3, yaw: float, lis
 	if m == null:
 		return
 	var b := AssetLibrary.bounds(m)
-	# Asientos y camas sin colisión: el jugador se coloca encima al usarlos
-	var big := b.size.y * SCALE > 0.6 and list == null and not model_name.begins_with("Light_Ceiling")
-	var placed := AssetLibrary.place(root, m, pos, b.size.y * SCALE, yaw, big)
+	# Todo lo que tiene cuerpo choca (también sillas y camas: al usarlas, el jugador ignora ese
+	# mueble mientras está sentado). Solo se atraviesan alfombras, lámparas de techo y cosas diminutas.
+	var flat := model_name.begins_with("Carpet") or model_name.begins_with("Light_Ceiling")
+	var solid: bool = not flat and b.size.y * SCALE > 0.25 and maxf(b.size.x, b.size.z) * SCALE > 0.2
+	var placed := AssetLibrary.place(root, m, pos, b.size.y * SCALE, yaw, solid)
 	if model_name.begins_with("Light_Ceiling"):
 		placed.position.y -= b.size.y * SCALE
 	if list is Array:

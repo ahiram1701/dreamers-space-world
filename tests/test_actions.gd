@@ -141,6 +141,54 @@ func _run() -> void:
 	actions.player_gives("npc_samir", anchor)
 	_expect(inventory.has(anchor), "el Ancla no se puede regalar")
 
+	# --- PNJs coherentes: lo que dicen que hacen, lo hacen ---
+	var director = root.get_node("/root/StoryDirector")
+	var clock = root.get_node("/root/WorldClock")
+	# Dice que se encierra y no trae la acción: se añade y la conversación termina
+	var t2 := {"line": "¡Se acabó! Me encierro en la cafetería y no me molestes.", "actions": [
+		{"type": "refuse_contact", "amount": 10}], "end_conversation": false}
+	director.make_consistent(t2)
+	var inside: Array = t2.actions.filter(func(a): return a.type == "go_inside")
+	_expect(inside.size() == 1 and inside[0].target == "cafetería", "«me encierro en la cafetería» trae go_inside %s" % [t2.actions])
+	_expect(t2.leaving and t2.end_conversation, "si se va, la conversación termina")
+	_expect(inside[0].get("locked", false), "enfadado (refuse_contact) + encerrarse = con pestillo")
+	var t3 := {"line": "Vale, me voy, que tengo prisa.", "actions": []}
+	director.make_consistent(t3)
+	_expect(t3.actions.size() == 1 and t3.actions[0].type == "leave", "«me voy» trae leave")
+	var t4 := {"line": "El faro se enciende solo a las 3:33.", "actions": []}
+	director.make_consistent(t4)
+	_expect(t4.actions.is_empty() and not t4.leaving, "una frase normal no inventa acciones")
+	# Recuerdos veraces: los movimientos no se guardan como hechos
+	var kept: Array = director.truthful_facts(["Teo ha entrado en la cafetería y ha echado el pestillo.", "Benn dice que oye la radio de noche."])
+	_expect(kept == ["Benn dice que oye la radio de noche."], "los movimientos narrados no se guardan como recuerdo %s" % [kept])
+	# El PNJ se mete en un edificio un rato: dentro hasta que pase el tiempo
+	memory.go_inside("npc_teo", "cafe", "la cafetería", 60.0, true)
+	_expect(memory.inside("npc_teo") == "cafe" and memory.is_locked_in("npc_teo"), "Teo está dentro con pestillo")
+	clock.advance(61)
+	_expect(memory.inside("npc_teo").is_empty(), "al pasar una hora sale")
+	# Reacción a lo que haces con F: se guarda como algo que pasó de verdad
+	var rel_before := int(memory.get_mem("npc_teo").relationship)
+	r = validator.validate("world_action", {"narration": "Le das un puñetazo a Teo.", "steps": [
+		{"type": "gesto", "target": "golpear"},
+		{"type": "reaccionar", "target": "npc:npc_teo", "emotion": "enfadado", "behavior": "huir", "line": "¡¿Estás loco?!", "amount": -25,
+			"text": "El jugador te dio un puñetazo sin motivo."}]})
+	_expect(r.ok and r.data.steps.size() == 2 and r.data.steps[0].type == "play", "pasos validados %s" % [r.errors])
+	var react: Array = r.data.steps.filter(func(a): return a.type == "npc_react")
+	_expect(react.size() == 1 and react[0].behavior == "flee" and react[0].emotion == "angry", "npc_react con sinónimos %s" % [r.data.steps])
+	notes = actions.execute("", react)
+	_expect(int(memory.get_mem("npc_teo").relationship) == rel_before - 25, "la relación baja 25")
+	_expect(memory.describe("npc_teo").contains("puñetazo"), "Teo recuerda el puñetazo (como hecho real)")
+	_expect(notes.size() == 1 and "Estás loco" in notes[0], "su grito se muestra %s" % [notes])
+	# Autocorrección: si narra un golpe sin el paso, se detecta (para pedirlo otra vez una sola vez)
+	_expect(director.missing_steps({"narration": "Golpeas a Teo en el hombro.", "steps": [{"type": "play", "target": "punch"}]}) == ["npc_react"],
+		"falta el paso de la reacción")
+	_expect(director.missing_steps({"narration": "Talas el pino.", "steps": [{"type": "affect_nearby", "target": "tree"}]}).is_empty(),
+		"con el paso, no falta nada")
+	# Modelos que solo dan "actions": el gesto va primero
+	var plan: Array = director.plan_steps({"actions": [{"type": "affect_nearby", "target": "tree"}, {"type": "play", "target": "chop"}]})
+	_expect(plan.size() == 2 and plan[0].type == "play", "sin steps, el gesto va antes que el efecto")
+	_expect(actions.npc_from("Teo") == "npc_teo" and actions.npc_from("npc:npc_samir") == "npc_samir", "nombres → ids de PNJ")
+
 	db.delete_world(world_id)
 	db.set_last_world_id(previous_last)
 	print("\n%s" % ("TODO OK" if _failed == 0 else "%d FALLOS" % _failed))

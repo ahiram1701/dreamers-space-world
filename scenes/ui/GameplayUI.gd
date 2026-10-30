@@ -19,10 +19,14 @@ var anchor: AnchorPanel
 var inventory: InventoryPanel
 var pause: PauseMenu
 var actions: ActionPanel
-var _clock: Label
-var _hud: CanvasLayer
-var _tracker: Label
-var _toast: Label
+var hud: HUD
+var hints: Hints
+var phone: PhonePanel
+var stash: StashPanel
+## Lo asigna la escena: llamar a alguien (abre la conversación en modo llamada).
+var start_call: Callable
+## Lo asigna la escena: sitios con nombre para el mapa del celular.
+var places: Callable = func(): return {}
 var _glitch: ColorRect
 var _blocks := 0
 var _decay_t := 0.0
@@ -31,22 +35,28 @@ var _unanchoring := false
 
 
 func _ready() -> void:
-	add_child(StatsHUD.new())
-	_hud = CanvasLayer.new()
-	_hud.layer = 5
-	add_child(_hud)
-	_tracker = _label(Vector2(0, 16), 18, Color("#ffd9a0"))
-	_tracker.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 16)
-	_tracker.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_tracker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_toast = _label(Vector2.ZERO, 20, Color("#9fd8ff"))
-	_toast.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 90)
-	_toast.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_toast.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_toast.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_toast.custom_minimum_size.x = 700
-	_toast.modulate.a = 0.0
+	hud = HUD.new()
+	add_child(hud)
+	hud.player = player
+	hints = Hints.new()
+	hints.player = player
+	add_child(hints)
+	stash = StashPanel.new()
+	add_child(stash)
+	phone = PhonePanel.new()
+	phone.player = player
+	phone.places = func(): return places.call()
+	add_child(phone)
+	phone.call_requested.connect(func(id): if start_call.is_valid(): start_call.call(id))
+	phone.waypoint_set.connect(hud.set_waypoint)
+	Phone.message_received.connect(func(id, text):
+		Sfx.chime(self)
+		toast("%s: %s" % [WorldDB.get_entity("npc", id).get("name", "?").split(" ")[0], text], "memory"))
+	Inventory.phone_requested.connect(func(): if _blocks == 0 or inventory.is_open(): inventory.close(); phone.open())
+	Inventory.action_requested.connect(func(text): if not actions.is_busy(): inventory.close(); actions.open(text))
+	Inventory.light_toggled.connect(func(on): if player: player.set_light(on))
+	Jobs.fired.connect(func(_r): toast("Te han despedido del trabajo.", "warn"))
+	Jobs.hired.connect(func(j): toast("Trabajo nuevo: %s (%02d:00–%02d:00)" % [j.title, j.start_hour, j.end_hour], "quest"))
 
 	var glitch_layer := CanvasLayer.new()
 	glitch_layer.layer = 4
@@ -70,14 +80,11 @@ func _ready() -> void:
 	actions.context = func(): return scene_context.call()
 	actions.player = player
 	add_child(actions)
-	_clock = _label(Vector2.ZERO, 18, Color(1, 1, 1, 0.85))
-	_clock.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 16)
-	_clock.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	_clock.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	for panel in [anchor, inventory, pause, actions]:
+	for panel in [anchor, inventory, pause, actions, phone, stash]:
 		panel.opened.connect(block.bind(true))
 		panel.closed.connect(block.bind(false))
 	inventory.message.connect(toast)
+	inventory.action_requested.connect(func(text): if not actions.is_busy(): actions.open(text))
 
 	GameState.stat_changed.connect(_on_stat_changed)
 	Quests.quest_completed.connect(_on_quest_completed)
@@ -93,14 +100,9 @@ func block(on: bool) -> void:
 		player.controls_enabled = _blocks == 0
 
 
-func toast(text: String) -> void:
-	if text.is_empty():
-		return
-	_toast.text = text
-	_toast.modulate.a = 1.0
-	var tw := create_tween()
-	tw.tween_interval(clampf(text.length() * 0.06, 3.0, 9.0))
-	tw.tween_property(_toast, "modulate:a", 0.0, 1.0)
+## Aviso en una tarjeta (ver HUD.notify): "item", "money", "quest", "memory", "warn" o "info".
+func toast(text: String, kind: String = "info") -> void:
+	hud.notify(text, kind)
 
 
 func refresh_tracker() -> void:
@@ -116,35 +118,47 @@ func refresh_tracker() -> void:
 			lines.append("Coordenadas completas — usa el Ancla (T) para seguir la señal hasta su origen")
 		elif GameState.ending().is_empty():
 			lines.append("Coordenadas de la transmisión: %d/%d" % [GameState.fragments(), GameState.FRAGMENTS_NEEDED])
-	_tracker.text = "\n".join(lines)
+	hud.set_tracker("\n".join(lines))
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not (event is InputEventKey and event.pressed and not event.echo):
+	if event.is_echo():
 		return
-	match event.physical_keycode:
-		KEY_ESCAPE:
-			if actions.is_open():
-				actions.close()
-			elif inventory.is_open():
-				inventory.close()
-			elif anchor.is_open():
-				anchor.close()
-			else:
-				pause.toggle()
+	if event.is_action_pressed("pause"):
+		if phone.is_open():
+			phone.close()
+		elif actions.is_open():
+			actions.close()
+		elif inventory.is_open():
+			inventory.close()
+		elif anchor.is_open():
+			anchor.close()
+		elif _blocks == 0 or pause.is_open():
+			pause.toggle()
+		else:
+			return  # una conversación abierta: Esc es despedirse (lo gestiona el diálogo)
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("inventory"):
+		if not pause.is_open():
+			inventory.toggle()
 			get_viewport().set_input_as_handled()
-		KEY_I:
-			if not pause.is_open():
-				inventory.toggle()
-				get_viewport().set_input_as_handled()
-		KEY_F:
-			if _blocks == 0:
-				actions.open()
-				get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("phone"):
+		if phone.is_open():
+			phone.close()
+			get_viewport().set_input_as_handled()
+		elif _blocks == 0:
+			if Phone.has_phone():
+				phone.open()
+			else:
+				toast("No llevas el celular encima.", "warn")
+			get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("act"):
+		if _blocks == 0 and not actions.is_busy():
+			actions.open()
+			get_viewport().set_input_as_handled()
 
 
 func _process(delta: float) -> void:
-	_clock.text = WorldClock.text()
 	if not GameState.is_awakened() or _unanchoring or _blocks > 0:
 		return
 	var instability := GameState.get_stat("instability")
@@ -171,7 +185,7 @@ func _on_stat_changed(stat: String, value: int) -> void:
 
 
 func _on_quest_completed(q: Dictionary, reward: String) -> void:
-	toast("%s\n%s" % [q.completion_text, reward])
+	toast("%s\n%s" % [q.completion_text, reward], "quest")
 	refresh_tracker()
 
 
@@ -208,14 +222,3 @@ func _unanchor() -> void:
 		text.text += "\n\nHas perdido: %s" % lost
 		await get_tree().create_timer(2.5).timeout
 	get_tree().reload_current_scene()
-
-
-func _label(pos: Vector2, size: int, color: Color) -> Label:
-	var l := Label.new()
-	l.position = pos
-	l.add_theme_font_size_override("font_size", size)
-	l.add_theme_color_override("font_color", color)
-	l.add_theme_constant_override("outline_size", 6)
-	l.add_theme_color_override("font_outline_color", Color.BLACK)
-	_hud.add_child(l)
-	return l

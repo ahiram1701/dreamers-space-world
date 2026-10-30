@@ -18,14 +18,24 @@ var _update_bar: ProgressBar
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	var bg := ColorRect.new()
-	bg.color = Color("#141a2e")
+	var bg := ColorRect.new()  # anochecer sobre el mar con el faro (shader)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var sky := ShaderMaterial.new()
+	sky.shader = preload("res://shaders/menu_sky.gdshader")
+	bg.material = sky
+	bg.resized.connect(func(): sky.set_shader_parameter("aspect", Vector2(bg.size.x / maxf(bg.size.y, 1.0), 1.0)))
 	add_child(bg)
 
-	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(center)
+	# Columna a la izquierda: el fondo (el faro) queda a la vista
+	var column := MarginContainer.new()
+	column.anchor_bottom = 1.0
+	column.add_theme_constant_override("margin_left", 72)
+	column.add_theme_constant_override("margin_top", 60)
+	column.add_theme_constant_override("margin_bottom", 40)
+	add_child(column)
+	var center := VBoxContainer.new()
+	center.alignment = BoxContainer.ALIGNMENT_CENTER
+	column.add_child(center)
 	var stack := VBoxContainer.new()
 	center.add_child(stack)
 	_main_box = VBoxContainer.new()
@@ -40,14 +50,19 @@ func _ready() -> void:
 
 	var title := Label.new()
 	title.text = "Dreamer's Space World"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 36)
+	title.add_theme_font_size_override("font_size", 52)
+	title.add_theme_font_override("font", UITheme.font_bold)
+	title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
+	title.add_theme_constant_override("shadow_offset_y", 3)
 	_main_box.add_child(title)
 	var sub := Label.new()
 	sub.text = "Todos empiezan igual. Nadie termina en el mismo universo."
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
+	sub.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
+	sub.add_theme_font_size_override("font_size", 18)
 	_main_box.add_child(sub)
+	var gap := Control.new()
+	gap.custom_minimum_size.y = 18
+	_main_box.add_child(gap)
 
 	_name = LineEdit.new()
 	_name.placeholder_text = "¿Cómo te llamas?"

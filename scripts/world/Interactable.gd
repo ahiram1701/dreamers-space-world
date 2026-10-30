@@ -1,19 +1,24 @@
 class_name Interactable
 extends Area3D
 ## Algo con lo que se interactúa con E: una puerta, una cama, una silla, una barca…
-## Al acercarse muestra el aviso ("[E] Entrar") y, al pulsar E, llama a `on_use(player)`.
+## Al acercarse se apunta como candidato del InteractionSystem del jugador (que elige el mejor
+## y muestra el aviso "[E] Entrar") y, al pulsar E, llama a `on_use(player)`.
 
 var prompt := "Usar"
 var on_use: Callable
+## El objeto físico al que pertenece (la silla, la barca): no tapa su propia visibilidad.
+## Vacío para las que no son de un objeto (puertas, salidas).
+var owner_node: Node = null
+## Desactivado (p. ej. una puerta cerrada con pestillo sigue mostrando su aviso, pero no abre).
+var enabled := true
 
-var _hint: Label3D
 
-
-static func create(parent: Node3D, pos: Vector3, radius: float, prompt_text: String, callback: Callable) -> Interactable:
+static func create(parent: Node3D, pos: Vector3, radius: float, prompt_text: String, callback: Callable, owner_of: Node = null) -> Interactable:
 	var it := Interactable.new()
 	it.prompt = prompt_text
 	it.on_use = callback
 	it.position = pos
+	it.owner_node = owner_of
 	var cs := CollisionShape3D.new()
 	cs.shape = SphereShape3D.new()
 	cs.shape.radius = radius
@@ -23,25 +28,30 @@ static func create(parent: Node3D, pos: Vector3, radius: float, prompt_text: Str
 
 
 func _ready() -> void:
-	_hint = Label3D.new()
-	_hint.text = "[E] " + prompt
-	_hint.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_hint.font_size = 36
-	_hint.outline_size = 8
-	_hint.fixed_size = true  # mismo tamaño en pantalla, esté cerca o lejos
-	_hint.pixel_size = 0.0012
-	_hint.position.y = 1.6
-	_hint.visible = false
-	_hint.no_depth_test = true
-	add_child(_hint)
+	add_to_group("interactables")
+	Layers.zone(self)
 	body_entered.connect(_on_enter)
 	body_exited.connect(_on_exit)
 
 
 func set_prompt(text: String) -> void:
 	prompt = text
-	if _hint:
-		_hint.text = "[E] " + text
+
+
+func interaction_prompt() -> String:
+	return prompt
+
+
+func interaction_point() -> Vector3:
+	return global_position
+
+
+func interaction_owner() -> Node:
+	return owner_node
+
+
+func can_interact() -> bool:
+	return enabled
 
 
 func use(player: Node) -> void:
@@ -51,12 +61,14 @@ func use(player: Node) -> void:
 
 func _on_enter(body: Node3D) -> void:
 	if body is Player:
-		body.interact_target = self
-		_hint.visible = true
+		body.interaction.add_candidate(self)
 
 
 func _on_exit(body: Node3D) -> void:
 	if body is Player:
-		if body.interact_target == self:
-			body.interact_target = null
-		_hint.visible = false
+		body.interaction.remove_candidate(self)
+
+
+func _exit_tree() -> void:
+	for p in get_tree().get_nodes_in_group("player"):
+		p.interaction.remove_candidate(self)

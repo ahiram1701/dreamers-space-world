@@ -176,14 +176,26 @@ static func build_placed(parent: Node3D, entry: Dictionary, height_at: Callable,
 		return boat
 	pos.y = height_at.call(pos.x, pos.z)
 	var root: Node3D
-	if PLACED_MODELS.has(kind):
+	if not entry.get("parts", []).is_empty():  # lo que se inventó el jugador, con su forma
+		root = _composite(parent, entry.parts, pos, yaw)
+	elif PLACED_MODELS.has(kind):
 		var spec: Array = PLACED_MODELS[kind]
 		var model := AssetLibrary.instance(spec[0], spec[1])
 		if model:
-			root = AssetLibrary.place(parent, model, pos, spec[2], yaw, kind in ["tent", "shelter", "table", "bed"])
+			root = AssetLibrary.place(parent, model, pos, spec[2], yaw, "trunk" if kind == "torch" else kind != "campfire")  # todo es sólido menos el fuego
 	if root == null:
 		root = _primitive_placed(parent, kind, pos, yaw)
-	if kind in ["campfire", "torch"]:
+	var function: String = entry.get("function", "none")
+	root.set_meta("placed_id", entry.get("id", ""))
+	root.set_meta("function", function)
+	if function == "light" and kind != "torch":
+		var lamp := OmniLight3D.new()
+		lamp.light_color = Color("#ffe6b0")
+		lamp.omni_range = 9.0
+		lamp.light_energy = 1.4
+		lamp.position = Vector3(0, _top(root) + 0.2, 0)
+		root.add_child(lamp)
+	if kind in ["campfire", "torch"] or function == "heat":
 		var light := OmniLight3D.new()
 		light.light_color = Color("#ff9a4a")
 		light.omni_range = 7.0 if kind == "campfire" else 5.0
@@ -196,15 +208,52 @@ static func build_placed(parent: Node3D, entry: Dictionary, height_at: Callable,
 	var label := Label3D.new()
 	label.text = entry.name
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.pixel_size = 0.005
+	label.fixed_size = true
+	label.pixel_size = 0.0009
 	label.font_size = 32
-	label.outline_size = 6
+	label.outline_size = 8
+	label.visibility_range_end = 20.0
 	label.position.y = 2.0 if kind in ["tent", "shelter"] else 1.2
 	root.add_child(label)
-	if kind in ["chair", "bed", "campfire"]:
-		var prompt: String = {"chair": "Sentarse", "bed": "Dormir", "campfire": "Sentarse junto al fuego"}[kind]
-		Interactable.create(root, Vector3(0, 0.3, 0), 1.6, prompt, func(player): on_use.call(kind, root, player))
+	var use_as: String = {"seat": "chair", "bed": "bed", "heat": "campfire", "storage": "storage", "signal": "signal"}.get(function, "")
+	if use_as.is_empty() and kind in ["chair", "bed", "campfire"]:
+		use_as = kind
+	if not use_as.is_empty():
+		var prompt: String = {"chair": "Sentarse", "bed": "Dormir", "campfire": "Sentarse junto al fuego", "storage": "Guardar o sacar: %s" % entry.name,
+			"signal": "Usar: %s" % entry.name}[use_as]
+		Interactable.create(root, Vector3(0, 0.6, 0), 1.6, prompt, func(player): on_use.call(use_as, root, player), root)
 	return root
+
+
+## Objeto hecho de piezas (cajas, cilindros, esferas) tal como lo describió la IA. Sólido.
+static func _composite(parent: Node3D, parts: Array, pos: Vector3, yaw: float) -> Node3D:
+	var root := Node3D.new()
+	root.position = pos
+	root.rotation.y = yaw
+	parent.add_child(root)
+	var lowest := INF
+	for p in parts:
+		lowest = minf(lowest, float(p.pos[1]) - float(p.size[1]) / 2.0)
+	for p in parts:
+		var size := Vector3(p.size[0], p.size[1], p.size[2]).clamp(Vector3.ONE * 0.02, Vector3.ONE * 6.0)
+		var at := Vector3(p.pos[0], p.pos[1] - minf(lowest, 0.0), p.pos[2])  # que nada quede bajo el suelo
+		var color := Color(p.color) if Color.html_is_valid(str(p.color)) else Color("#8b6b4a")
+		match p.shape:
+			"cylinder":
+				PropsBuilder._cylinder(root, at, size.x / 2.0, size.x / 2.0, size.y, color, size.y > 0.3)
+			"sphere":
+				PropsBuilder._sphere(root, at, size.x / 2.0, color, size.x > 0.4)
+			_:
+				PropsBuilder._box(root, at, size, color, size.y > 0.3 or size.x * size.z > 0.5)
+	return root
+
+
+## Altura del objeto (para poner una luz encima).
+static func _top(root: Node3D) -> float:
+	var top := 1.0
+	for m in root.find_children("*", "MeshInstance3D", true, false):
+		top = maxf(top, (m as MeshInstance3D).position.y + (m as MeshInstance3D).get_aabb().size.y / 2.0)
+	return top
 
 
 static func _primitive_placed(parent: Node3D, kind: String, pos: Vector3, yaw: float) -> Node3D:
@@ -218,12 +267,13 @@ static func _primitive_placed(parent: Node3D, kind: String, pos: Vector3, yaw: f
 			for i in 5:
 				PropsBuilder._box(root, Vector3(i * 0.8 - 1.6, 0.5, 0), Vector3(0.1, 1.0, 0.1), wood, false)
 			PropsBuilder._box(root, Vector3(0, 0.75, 0), Vector3(3.4, 0.12, 0.06), wood, true)
+			PropsBuilder._box(root, Vector3(0, 0.5, 0), Vector3(3.4, 1.0, 0.12), wood, true).visible = false
 			PropsBuilder._box(root, Vector3(0, 0.35, 0), Vector3(3.4, 0.12, 0.06), wood, false)
 		"sign":
 			PropsBuilder._box(root, Vector3(0, 0.6, 0), Vector3(0.1, 1.2, 0.1), wood, true)
 			PropsBuilder._box(root, Vector3(0, 1.1, 0), Vector3(0.9, 0.5, 0.06), wood.lightened(0.2), false)
 		"garden":
-			PropsBuilder._box(root, Vector3(0, 0.08, 0), Vector3(2.4, 0.16, 1.6), Color("#4a3426"), false)
+			PropsBuilder._box(root, Vector3(0, 0.08, 0), Vector3(2.4, 0.16, 1.6), Color("#4a3426"), true)
 			for i in 6:
 				PropsBuilder._sphere(root, Vector3((i % 3) * 0.7 - 0.7, 0.3, (i / 3) * 0.7 - 0.35), 0.22, Color("#4f8a3a"), false)
 		_:

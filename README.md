@@ -66,10 +66,20 @@ Si la IA no está disponible, el juego usa contenido de respaldo y **nunca se qu
 | ✅ | Inventario y objetos usables, inestabilidad con fallos visuales, desanclaje y recuperación |
 | ✅ | Siguiente destino pregenerado en segundo plano, túnel de salto y sonido ambiental procedural |
 | ✅ | **Lo que se dice, pasa**: los PNJs dan, prestan, reciben, acompañan, curan, encargan favores y revelan lugares de verdad |
-| ✅ | **Hacer algo** (<kbd>F</kbd>): describe cualquier acción y la IA narra qué ocurre en el mundo |
+| ✅ | **Hacer algo** (<kbd>F</kbd>): describe cualquier acción y la ves pasar paso a paso (caminar, gestos, usar cosas) mientras la gente reacciona |
 | ✅ | Ciclo de día y noche, rutinas de los vecinos, diario y encargos |
 | ✅ | **Tu personaje hace lo que escribes**: talar, construir, reparar, cavar, sentarse, dormir… y el mundo cambia (árboles talados, balsas, hogueras) |
-| ✅ | Edificios con interior, barcas que se manejan, nadar, dormir hasta la mañana |
+| ✅ | Edificios con interior, barcas que se manejan, nadar, dormir hasta la mañana; todo es sólido |
+| ✅ | PNJs coherentes: si dicen que se van o se encierran, lo hacen, y solo recuerdan lo que pasó de verdad |
+| ✅ | Cámara con zoom y primera persona, mando, pasos y sonidos del mundo |
+| ✅ | **Vida real**: hambre, sed, descanso e higiene, dinero (dólares), tiempo atmosférico y días de la semana |
+| ✅ | **Celular**: mensajes y llamadas con la gente (la IA contesta), banco y mapa con destino |
+| ✅ | **Trabajo** con horario y sueldo, retrasos, faltas y despido |
+| ✅ | **Crear e inventar**: objetos con uso real y construcciones con forma y función (luz, baúl, radio…) |
+| ✅ | Transeúntes, vecinos que vuelven a casa de noche, sonido ambiente y música |
+| ✅ | **La IA crea gente y sitios** que se quedan en tu mundo cuando lo que haces lo pide |
+| ✅ | **El pueblo vive**: actividades, testigos, rumores y charlas entre vecinos |
+| ✅ | Interfaz nueva: HUD mínimo, consejos de primera vez, Cuaderno, conversaciones de cine |
 | ✅ | Animación procedural natural (locomoción, 20+ gestos, emociones, herramientas en la mano) |
 | ✅ | Modelos 3D CC0 animados, mar con olas, hierba con viento e iluminación con SSAO, glow y niebla |
 | ✅ | Menú de pausa, ajustes (IA, ratón, volumen, calidad gráfica, personaje) y gestión de partidas |
@@ -101,12 +111,16 @@ Desde la **v0.2.0**, el juego comprueba al arrancar si hay una versión estable 
 |---|---|
 | Moverse / correr | <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / <kbd>Shift</kbd> |
 | Saltar | <kbd>Espacio</kbd> |
-| Cámara | Ratón |
-| Hablar / recoger / entrar / sentarse / subir a una barca | <kbd>E</kbd> |
+| Cámara / acercar y alejar | Ratón / rueda (al mínimo, primera persona) |
+| Hablar / recoger / entrar / sentarse / subir a una barca | <kbd>E</kbd> (lo que tienes delante, indicado abajo en pantalla) |
+| Elegir respuesta en un diálogo | <kbd>1</kbd>–<kbd>4</kbd> |
 | Hacer algo (acción libre) | <kbd>F</kbd> |
 | Ancla (saltar) | <kbd>T</kbd> |
-| Inventario, encargos y diario | <kbd>I</kbd> |
+| Cuaderno: objetos, encargos, diario y personas | <kbd>I</kbd> |
+| Celular | <kbd>C</kbd> |
 | Pausa | <kbd>Esc</kbd> |
+
+Con mando: stick izquierdo para moverse, derecho para la cámara, <kbd>A</kbd> saltar, <kbd>X</kbd> interactuar, <kbd>Y</kbd> hacer algo, <kbd>LB</kbd> Ancla, <kbd>Back</kbd> inventario, <kbd>RB</kbd> celular y <kbd>Start</kbd> pausa.
 
 ## 🏗️ Arquitectura
 
@@ -127,8 +141,12 @@ Desde la **v0.2.0**, el juego comprueba al arrancar si hay una versión estable 
 | [`Inventory`](autoload/Inventory.gd) / [`Quests`](autoload/Quests.gd) | Objetos usables, préstamos y misiones generadas |
 | [`Actions`](autoload/Actions.gd) / [`Journal`](autoload/Journal.gd) | Hace real lo que la IA decide (dar, acompañar, curar…) y el diario |
 | [`WorldClock`](autoload/WorldClock.gd) | Hora del mundo, día y noche |
+| [`Controls`](autoload/Controls.gd) | Acciones de control (teclado, ratón y mando) |
+| [`UITheme`](autoload/UITheme.gd) | Aspecto de toda la interfaz (fuente, colores, botones, paneles) |
+| [`Body`](autoload/Body.gd) / [`Wallet`](autoload/Wallet.gd) | Necesidades del cuerpo y dinero |
+| [`Phone`](autoload/Phone.gd) / [`Jobs`](autoload/Jobs.gd) | Celular (contactos, mensajes, llamadas) y trabajo |
 
-Escenas y mundo: [`HumanoidRig`](scripts/npc/HumanoidRig.gd) (animación por código), [`InteriorManager`](scripts/world/InteriorManager.gd) e [`InteriorBuilder`](procgen/InteriorBuilder.gd) (edificios por dentro), [`Boat`](scripts/world/Boat.gd), [`Interactable`](scripts/world/Interactable.gd) y [`Decor`](scripts/world/Decor.gd) (agua, hierba, farolas y lo que construye el jugador).
+Escenas y mundo: [`LocationScene`](scenes/common/LocationScene.gd) (lo común al pueblo y a los mundos generados: interactuar, conversar, lo que hacen los PNJs), [`ActionPerformer`](scripts/world/ActionPerformer.gd) (representa paso a paso lo que escribes con F), [`InteractionSystem`](scripts/world/InteractionSystem.gd) (con qué interactúa E), [`TownLife`](scripts/world/TownLife.gd) (actividades, testigos, rumores y charlas), [`Weather`](scripts/world/Weather.gd) (el tiempo), [`HumanoidRig`](scripts/npc/HumanoidRig.gd) (animación por código), [`InteriorManager`](scripts/world/InteriorManager.gd) e [`InteriorBuilder`](procgen/InteriorBuilder.gd) (edificios por dentro), [`Boat`](scripts/world/Boat.gd), [`Interactable`](scripts/world/Interactable.gd) y [`Decor`](scripts/world/Decor.gd) (agua, hierba, farolas y lo que construye el jugador).
 
 ```
 assets/        Modelos 3D CC0 (ver assets/CREDITS.md)
@@ -151,6 +169,11 @@ godot --headless --path . -s tests/test_semver.gd      # pruebas de versiones (a
 godot --headless --path . -s tests/test_awakening_flow.gd  # El Despertar y los saltos
 godot --headless --path . -s tests/test_full_game.gd   # partida completa: misiones, fragmentos y final
 godot --headless --path . -s tests/test_actions.gd     # lo que los PNJs aceptan hacer pasa de verdad
+godot --headless --path . -s tests/test_interaction.gd # E elige lo que tienes delante y a la vista
+godot --headless --path . -s tests/test_collision.gd   # nada sólido se atraviesa
+godot --headless --path . -s tests/test_life.gd        # cuerpo, dinero y lo que crea la IA
+godot --headless --path . -s tests/test_town_life.gd   # testigos y rumores
+godot --headless --path . -s tests/test_routine.gd     # celular, trabajo y construir
 bash tests/smoke.sh                                    # arranca las escenas y busca errores de script
 ```
 

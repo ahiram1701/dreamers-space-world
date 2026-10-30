@@ -50,7 +50,7 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_T:
+	if event.is_action_pressed("anchor") and not event.is_echo():
 		if _panel.visible:
 			close()
 		elif GameState.is_awakened() and not _busy:

@@ -49,7 +49,7 @@ func play() -> void:
 
 	# 3. La IA escribe el Despertar de este jugador
 	_loading.show_loading("3:33", PackedStringArray([
-		"Algo curva el aire en la base del faro", "Tu móvil se apaga en tu mano",
+		"Algo curva el aire en la base del faro", "Tu celular se apaga en tu mano",
 		"El mar avanza demasiado despacio", "El pulso no termina"]))
 	_data = await StoryDirector.generate_awakening()
 	_loading.hide_loading()

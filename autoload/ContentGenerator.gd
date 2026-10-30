@@ -82,7 +82,7 @@ func world_rules_prompt() -> String:
 	var canon_text := "(aún no hay hechos canónicos)" if canon.is_empty() else "- " + "\n- ".join(PackedStringArray(canon))
 	return """Trabajas para un videojuego que crece con cada jugador.
 Respondes SIEMPRE con un único objeto JSON válido, sin texto adicional.
-Escribe los textos en idioma: %s.
+Escribe los textos en idioma: %s. Usa ESPAÑOL LATINOAMERICANO NEUTRO: "ustedes" (nunca "vosotros", ni "os", "vuestro", "habéis"), "celular", "computadora", "carro", "manejar", "agarrar", "platicar", "enojado", "lentes", "jugo", "departamento"; nunca "vale", "coger", "móvil", "ordenador", "coche", "conducir", "tío", "mola", "guay", "enfadado". Sin modismos de un país concreto.
 
 REGLAS DEL MULTIVERSO:
 %s

@@ -26,6 +26,30 @@ const ACTION := {"t": "object", "fields": {
 	"target": {"t": "string", "min": 1, "max": 80, "opt": true},
 	"amount": {"t": "int", "min": -30, "max": 30, "default": 0},
 	"text": {"t": "string", "min": 3, "max": 300, "opt": true},
+	# Reacción de una persona a lo que hace el jugador (npc_react) e irse encerrado (go_inside)
+	"gesture": {"t": "enum", "from": "gesture", "opt": true},
+	"emotion": {"t": "enum", "from": "emotion", "opt": true},
+	"behavior": {"t": "enum", "from": "npc_behavior", "opt": true},
+	"line": {"t": "string", "min": 1, "max": 200, "opt": true},
+	"locked": {"t": "bool", "default": false},
+	# Dinero (pagar, cobrar, precio de lo que te dan, recompensa de un encargo)
+	"price": {"t": "int", "min": 0, "max": 200, "default": 0},
+	# Gente nueva (spawn_npc): nombre y oficio
+	"name": {"t": "string", "min": 2, "max": 40, "opt": true},
+	"occupation": {"t": "string", "min": 2, "max": 80, "opt": true},
+	# Trabajo (hire_player): horario del turno
+	"start_hour": {"t": "int", "min": 0, "max": 23, "opt": true},
+	"end_hour": {"t": "int", "min": 0, "max": 23, "opt": true},
+	# Lo que se construye (place_object): para qué sirve y su forma en piezas
+	"function": {"t": "enum", "from": "placed_function", "default": "none"},
+	"parts": {"t": "array", "min": 0, "max": 14, "opt": true, "lenient": true, "items": {"t": "object", "fields": {
+		"shape": {"t": "enum", "from": "part_shape", "default": "box"},
+		"size": {"t": "array", "min": 3, "max": 3, "items": {"t": "float", "min": 0.02, "max": 6.0}},
+		"pos": {"t": "array", "min": 3, "max": 3, "items": {"t": "float", "min": -4.0, "max": 6.0}},
+		"color": {"t": "color", "default": "#8b6b4a"},
+	}}},
+	# Frase de narración de este paso (world_action.steps)
+	"narration": {"t": "string", "min": 2, "max": 300, "opt": true},
 }}
 
 const SPECS := {
@@ -89,8 +113,17 @@ const SPECS := {
 	# El jugador hace algo libre en el mundo ("busco en el cajón", "pesco en el muelle").
 	"world_action": {
 		"narration": {"t": "string", "min": 5, "max": 800},
+		# Lo que hace el personaje, en orden y con su narración: ir, hacer el gesto, usar algo, que alguien reaccione…
+		"steps": {"t": "array", "min": 0, "max": 8, "opt": true, "lenient": true, "items": ACTION},
 		"actions": {"t": "array", "min": 0, "max": 6, "opt": true, "lenient": true, "items": ACTION},
 		"minutes": {"t": "int", "min": 0, "max": 480, "default": 5},
+	},
+	# Dos vecinos charlan entre ellos (se ve en bocadillos). "who": "a" o "b".
+	"ambient_chat": {
+		"lines": {"t": "array", "min": 2, "max": 4, "lenient": true, "items": {"t": "object", "fields": {
+			"who": {"t": "string", "min": 1, "max": 40},
+			"text": {"t": "string", "min": 2, "max": 160},
+		}}},
 	},
 	# El momento en que el jugador descubre la brecha. Una vez por partida.
 	"awakening": {
@@ -176,6 +209,39 @@ const SYNONYMS := {
 	"recoger": "pick_up", "buscar": "search", "agacharse": "crouch", "martillar": "hammer", "asentir": "nod",
 	"negar": "shake_head", "encogerse_de_hombros": "shrug", "cruzar_brazos": "cross_arms", "entregar_objeto": "give", "masculino": "masculine", "hombre": "masculine", "male": "masculine",
 	"femenino": "feminine", "mujer": "feminine", "female": "feminine",
+	"irse": "leave", "marcharse": "leave", "salir": "leave", "go_away": "leave", "walk_away": "leave", "exit": "leave",
+	"entrar": "go_inside", "encerrarse": "go_inside", "meterse": "go_inside", "enter": "go_inside", "enter_building": "go_inside",
+	"go_home": "go_inside", "acercarse": "approach", "approach_player": "approach", "reaccionar": "npc_react",
+	"reaction": "npc_react", "react": "npc_react", "dar_a": "give_to_npc", "give_to": "give_to_npc", "hand_over": "give_to_npc",
+	"usar": "use", "use_object": "use", "interact": "use", "interactuar": "use", "ir_hasta": "go_to", "caminar": "go_to",
+	"walk_to": "go_to", "golpear": "punch", "pegar": "punch", "puñetazo": "punch", "hit": "punch", "strike": "punch",
+	"empujar": "push", "patear": "kick", "patada": "kick", "abrazar": "hug", "abrazo": "hug", "dar_la_mano": "handshake",
+	"saludar_mano": "handshake", "lanzar": "throw", "tirar": "throw", "palmada": "pat", "arrodillarse": "kneel",
+	"escribir": "write", "anotar": "write", "leer": "read", "escuchar": "listen", "llamar": "call", "telefonear": "call",
+	"huir": "flee", "escapar": "flee", "run_away": "flee", "quedarse": "stay", "defenderse": "fight_back",
+	"devolver_golpe": "fight_back", "fight": "fight_back",
+	"dar_numero": "share_number", "dar_número": "share_number", "give_number": "share_number", "share_phone": "share_number",
+	"contratar": "hire_player", "hire": "hire_player", "offer_job": "hire_player", "dar_trabajo": "hire_player", "emplear": "hire_player",
+	"despedir": "quit_job", "renunciar": "quit_job", "fire_player": "quit_job", "quit": "quit_job",
+	"luz": "light", "linterna": "light", "lamp": "light", "comer_item": "nourish", "food_item": "nourish", "edible": "nourish",
+	"beber_item": "hydrate", "drinkable": "hydrate", "telefono": "phone", "teléfono": "phone", "celular": "phone",
+	"radio": "signal", "receptor": "signal", "abrigo": "warmth", "warm": "warmth", "herramienta": "tool",
+	"asiento": "seat", "refugio_lluvia": "shelter", "calor": "heat", "calefacción": "heat", "almacén": "storage", "baúl": "storage",
+	"guardar": "storage", "chest": "storage", "antena": "signal", "cubo": "box", "caja_forma": "box", "cilindro": "cylinder",
+	"esfera": "sphere", "bola": "sphere",
+	"hambre": "hunger", "comida": "hunger", "food": "hunger", "sed": "thirst", "bebida": "thirst", "water": "thirst",
+	"descanso": "rest", "sueño": "rest", "cansancio": "rest", "sleep_need": "rest", "fatigue": "rest", "higiene": "hygiene",
+	"limpieza": "hygiene", "ducha": "hygiene", "cleanliness": "hygiene", "necesidad": "change_need", "satisfy_need": "change_need",
+	"comer_beber": "change_need", "pagar": "pay", "payment": "pay", "spend": "pay", "gastar_dinero": "pay", "cobrar": "charge",
+	"cobrarle": "charge", "sell": "charge", "vender": "charge", "charge_player": "charge", "ganar": "earn", "ganar_dinero": "earn",
+	"cobrar_trabajo": "earn", "get_paid": "earn", "receive_money": "earn", "pagar_jugador": "pay_player", "pay_to_player": "pay_player",
+	"dar_dinero": "pay_player", "give_money": "pay_player", "crear_persona": "spawn_npc", "aparece": "spawn_npc", "create_npc": "spawn_npc",
+	"new_npc": "spawn_npc", "add_npc": "spawn_npc", "llamar_a": "spawn_npc", "crear_lugar": "create_place", "crear_sitio": "create_place",
+	"new_place": "create_place", "add_place": "create_place", "build_place": "create_place", "abrir_negocio": "create_place",
+	"store": "shop", "comercio": "shop", "panadería": "bakery", "panaderia": "bakery", "horno": "bakery", "bakery_shop": "bakery",
+	"taberna": "bar", "pub": "bar", "restaurante": "bar", "restaurant": "bar", "taller_mecánico": "workshop", "garage": "workshop",
+	"oficina": "office", "consulta": "clinic", "clínica": "clinic", "clinica": "clinic", "médico": "clinic", "farmacia": "clinic",
+	"mercado": "market", "puesto": "market", "pescadería": "market", "pescaderia": "market", "limpiar": "wipe", "fregar": "wipe",
 }
 
 var _archetypes: Dictionary = {}

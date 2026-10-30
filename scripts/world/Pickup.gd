@@ -4,7 +4,7 @@ extends Node3D
 
 var item_id := ""
 var _gem: MeshInstance3D
-var _hint: Label3D
+var _name := "objeto"
 
 
 func setup(entity: Dictionary) -> void:
@@ -26,24 +26,19 @@ func setup(entity: Dictionary) -> void:
 	light.omni_range = 4.0
 	light.position.y = 1.0
 	add_child(light)
+	_name = entity.get("name", "objeto")
 	var label := Label3D.new()
-	label.text = entity.get("name", "?")
+	label.text = _name
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.fixed_size = true
 	label.font_size = 36
 	label.outline_size = 8
-	label.pixel_size = 0.006
-	label.position.y = 1.8
+	label.pixel_size = 0.0009
+	label.visibility_range_end = 25.0
+	label.position.y = 1.7
 	add_child(label)
-	_hint = Label3D.new()
-	_hint.text = "[E] Recoger"
-	_hint.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_hint.font_size = 30
-	_hint.outline_size = 8
-	_hint.pixel_size = 0.006
-	_hint.position.y = 1.5
-	_hint.visible = false
-	add_child(_hint)
 	var area := Area3D.new()
+	Layers.zone(area)
 	var zone := CollisionShape3D.new()
 	zone.shape = SphereShape3D.new()
 	zone.shape.radius = 2.2
@@ -60,14 +55,19 @@ func _process(delta: float) -> void:
 		_gem.position.y = 1.0 + sin(Time.get_ticks_msec() / 400.0) * 0.12
 
 
+func interaction_prompt() -> String:
+	return "Recoger: " + _name
+
+
+func interaction_point() -> Vector3:
+	return global_position + Vector3(0, 1.0, 0)
+
+
 func _on_body_entered(body: Node3D) -> void:
 	if body is Player:
-		body.interact_target = self
-		_hint.visible = true
+		body.interaction.add_candidate(self)
 
 
 func _on_body_exited(body: Node3D) -> void:
 	if body is Player:
-		if body.interact_target == self:
-			body.interact_target = null
-		_hint.visible = false
+		body.interaction.remove_candidate(self)

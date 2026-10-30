@@ -12,10 +12,16 @@ var _mock: CheckBox
 var _updates: CheckBox
 var _sens: HSlider
 var _volume: HSlider
+var _music: HSlider
 var _quality: OptionButton
 var _figure: OptionButton
 var _day: OptionButton
+var _fov: HSlider
+var _invert: CheckBox
 var _status: Label
+var _text_speed: HSlider
+var _ui_scale: HSlider
+var _text_scale: HSlider
 
 
 func _ready() -> void:
@@ -40,29 +46,49 @@ func _ready() -> void:
 	title.add_theme_font_size_override("font_size", 26)
 	box.add_child(title)
 
-	_section(box, "Inteligencia artificial (Ollama Cloud)")
-	_key = _line(box, "API key de Ollama Cloud", Settings.api_key, true)
-	_model = _line(box, "Modelo (por defecto %s)" % Settings.DEFAULT_MODEL, Settings.model, false)
-	_mock = _check(box, "Modo sin conexión (respuestas predefinidas, sin IA)", Settings.use_mock)
+	var tabs := TabContainer.new()
+	tabs.custom_minimum_size = Vector2(560, 380)
+	box.add_child(tabs)
+	var game := _page(tabs, "Juego")
+	var gfx := _page(tabs, "Imagen")
+	var sound := _page(tabs, "Sonido")
+	var controls := _page(tabs, "Controles")
+	var ai := _page(tabs, "IA")
+
+	_figure = _option(game, "Tu personaje", ["Lo decide el mundo", "Hombre", "Mujer"],
+		["", "masculine", "feminine"].find(Settings.player_figure))
+	_day = _option(game, "Duración del día", ["24 minutos", "1 hora", "2 horas", "4 horas", "Tiempo real (24 h)"],
+		DAY_OPTIONS.find(Settings.day_minutes) if DAY_OPTIONS.has(Settings.day_minutes) else 2)
+	_text_speed = _slider(game, "Velocidad del texto", 0.5, 3.0, Settings.text_speed)
+	_updates = _check(game, "Buscar actualizaciones al iniciar", Settings.auto_check_updates)
+
+	_quality = _option(gfx, "Calidad gráfica", ["Baja (PCs modestos)", "Media", "Alta"], Settings.graphics_quality)
+	_fov = _slider(gfx, "Campo de visión de la cámara", 55.0, 95.0, Settings.fov)
+	_fov.step = 1.0
+	_ui_scale = _slider(gfx, "Tamaño de la interfaz", 0.85, 1.3, Settings.ui_scale)
+	_text_scale = _slider(gfx, "Tamaño del texto", 0.85, 1.4, Settings.text_scale)
+
+	_volume = _slider(sound, "Volumen", 0.0, 1.0, Settings.volume)
+	_volume.value_changed.connect(func(v): AudioServer.set_bus_volume_db(0, linear_to_db(maxf(v, 0.0001))))
+	_music = _slider(sound, "Música (0 = sin música)", 0.0, 1.0, Settings.music_volume)
+	_music.value_changed.connect(func(v): Settings.music_volume = v)
+
+	_sens = _slider(controls, "Sensibilidad del ratón y del stick", 0.3, 3.0, Settings.mouse_sensitivity)
+	_invert = _check(controls, "Invertir el eje vertical de la cámara", Settings.invert_y)
+	var hint := Label.new()
+	hint.text = "La lista completa de controles (teclado y mando) está en la pausa → Controles."
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.add_theme_color_override("font_color", UITheme.MUTED)
+	controls.add_child(hint)
+
+	_section(ai, "Ollama Cloud")
+	_key = _line(ai, "API key de Ollama Cloud", Settings.api_key, true)
+	_model = _line(ai, "Modelo (por defecto %s)" % Settings.DEFAULT_MODEL, Settings.model, false)
+	_mock = _check(ai, "Modo sin conexión (respuestas predefinidas, sin IA)", Settings.use_mock)
 	var test := Button.new()
 	test.text = "Probar conexión con la IA"
 	test.pressed.connect(_test_connection.bind(test))
-	box.add_child(test)
-
-	_section(box, "Controles y sonido")
-	_sens = _slider(box, "Sensibilidad del ratón", 0.3, 3.0, Settings.mouse_sensitivity)
-	_volume = _slider(box, "Volumen", 0.0, 1.0, Settings.volume)
-	_volume.value_changed.connect(func(v): AudioServer.set_bus_volume_db(0, linear_to_db(maxf(v, 0.0001))))
-
-	_section(box, "Imagen y personaje")
-	_quality = _option(box, "Calidad gráfica", ["Baja (PCs modestos)", "Media", "Alta"], Settings.graphics_quality)
-	_figure = _option(box, "Tu personaje", ["Lo decide el mundo", "Hombre", "Mujer"],
-		["", "masculine", "feminine"].find(Settings.player_figure))
-	_day = _option(box, "Duración del día", ["24 minutos", "1 hora", "2 horas", "4 horas", "Tiempo real (24 h)"],
-		DAY_OPTIONS.find(Settings.day_minutes) if DAY_OPTIONS.has(Settings.day_minutes) else 2)
-
-	_section(box, "Actualizaciones")
-	_updates = _check(box, "Buscar actualizaciones al iniciar", Settings.auto_check_updates)
+	ai.add_child(test)
 
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -114,9 +140,15 @@ func _save() -> void:
 	Settings.auto_check_updates = _updates.button_pressed
 	Settings.mouse_sensitivity = _sens.value
 	Settings.volume = _volume.value
+	Settings.music_volume = _music.value
 	Settings.graphics_quality = _quality.selected
 	Settings.player_figure = ["", "masculine", "feminine"][maxi(_figure.selected, 0)]
 	Settings.day_minutes = DAY_OPTIONS[maxi(_day.selected, 0)]
+	Settings.fov = _fov.value
+	Settings.text_speed = _text_speed.value
+	Settings.ui_scale = _ui_scale.value
+	Settings.text_scale = _text_scale.value
+	Settings.invert_y = _invert.button_pressed
 	Settings.save_settings()
 	_status.text = "Guardado."
 	_close()
@@ -126,6 +158,14 @@ func _close() -> void:
 	Settings._apply_volume()  # deshace la vista previa si no se guardó
 	closed.emit()
 	queue_free()
+
+
+func _page(tabs: TabContainer, title: String) -> VBoxContainer:
+	var v := VBoxContainer.new()
+	v.name = title
+	v.add_theme_constant_override("separation", 10)
+	tabs.add_child(v)
+	return v
 
 
 func _section(parent: Node, text: String) -> void:

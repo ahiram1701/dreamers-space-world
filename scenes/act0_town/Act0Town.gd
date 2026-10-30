@@ -1,4 +1,4 @@
-extends Node3D
+extends LocationScene
 ## Acto 0 — Bahía de las Horas. Igual para todos los jugadores; lo que cambia es
 ## cómo hablas con la gente, y eso ya empieza a moldear tu mundo (NPCMemory, PlayerProfile).
 ## Se construye en código con modelos CC0 (AssetLibrary), terreno y agua procedurales.
@@ -21,22 +21,17 @@ const SCENE_CONTEXT := """Acto 0. Bahía de las Horas: pueblo costero tranquilo 
 El jugador es un/a vecino/a corriente del pueblo con una vida normal. Aún no sabe nada de multiversos.
 Últimamente pasan cosas pequeñas y raras con explicación física aún desconocida: un pulso electromagnético a las 3:33 que enciende el faro desconectado y para relojes, vecinos con flashes de recuerdos que no son suyos, una transmisión de radio estructurada."""
 
-var _player: Player
-var _dialogue: DialoguePanel
-var _objective: Label
 var _beacon: OmniLight3D
 var _sun: DirectionalLight3D
 var _env: Environment
 var _sky_mat: ProceduralSkyMaterial
 var _awakening: AwakeningSequence
-var _ui: GameplayUI
-var _npcs: Dictionary = {}  # npc_id -> TownNPC
 var _fx: EnvironmentFX
 var _noise: FastNoiseLite
 var _boats: Array = []
 var _schedules: Dictionary = {}  # npc_id -> [[hora, sitio], ...]
-var _interiors: InteriorManager
-var _features: Array = []        # árboles, rocas y arbustos que se pueden talar o romper
+var _activities: Dictionary = {}  # npc_id -> {sitio: [qué hace, gesto]}
+var _homes: Dictionary = {}       # npc_id -> id de la puerta de su casa
 var _removed: Array = []         # los que ya talaste (no vuelven)
 var _house_count := 0
 
@@ -45,6 +40,8 @@ func _ready() -> void:
 	if not WorldDB.is_loaded() and not WorldDB.load_world(WorldDB.last_world_id()):
 		WorldDB.create_world("Mundo sin nombre")  # escena abierta directamente desde el editor
 	_seed_base_npcs()
+	_places = PLACES.duplicate()
+	_water_level = WATER_Y
 	_removed = Actions.removed_here(GameState.current_location())
 	_interiors = InteriorManager.new()
 	add_child(_interiors)
@@ -58,19 +55,14 @@ func _ready() -> void:
 	_player.position = SPAWN
 	_player.water_level = WATER_Y
 	add_child(_player)
-	_player.interact_requested.connect(_on_interact)
 	_interiors.player = _player
 	_interiors.entered.connect(func(_k, _id): _follow_schedules(true))
 	_interiors.exited.connect(func(_k, _id): _follow_schedules(true))
-	for entry in Actions.placed_here(GameState.current_location()):
-		Decor.build_placed(self, entry, _ground_height, WATER_Y, _on_placed_use)
-	Actions.player_pose = _player_pose
-	Actions.feature_finder = _find_feature
-	Actions.object_placed.connect(func(e): Decor.build_placed(self, e, _ground_height, WATER_Y, _on_placed_use))
-	Actions.feature_removed.connect(_remove_feature)
 
 	for entry in _load_npc_entries():
 		_schedules[entry.id] = entry.get("schedule", [])
+		_activities[entry.id] = entry.get("activities", {})
+		_homes[entry.id] = entry.get("home", "")
 		var npc := TownNPC.new()
 		add_child(npc)
 		npc.position = Vector3(entry.position[0], _ground_height(entry.position[0], entry.position[2]) + 0.1, entry.position[2])
@@ -78,21 +70,17 @@ func _ready() -> void:
 		npc.face(SPAWN)
 		_npcs[entry.id] = npc
 
-	_build_hud()
 	_dialogue = DialoguePanel.new()
 	_dialogue.scene_context = SCENE_CONTEXT
 	add_child(_dialogue)
-	_dialogue.closed.connect(_on_dialogue_closed)
-	_dialogue.turn_received.connect(_on_turn)
 	_ui = GameplayUI.new()
 	_ui.player = _player
 	_ui.nearby_npcs = func(): return _npcs.keys()
-	_ui.scene_context = _context
 	add_child(_ui)
-	_interiors.message.connect(_ui.toast)
-	Actions.npc_action.connect(_on_npc_action)
-	WorldClock.hour_changed.connect(func(_h): _follow_schedules(false))
+	_setup_common()
+	WorldClock.hour_changed.connect(func(_h): _follow_schedules(false); _shop_hours())
 	_follow_schedules(true)
+	_shop_hours()
 	var waves := AmbientAudio.new()
 	waves.kind = AmbientAudio.Kind.WAVES
 	add_child(waves)
@@ -103,11 +91,7 @@ func _process(_delta: float) -> void:
 	if _player.position.y < -30.0 and not _interiors.is_inside():  # cayó fuera del mapa
 		_player.position = SPAWN
 		_player.velocity = Vector3.ZERO
-	# Los vecinos te miran cuando pasas cerca
-	var head := _player.global_position + Vector3(0, 1.6, 0)
-	for id in _npcs:
-		var npc: TownNPC = _npcs[id]
-		npc.look_at_target(head if npc.global_position.distance_to(head) < 7.0 else Vector3.INF)
+	_process_common()
 	if _awakening != null:
 		return  # la secuencia controla el faro
 	# El faro "respira"; cuando el Despertar está cerca, parpadea nervioso.
@@ -123,6 +107,10 @@ func _process(_delta: float) -> void:
 ## Los 3 vecinos se escriben a mano y entran en el mundo del jugador al empezar.
 ## A partir de ahí son suyos: sus recuerdos y su relación evolucionan distinto en cada partida.
 func _seed_base_npcs() -> void:
+	if not WorldDB.get_state("contacts_seeded", false):  # tus vecinos de siempre: tienes su número
+		WorldDB.set_state("contacts_seeded", true)
+		for entry in _load_npc_entries():
+			NPCMemory.set_fields(entry.id, {"phone": true})
 	for entry in _load_npc_entries():
 		var existing := WorldDB.get_entity("npc", entry.id)
 		if existing.is_empty():
@@ -144,31 +132,41 @@ func _progress() -> Dictionary:
 	return WorldDB.get_state("act0", {"talked": [], "awakening_ready": false})
 
 
-func _on_interact(target: Node) -> void:
-	if target is TownNPC:
-		_ui.block(true)
-		target.face(_player.global_position)
-		target.talking = true
-		_player.face_towards(target.global_position)
-		_dialogue.scene_context = _context()
-		_dialogue.open(target.npc_id)
-	elif target is Interactable:
-		target.use(_player)
-	elif target is Boat:
-		target._on_use(_player)
+## La cafetería abre de 7:00 a 22:00 (de noche, la puerta está cerrada).
+func _shop_hours() -> void:
+	var h := WorldClock.hour()
+	var open := h >= 7.0 and h < 22.0
+	if not NPCMemory.is_locked_in("npc_teo"):
+		_interiors.set_locked("cafe", "" if open else "La cafetería está cerrada. Abre a las 7:00.")
 
 
-## El PNJ gesticula según cómo se siente en cada respuesta.
-func _on_turn(npc_id: String, turn: Dictionary) -> void:
-	if _npcs.has(npc_id):
-		_npcs[npc_id].set_emotion(turn.get("emotion", "neutral"))
+## De quién es cada casa (para reaccionar si entras sin permiso).
+func owner_of_door(door: String) -> String:
+	for id in _homes:
+		var home: String = _homes[id]
+		if home == door or (not home.is_empty() and _interiors.door_of_kind(home) == door):
+			return id
+	return ""
 
 
-func _on_dialogue_closed(npc_id: String) -> void:
-	_ui.block(false)
-	_npcs[npc_id].talking = false
-	_player.clear_look()
-	_npcs[npc_id].refresh_name(WorldDB.get_entity("npc", npc_id))
+func ground_at(x: float, z: float) -> float:
+	return _ground_height(x, z)
+
+
+func scene_context() -> String:
+	return SCENE_CONTEXT
+
+
+## Si un vecino se mete "en casa" sin decir dónde, va al edificio de su rutina (Teo, a la cafetería).
+func _npc_home_door(npc_id: String) -> String:
+	for slot in _schedules.get(npc_id, []):
+		var kind: String = INDOOR.get(slot[1], "")
+		if not kind.is_empty() and kind != "home":
+			return _interiors.door_of_kind(kind)
+	return super(npc_id)
+
+
+func _after_dialogue(npc_id: String) -> void:
 	var p := _progress()
 	if not (npc_id in p.talked):
 		p.talked.append(npc_id)
@@ -180,11 +178,11 @@ func _on_dialogue_closed(npc_id: String) -> void:
 func _update_objective() -> void:
 	var p := _progress()
 	if GameState.is_awakened():
-		_objective.text = "Bahía de las Horas · Pulsa T para usar el Ancla"
+		_set_objective("Bahía de las Horas · Pulsa T para usar el Ancla")
 	elif p.awakening_ready:
-		_objective.text = "Son casi las 3:33. Ve al faro."
+		_set_objective("Son casi las 3:33. Ve al faro.")
 	else:
-		_objective.text = "Habla con tus vecinos (%d/%d)" % [p.talked.size(), _npcs.size()]
+		_set_objective("Habla con tus vecinos (%d/%d)" % [p.talked.size(), _npcs.size()])
 
 
 func _on_lighthouse_entered(body: Node3D) -> void:
@@ -192,7 +190,7 @@ func _on_lighthouse_entered(body: Node3D) -> void:
 		return
 	if not _progress().get("awakening_ready", false):
 		return
-	_objective.text = "3:33"
+	_set_objective("3:33")
 	_fx.frozen = true  # la secuencia controla el cielo
 	WorldClock.set_hour(3.55)
 	_awakening = AwakeningSequence.new()
@@ -208,92 +206,13 @@ func _on_lighthouse_entered(body: Node3D) -> void:
 
 # --- Vida en el pueblo ---------------------------------------------------------------
 
-## Escena para la IA: el pueblo, la hora y lo que el jugador tiene cerca.
-func _context() -> String:
-	var people := PackedStringArray()
-	for id in _npcs:
-		if _npcs[id].global_position.distance_to(_player.global_position) < 12.0:
-			people.append(WorldDB.get_entity("npc", id).get("name", "?"))
-	var where := ""
-	if _interiors.is_inside():
-		where = "El jugador está DENTRO de: %s (una habitación con muebles; fuera está el pueblo)." % _interiors.current_label()
-	else:
-		where = "El jugador está cerca de: %s. Cerca: %s." % [_nearest_place(_player.global_position), _surroundings()]
-	return "%s\n%s %s%s" % [SCENE_CONTEXT, WorldClock.describe(), where,
-		(" Cerca hay: %s." % ", ".join(people)) if not people.is_empty() else ""]
-
-
-## Qué tiene el jugador a mano: árboles, rocas, el mar… (para que la IA sepa qué puede talar o usar).
-func _surroundings() -> String:
-	var counts := {}
-	for f in _features:
-		if is_instance_valid(f.node) and f.pos.distance_to(_player.global_position) < 8.0:
-			counts[f.kind] = counts.get(f.kind, 0) + 1
-	var names := {"tree": "árbol", "rock": "roca", "bush": "arbusto"}
-	var parts := PackedStringArray()
-	for k in counts:
-		parts.append("%d %s%s" % [counts[k], names.get(k, k), "es" if counts[k] > 1 and k != "tree" and k != "rock" else ("s" if counts[k] > 1 else "")])
-	var water := _water_spot()
-	if water != Vector3.INF:
-		parts.append("el mar a %d m" % roundi(water.distance_to(_player.global_position)))
-	return "nada especial" if parts.is_empty() else ", ".join(parts)
-
-
-func _nearest_place(pos: Vector3) -> String:
-	var best := ""
-	var best_d := INF
-	for name in PLACES:
-		var d := Vector2(pos.x - PLACES[name].x, pos.z - PLACES[name].z).length()
-		if d < best_d:
-			best = name
-			best_d = d
-	return best
-
-
-## Lo que un vecino decide hacer en una conversación (Actions) se ve en el mundo.
-func _on_npc_action(npc_id: String, action: Dictionary) -> void:
-	if not _npcs.has(npc_id):
-		return
-	var npc: TownNPC = _npcs[npc_id]
-	match action.get("type", ""):
-		"follow_player":
-			npc.follow(_player)
-		"stop_following":
-			npc.stop()
-		"go_to":
-			if not NPCMemory.is_following(npc_id):
-				npc.walk_to(_place_position(str(action.get("target", ""))))
-		"give_item", "take_item":
-			npc.play_gesture("give", 2.5)
-		"update_item":
-			npc.play_gesture("hammer", 3.0)
-		"refuse_contact":
-			npc.play_gesture("cross_arms", 6.0)
-		"play":
-			npc.play_gesture(ContentValidator._match_enum(str(action.get("target", "")), ContentValidator.archetypes().gesture), 4.0)
-
-
-## Posición de un sitio por su nombre aproximado ("el faro", "la cafetería del muelle"…).
-func _place_position(text: String) -> Vector3:
-	var t := text.to_lower()
-	for name in PLACES:
-		if t.contains(name) or name.contains(t):
-			return _on_ground(PLACES[name])
-	for name in PLACES:  # "cafe" → "cafetería"
-		if t.length() >= 4 and name.begins_with(t.left(4)):
-			return _on_ground(PLACES[name])
-	return _on_ground(PLACES["calle principal"])
-
-
-func _on_ground(p: Vector3) -> Vector3:
-	return Vector3(p.x, _ground_height(p.x, p.z), p.z)
-
-
 ## Rutinas: cada vecino va a su sitio según la hora (salvo si te acompaña o está hablando).
 func _follow_schedules(teleport: bool) -> void:
 	var h := WorldClock.hour()
 	for id in _npcs:
 		var npc: TownNPC = _npcs[id]
+		if npc_busy(id):
+			continue  # se fue o se encerró: no sigue su rutina hasta que salga
 		if NPCMemory.is_following(id):
 			if teleport:
 				npc.global_position = _player.global_position + Vector3(1.5, 0.3, 1.0)
@@ -306,17 +225,34 @@ func _follow_schedules(teleport: bool) -> void:
 		for slot in plan:
 			if h >= float(slot[0]):
 				place = slot[1]
-		var target := _place_position(place) + Vector3(randf_range(-2, 2), 0, randf_range(-2, 2))
-		var indoor: String = INDOOR.get(place, "")
-		if not indoor.is_empty():
-			if _interiors.current_kind() == indoor:  # estás dentro: está ahí, en su sitio
+		var act: Array = _activities.get(id, {}).get(place, ["", ""])
+		npc.set_activity(act[0], act[1])
+		var night := h >= 23.0 or h < 7.0
+		# Dentro de un edificio: su casa ("casa") o un sitio cubierto (la cafetería, la estación…)
+		var door_id := ""
+		if place == "casa":
+			door_id = _homes.get(id, "")
+		elif INDOOR.has(place):
+			door_id = _interiors.door_of_kind(INDOOR[place])
+		var target := place_position(place) + Vector3(randf_range(-2, 2), 0, randf_range(-2, 2)) if place != "casa" else Vector3.INF
+		if not door_id.is_empty():
+			if _interiors.current_door() == door_id:  # estás dentro: está ahí, en su sitio
+				npc.set_present(true)
 				npc.stop()
 				npc.global_position = _interiors.npc_spot(_npcs.keys().find(id)) + Vector3(0, 0.2, 0)
 				continue
-			var door := _interiors.door_position(_interiors.door_of_kind(indoor))
-			if door != Vector3.INF:  # estás fuera: lo ves junto a la puerta
+			if night:  # de noche está dentro (no se le ve en la calle)
+				npc.set_present(false)
+				continue
+			npc.set_present(true)
+			var door := _interiors.door_position(door_id)
+			if door != Vector3.INF:  # de día y estás fuera: lo ves junto a la puerta
 				target = door + Vector3(randf_range(-2, 2), 0, randf_range(1.5, 3))
 				target.y = _ground_height(target.x, target.z)
+		elif not npc.is_present():
+			npc.set_present(true)
+		if target == Vector3.INF:
+			continue
 		if teleport:
 			npc.global_position = target + Vector3(0, 0.2, 0)
 		elif npc.global_position.distance_to(target) > 4.0:
@@ -418,7 +354,11 @@ func _build_town() -> void:
 	var wall_colors := [Color("#f4f1de"), Color("#e9d8b4"), Color("#f2c9a0"), Color("#c9dbe2"), Color("#e7b8a8"), Color("#d8e2c4")]
 	for row in range(-4, 5):
 		for side in [-1, 1]:
-			if rng.randf() < 0.2 or (row == 0 and side == -1):  # ese hueco es tu casa
+			var empty := rng.randf() < 0.2  # (en este orden: el pueblo sale igual que siempre)
+			if row == 0 and side == -1:  # ese hueco es tu casa
+				continue
+			if empty:  # solar vacío: ahí puede abrirse un sitio nuevo (lo crea la IA)
+				_free_lots.append({"pos": Vector3(-5 + side * 11.0, 0, row * 12), "yaw": PI / 2 if side < 0 else -PI / 2})
 				continue
 			var pos := Vector3(-5 + side * rng.randf_range(10, 12), 0, row * 12 + rng.randf_range(-2, 2))
 			_house(pos, side, "town" if absi(row) <= 1 else "small", wall_colors[rng.randi() % wall_colors.size()], rng)
@@ -448,7 +388,7 @@ func _build_town() -> void:
 		var model := AssetLibrary.nature(biome, kind, rng)
 		var height := rng.randf_range(5.0, 9.0) if kind == 0 else rng.randf_range(0.8, 2.2)
 		var yaw := rng.randf() * TAU
-		var solid: Variant = "trunk" if kind == 0 else rng.randf() < 0.5
+		var solid: Variant = "trunk" if kind == 0 else (true if kind == 2 else "bush")
 		var fid := "%s_%d_%d" % [["tree", "bush", "rock"][kind], roundi(x), roundi(z)]
 		if model and not (fid in _removed):
 			_features.append({"id": fid, "kind": ["tree", "bush", "rock"][kind], "pos": Vector3(x, 0, z),
@@ -463,7 +403,7 @@ func _build_town() -> void:
 		var yaw := rng.randf() * TAU
 		var fid := "bush_%d_%d" % [roundi(x), roundi(z)]
 		if bush and not (fid in _removed):
-			_features.append({"id": fid, "kind": "bush", "pos": Vector3(x, 0, z), "node": AssetLibrary.place(self, bush, Vector3(x, 0, z), h, yaw, false)})
+			_features.append({"id": fid, "kind": "bush", "pos": Vector3(x, 0, z), "node": AssetLibrary.place(self, bush, Vector3(x, 0, z), h, yaw, "bush")})
 		elif bush:
 			bush.free()
 
@@ -587,63 +527,6 @@ func _add_door(root: Node3D, kind: String, id: String, label: String) -> void:
 
 # --- Lo que el jugador cambia en el mundo ------------------------------------------------
 
-func _player_pose() -> Dictionary:
-	return {"pos": _player.global_position, "yaw": _player.facing_yaw(), "water": _water_spot()}
-
-
-## Punto de agua navegable más cercano (a menos de 25 m), o INF.
-func _water_spot() -> Vector3:
-	var p := _player.global_position
-	if _interiors.is_inside():
-		return Vector3.INF
-	for dist in [3.0, 6.0, 10.0, 15.0, 20.0, 25.0]:
-		for i in 12:
-			var a := TAU * i / 12.0
-			var q: Vector3 = p + Vector3(cos(a), 0, sin(a)) * dist
-			if _ground_height(q.x, q.z) < WATER_Y - 0.5:
-				return Vector3(q.x, WATER_Y, q.z)
-	return Vector3.INF
-
-
-func _find_feature(kind: String) -> String:
-	var best := ""
-	var best_d := 6.0
-	for f in _features:
-		if f.kind == kind and is_instance_valid(f.node):
-			var d: float = Vector2(f.pos.x - _player.global_position.x, f.pos.z - _player.global_position.z).length()
-			if d < best_d:
-				best = f.id
-				best_d = d
-	return best
-
-
-## Talado o roto: cae (o se hunde) y desaparece.
-func _remove_feature(id: String) -> void:
-	for f in _features:
-		if f.id == id and is_instance_valid(f.node):
-			var node: Node3D = f.node
-			for c in node.get_children():
-				if c is StaticBody3D:
-					c.queue_free()
-			var tw := node.create_tween()
-			if f.kind == "tree":
-				var away := (node.global_position - _player.global_position).normalized()
-				tw.tween_property(node, "rotation", Vector3(away.z * 1.5, node.rotation.y, -away.x * 1.5), 1.6).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-				tw.tween_interval(1.5)
-			tw.tween_property(node, "scale", Vector3(1, 0.01, 1), 0.6)
-			tw.tween_callback(node.queue_free)
-			_features.erase(f)
-			return
-
-
-## Usar algo que construiste (sentarse en la silla o junto al fuego, dormir en la cama).
-func _on_placed_use(kind: String, node: Node3D, player: Player) -> void:
-	if kind == "bed":
-		_interiors.sleep(node)
-	else:
-		_interiors.sit(node)
-
-
 # --- Helpers de primitivas ------------------------------------------------------------
 
 func _box(pos: Vector3, size: Vector3, color: Color, collide: bool = true) -> MeshInstance3D:
@@ -704,23 +587,11 @@ func _label3d(pos: Vector3, text: String) -> void:
 	add_child(l)
 
 
-func _build_hud() -> void:
-	var hud := CanvasLayer.new()
-	add_child(hud)
-	_objective = Label.new()
-	_objective.position = Vector2(20, 16)
-	_objective.add_theme_font_size_override("font_size", 22)
-	_objective.add_theme_constant_override("outline_size", 6)
-	_objective.add_theme_color_override("font_outline_color", Color.BLACK)
-	hud.add_child(_objective)
-	var help := Label.new()
-	help.text = "WASD moverse · Shift correr · Espacio saltar · E hablar · F hacer algo · I inventario y diario · Esc pausa"
-	help.anchor_top = 1.0
-	help.anchor_bottom = 1.0
-	help.offset_top = -34
-	help.offset_left = 20
-	help.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
-	hud.add_child(help)
+## El objetivo del Acto 0 arriba a la izquierda (HUD).
+func _set_objective(text: String) -> void:
+	if _ui:
+		_ui.hud.set_place("Bahía de las Horas")
+		_ui.hud.set_objective(text)
 
 
 func _mat(c: Color) -> StandardMaterial3D:

@@ -6,7 +6,7 @@
 	"location_kind": ["town", "city", "wilderness", "space_station", "planet_surface", "ruins", "ship_interior", "anomaly_zone"],
 	"biome": ["temperate", "desert", "ice", "jungle", "ocean", "volcanic", "crystal", "barren", "urban", "void"],
 	"item_kind": ["tool", "artifact", "technology", "consumable", "key", "relic", "data"],
-	"item_effect": ["none", "heal", "restore_temporal_energy", "reduce_paradox", "reveal_secret", "unlock_location", "boost_reputation"],
+	"item_effect": ["none", "heal", "restore_temporal_energy", "reduce_paradox", "reveal_secret", "unlock_location", "boost_reputation", "light", "nourish", "hydrate", "phone", "signal", "warmth", "tool"],
 	"era": ["prehistory", "ancient", "medieval", "industrial", "present", "near_future", "far_future", "deep_future"],
 	"emotion": ["neutral", "happy", "sad", "worried", "angry", "curious", "scared", "amused", "mysterious"],
 	"tone": ["friendly", "curious", "sarcastic", "honest", "evasive", "bold", "kind", "cold"],
@@ -16,9 +16,14 @@
 	"anchor_base": ["marina_watch", "samir_radio", "teo_notebook", "none"],
 	"quest_objective": ["visit_poi", "talk_npc", "bring_item"],
 	"ending": ["close_the_loop", "return_home", "keep_traveling"],
-	"npc_action": ["give_item", "take_item", "follow_player", "stop_following", "go_to", "change_stat", "reveal_place", "give_quest", "complete_quest", "refuse_contact", "journal", "update_item", "remove_item", "place_object", "affect_nearby", "play"],
+	"npc_action": ["give_item", "take_item", "follow_player", "stop_following", "go_to", "change_stat", "reveal_place", "give_quest", "complete_quest", "refuse_contact", "journal", "update_item", "remove_item", "place_object", "affect_nearby", "play", "leave", "go_inside", "approach", "npc_react", "give_to_npc", "use", "change_need", "pay", "earn", "charge", "pay_player", "spawn_npc", "create_place", "share_number", "hire_player", "quit_job"],
 	"stat": ["health", "energy", "instability"],
 	"placeable": ["boat", "raft", "campfire", "tent", "shelter", "table", "chair", "bed", "fence", "sign", "torch", "box", "garden", "other"],
 	"world_feature": ["tree", "rock", "bush", "crop"],
-	"gesture": ["chop", "hammer", "dig", "pick_up", "search", "crouch", "sit", "sleep", "drink", "eat", "wave", "point", "give", "fish", "row", "swim", "dance", "think", "cross_arms", "shrug", "nod", "shake_head"]
+	"gesture": ["chop", "hammer", "dig", "pick_up", "search", "crouch", "sit", "sleep", "drink", "eat", "wave", "point", "give", "fish", "row", "swim", "dance", "think", "cross_arms", "shrug", "nod", "shake_head", "punch", "push", "kick", "hug", "handshake", "throw", "pat", "kneel", "write", "read", "listen", "call", "wipe"],
+	"npc_behavior": ["stay", "flee", "approach", "follow", "go_inside", "fight_back", "leave"],
+	"need": ["hunger", "thirst", "rest", "hygiene"],
+	"place_kind": ["shop", "bakery", "bar", "workshop", "house", "office", "clinic", "market"],
+	"placed_function": ["none", "light", "seat", "bed", "shelter", "heat", "storage", "signal"],
+	"part_shape": ["box", "cylinder", "sphere"]
 }

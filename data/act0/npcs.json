@@ -51,7 +51,22 @@
 				13,
 				"faro"
 			]
-		]
+		],
+		"activities": {
+			"faro": [
+				"revisando la lámpara del faro",
+				"think"
+			],
+			"cafetería": [
+				"tomándose un café",
+				"drink"
+			],
+			"playa": [
+				"mirando el mar",
+				"think"
+			]
+		},
+		"home": "faro"
 	},
 	{
 		"id": "npc_teo",
@@ -74,7 +89,7 @@
 				"Terminar la novela de ciencia ficción que nunca enseña a nadie"
 			],
 			"secret": "Desde hace semanas tiene flashes de un cielo con dos lunas, tan nítidos como recuerdos, y los dibuja en servilletas. Los dibujos coinciden entre sí con precisión astronómica.",
-			"greeting": "¡Hombre! ¿Lo de siempre? Bueno, tú no tienes 'lo de siempre'... todavía.",
+			"greeting": "¡Hola, hola! ¿Lo de siempre? Bueno, tú no tienes 'lo de siempre'... todavía.",
 			"appearance": {
 				"figure": "masculine",
 				"body": "slim",
@@ -100,8 +115,31 @@
 			[
 				22,
 				"muelle"
+			],
+			[
+				23,
+				"casa"
 			]
-		]
+		],
+		"activities": {
+			"calle principal": [
+				"paseando sin prisa",
+				""
+			],
+			"cafetería": [
+				"limpiando la barra",
+				"wipe"
+			],
+			"muelle": [
+				"fumando y mirando las barcas",
+				"think"
+			],
+			"casa": [
+				"en su casa",
+				""
+			]
+		},
+		"home": "casa_4"
 	},
 	{
 		"id": "npc_samir",
@@ -159,6 +197,21 @@
 				22,
 				"estación"
 			]
-		]
+		],
+		"activities": {
+			"estación": [
+				"reparando una radio",
+				"hammer"
+			],
+			"calle principal": [
+				"comprando cosas",
+				"search"
+			],
+			"vías del tren": [
+				"escuchando la radio junto a las vías",
+				"listen"
+			]
+		},
+		"home": "station"
 	}
 ]

@@ -11,6 +11,7 @@ const SAVE_EVERY := 20.0     # segundos reales entre guardados
 var paused := false
 
 var _minutes := START_HOUR * 60.0
+var _day := 0                # días completos que han pasado (para "hasta mañana", rencores…)
 var _last_hour := -1
 var _since_save := 0.0
 var _loaded_world := ""
@@ -22,10 +23,15 @@ func _process(delta: float) -> void:
 	if _loaded_world != WorldDB.world_id:  # otro mundo: su propia hora
 		_loaded_world = WorldDB.world_id
 		_minutes = float(WorldDB.get_state("clock", START_HOUR * 60.0))
+		_day = int(WorldDB.get_state("clock_day", 0))
 		_last_hour = -1
 	if paused or get_tree().paused:
 		return
-	_minutes = fmod(_minutes + delta * (24.0 / maxf(Settings.day_minutes, 1.0)), 24.0 * 60.0)
+	_minutes += delta * (24.0 / maxf(Settings.day_minutes, 1.0))
+	if _minutes >= 24.0 * 60.0:
+		_minutes -= 24.0 * 60.0
+		_day += 1
+		WorldDB.set_state("clock_day", _day)
 	var h := int(_minutes / 60.0)
 	if h != _last_hour:
 		_last_hour = h
@@ -48,9 +54,26 @@ func set_hour(h: float) -> void:
 	_last_hour = -1
 
 
-## Pasa el tiempo de golpe (una acción que dura, dormir…).
+## Pasa el tiempo de golpe (una acción que dura, dormir…). Cuenta los días que cruza.
 func advance(minutes: float) -> void:
-	set_hour(hour() + maxf(minutes, 0.0) / 60.0)
+	var total := _minutes + maxf(minutes, 0.0)
+	_day += int(total / (24.0 * 60.0))
+	if WorldDB.is_loaded():
+		WorldDB.set_state("clock_day", _day)
+	set_hour(fmod(total, 24.0 * 60.0) / 60.0)
+
+
+const WEEKDAYS := ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+
+
+## Día de la semana (cada mundo empieza un jueves).
+func weekday() -> String:
+	return WEEKDAYS[(_day + 3) % 7]
+
+
+## Minutos de juego desde el principio del mundo (no vuelve a 0 a medianoche).
+func absolute_minutes() -> float:
+	return _day * 24.0 * 60.0 + _minutes
 
 
 func text() -> String:
@@ -72,4 +95,4 @@ func describe() -> String:
 	var h := hour()
 	var part := "de madrugada" if h < 6 else "por la mañana" if h < 12 else "a mediodía" if h < 14 \
 		else "por la tarde" if h < 19 else "al atardecer" if h < 21 else "de noche"
-	return "Son las %s (%s)." % [text(), part]
+	return "Es %s y son las %s (%s)." % [weekday(), text(), part]

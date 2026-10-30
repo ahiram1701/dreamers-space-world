@@ -18,7 +18,11 @@ const BONES := ["Hips", "Abdomen", "Torso", "Chest", "Neck", "Head", "Shoulder.L
 const SPINE := ["Hips", "Abdomen", "Torso", "Chest", "Neck", "Head"]
 const BLEND := 0.25            # segundos para entrar o salir de un gesto
 ## Gestos que duran hasta que se paran (los demás son de un par de segundos).
-const LOOPING := ["chop", "hammer", "dig", "search", "fish", "dance", "sleep", "sit", "crouch", "row", "swim", "think", "cross_arms"]
+const LOOPING := ["chop", "hammer", "dig", "search", "fish", "dance", "sleep", "sit", "crouch", "row", "swim", "think", "cross_arms",
+	"kneel", "write", "read", "listen", "call", "hug", "wipe"]
+
+## Cada vez que un pie toca el suelo al andar o correr (para el sonido de los pasos).
+signal footstep(running: bool)
 ## Herramienta en la mano derecha durante el gesto: [modelo, altura en m, giro en grados]
 const TOOLS := {
 	"chop": ["survival_pack/Axe", 0.75, Vector3(0, 0, -90)], "dig": ["survival_pack/Shovel", 1.1, Vector3(0, 0, -90)],
@@ -140,7 +144,10 @@ func _locomotion(delta: float) -> Dictionary:
 	var p := _empty()
 	var walk := clampf(speed / 4.0, 0.0, 1.0)
 	var run := clampf((speed - 4.8) / 3.0, 0.0, 1.0)
+	var before := sin(_phase)
 	_phase += delta * (1.8 + speed * 1.45)
+	if walk > 0.3 and not swimming and not airborne and signf(sin(_phase)) != signf(before):
+		footstep.emit(speed > 5.0)
 	var s := sin(_phase)
 	var c := cos(_phase)
 	var still := 1.0 - walk
@@ -329,6 +336,78 @@ func _gesture_pose(g: String, t: float) -> Dictionary:
 			p["Head"] = Vector3(sin(t * 7.0) * 14 * (1.0 - clampf(t / 2.0, 0.0, 1.0)), 0, 0)
 		"shake_head":
 			p["Head"] = Vector3(0, sin(t * 7.0) * 22 * (1.0 - clampf(t / 2.0, 0.0, 1.0)), 0)
+		"punch":  # carga atrás y golpe recto con la derecha
+			var wind := smoothstep(0.0, 0.3, t) - smoothstep(0.3, 0.42, t)
+			var hit := smoothstep(0.3, 0.42, t) - smoothstep(0.75, 1.1, t)
+			p["UpperArm.R"] = Vector3(-15 * wind + 85 * hit, 0, 10 + 15 * wind)
+			p["LowerArm.R"] = Vector3(115 * wind + 10 * hit + 60 * (1.0 - wind - hit), 0, 0)
+			p["UpperArm.L"] = Vector3(55, 0, 8)
+			p["LowerArm.L"] = Vector3(100, 0, 0)
+			p["Torso"] = Vector3(6 + 8 * hit, 22 * wind - 28 * hit, 0)
+			p["Hips"] = Vector3(0, 10 * wind - 12 * hit, 0)
+			_legs_apart(p, 10)
+			p["UpperLeg.L"] = Vector3(18, 0, 6)
+			p["LowerLeg.L"] = Vector3(-20, 0, 0)
+		"push":
+			var shove := smoothstep(0.1, 0.4, t) - smoothstep(0.8, 1.2, t)
+			_both_arms(p, Vector3(30 + 55 * shove, 0, 8), Vector3(80 - 70 * shove, 0, 0))
+			p["Torso"] = Vector3(4 + 16 * shove, 0, 0)
+			p["UpperLeg.L"] = Vector3(22 * shove, 0, 6)
+			p["LowerLeg.L"] = Vector3(-18 * shove, 0, 0)
+		"kick":
+			var lift := smoothstep(0.0, 0.3, t) - smoothstep(0.7, 1.1, t)
+			var snap := smoothstep(0.3, 0.45, t) - smoothstep(0.7, 1.1, t)
+			p["UpperLeg.R"] = Vector3(20 * lift + 55 * snap, 0, 4)
+			p["LowerLeg.R"] = Vector3(-90 * (lift - snap) - 10, 0, 0)
+			p["UpperLeg.L"] = Vector3(0, 0, -4)
+			p["LowerLeg.L"] = Vector3(-12, 0, 0)
+			_both_arms(p, Vector3(20, 0, 35), Vector3(40, 0, 0))
+			p["Torso"] = Vector3(-10 * lift, 0, 0)
+		"hug":
+			var close_in := smoothstep(0.0, 0.7, t)
+			_both_arms(p, Vector3(70 * close_in, -25 * close_in, 18), Vector3(70 * close_in, 0, 0))
+			p["Torso"] = Vector3(10 * close_in, 0, 0)
+			p["Head"] = Vector3(8, 20 * close_in, 0)
+		"handshake":
+			var reach := smoothstep(0.0, 0.5, t)
+			p["UpperArm.R"] = Vector3(45 * reach + sin(t * 11.0) * 6 * reach, 0, 6)
+			p["LowerArm.R"] = Vector3(35, 0, 0)
+			p["Torso"] = Vector3(8 * reach, 0, 0)
+			p["Head"] = Vector3(-4, 0, 0)
+		"throw":
+			var back := smoothstep(0.0, 0.45, t) - smoothstep(0.45, 0.6, t)
+			var fly := smoothstep(0.45, 0.6, t) - smoothstep(1.0, 1.5, t)
+			p["UpperArm.R"] = Vector3(150 * back + 80 * fly, 0, 15)
+			p["LowerArm.R"] = Vector3(70 * back + 10 * fly, 0, 0)
+			p["UpperArm.L"] = Vector3(60 * back, 0, 10)
+			p["Torso"] = Vector3(-8 * back + 18 * fly, 25 * back - 20 * fly, 0)
+			_legs_apart(p, 12)
+		"pat":
+			p["UpperArm.R"] = Vector3(85, -10, 8)
+			p["LowerArm.R"] = Vector3(25 + absf(sin(t * 8.0)) * 18, 0, 0)
+			p["Head"] = Vector3(6, 0, 0)
+		"kneel":
+			_kneel(p, 1.0)
+			_both_arms(p, Vector3(35, 0, 6), Vector3(40, 0, 0))
+			p["Head"] = Vector3(15, 0, 0)
+		"write", "read":  # algo en las manos a la altura del pecho (un libro, el celular)
+			p["UpperArm.L"] = Vector3(12, 18, 4)
+			p["LowerArm.L"] = Vector3(78, 0, 0)
+			p["UpperArm.R"] = Vector3(14, -14, 4)
+			p["LowerArm.R"] = Vector3(76 + (sin(t * 9.0) * 6 if g == "write" else 0.0), 0, 0)
+			p["Head"] = Vector3(26, 0, 0)
+		"wipe":  # limpiar una barra o una mesa: la mano dibuja círculos
+			p["UpperArm.R"] = Vector3(55 + sin(t * 4.0) * 10, cos(t * 4.0) * 14, 6)
+			p["LowerArm.R"] = Vector3(35, 0, 0)
+			p["UpperArm.L"] = Vector3(30, 0, 8)
+			p["LowerArm.L"] = Vector3(40, 0, 0)
+			p["Torso"] = Vector3(14, 0, 0)
+			p["Head"] = Vector3(14, 0, 0)
+		"listen", "call":  # una radio o un teléfono junto a la oreja
+			p["UpperArm.R"] = Vector3(25, 0, 62)
+			p["LowerArm.R"] = Vector3(140, 0, 0)
+			p["Hand.R"] = Vector3(0, 0, 20)
+			p["Head"] = Vector3(4, -6, 10 + sin(t * 0.8) * 3)
 	return p
 
 

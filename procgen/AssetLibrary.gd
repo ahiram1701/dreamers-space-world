@@ -149,8 +149,8 @@ static func bounds(node: Node3D) -> AABB:
 	return out
 
 
-## Pone el modelo en el mundo con la altura pedida. `collide`: false, true (caja) o "trunk"
-## (solo un cilindro fino en la base: se puede pasar bajo la copa de un árbol).
+## Pone el modelo en el mundo con la altura pedida. `collide`: false, true (caja), "trunk"
+## (solo un cilindro fino en la base: se puede pasar bajo la copa de un árbol) o "bush".
 ## Devuelve el nodo raíz (posición = base del modelo).
 static func place(parent: Node3D, model: Node3D, pos: Vector3, target_height: float, yaw: float, collide: Variant) -> Node3D:
 	var b := bounds(model)
@@ -162,11 +162,13 @@ static func place(parent: Node3D, model: Node3D, pos: Vector3, target_height: fl
 	model.position = -Vector3(b.get_center().x, b.position.y, b.get_center().z) * s
 	root.add_child(model)
 	root.set_meta("size", b.size * s)
-	if collide is String and collide == "trunk":
+	if collide is String and collide in ["trunk", "bush"]:
+		# "bush": un cilindro que ocupa casi todo el arbusto (no se atraviesa, pero se rodea bien)
 		var body := StaticBody3D.new()
 		var cs := CollisionShape3D.new()
 		cs.shape = CylinderShape3D.new()
-		cs.shape.radius = clampf(minf(b.size.x, b.size.z) * s * 0.08, 0.2, 0.45)
+		var r := minf(b.size.x, b.size.z) * s
+		cs.shape.radius = clampf(r * 0.08, 0.2, 0.45) if collide == "trunk" else clampf(r * 0.38, 0.2, 1.6)
 		cs.shape.height = minf(target_height, 4.0)
 		cs.position.y = cs.shape.height / 2.0
 		body.add_child(cs)

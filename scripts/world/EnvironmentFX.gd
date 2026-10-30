@@ -24,6 +24,12 @@ var sky_mat: ProceduralSkyMaterial
 ## Si una secuencia controla el cielo (El Despertar), el ciclo se detiene.
 var frozen := false
 
+## Tiempo que hace (Weather): nubes, niebla y lluvia que se mezclan poco a poco.
+var _overcast := 0.0
+var _fogginess := 0.0
+var _rain_amount := 0.0
+var _rain: GPUParticles3D
+var _rain_sound: AudioStreamPlayer
 var _stars: MultiMeshInstance3D
 var _star_mat: StandardMaterial3D
 var _last_night := -1.0
@@ -69,11 +75,39 @@ func _ready() -> void:
 	moon.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_ONLY
 	add_child(moon)
 	_build_stars()
+	if not space:
+		_build_rain()
 	_update(true)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_update_weather(delta)
 	_update(false)
+
+
+## Mezcla suave hacia el tiempo que toca (cambia en un par de segundos reales, no de golpe).
+func _update_weather(delta: float) -> void:
+	if space or frozen:
+		return
+	var w := Weather.current() if day_cycle else "clear"
+	var k := 1.0 - exp(-0.6 * delta)
+	_overcast = lerpf(_overcast, {"clear": 0.0, "cloudy": 0.6, "rain": 0.9, "fog": 0.55, "wind": 0.3}.get(w, 0.0), k)
+	_fogginess = lerpf(_fogginess, 1.0 if w == "fog" else (0.35 if w == "rain" else 0.0), k)
+	_rain_amount = lerpf(_rain_amount, 1.0 if w == "rain" else 0.0, k)
+	env.fog_density = fog_density * (1.0 + _fogginess * 9.0)
+	if _rain:
+		_rain.emitting = _rain_amount > 0.15
+		_rain.amount_ratio = clampf(_rain_amount, 0.0, 1.0)
+		var cam := get_viewport().get_camera_3d()
+		if cam:
+			_rain.global_position = cam.global_position + Vector3(0, 10, 0)
+			# Bajo techo (los interiores están a -400) no llueve
+			_rain.visible = cam.global_position.y > -100.0
+		_rain_sound.volume_db = linear_to_db(maxf(_rain_amount * 0.55, 0.0001)) if _rain.visible else -80.0
+		if _rain_amount > 0.05 and not _rain_sound.playing:
+			_rain_sound.play()
+		elif _rain_amount <= 0.05 and _rain_sound.playing:
+			_rain_sound.stop()
 
 
 ## Noche actual (0..1), para quien se conecta a night_changed después de crearse la escena.
@@ -102,6 +136,11 @@ func _update(force: bool) -> void:
 		var night_top := Color("#03050c")
 		var top := day_top.lerp(dusk_top, low).lerp(night_top, n)
 		var horizon := sky_color.lightened(0.15).lerp(Color("#f6a066"), low * (1.0 - n)).lerp(Color("#1a2747"), n)
+		# Nublado: el cielo se vuelve gris y la luz del sol se apaga
+		var gray := Color(0.5, 0.53, 0.57).lerp(Color("#0a0d14"), n)
+		top = top.lerp(gray.darkened(0.15), _overcast * 0.8)
+		horizon = horizon.lerp(gray, _overcast * 0.75)
+		sun.light_energy *= 1.0 - _overcast * 0.7
 		sky_mat.sky_top_color = top
 		sky_mat.sky_horizon_color = horizon
 		sky_mat.ground_horizon_color = horizon.darkened(0.1)
@@ -148,6 +187,63 @@ func _apply_quality() -> void:
 		vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA
 		vp.scaling_3d_scale = 1.0 if q >= 1 else 0.8
 	RenderingServer.directional_shadow_atlas_set_size(4096 if q >= 2 else 2048, true)
+
+
+func _build_rain() -> void:
+	_rain = GPUParticles3D.new()
+	_rain.amount = [600, 1400, 2600][Settings.graphics_quality]
+	_rain.lifetime = 0.9
+	_rain.emitting = false
+	_rain.visibility_aabb = AABB(Vector3(-25, -25, -25), Vector3(50, 40, 50))
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	pm.emission_box_extents = Vector3(22, 1, 22)
+	pm.direction = Vector3(0.08, -1, 0)
+	pm.spread = 2.0
+	pm.initial_velocity_min = 22.0
+	pm.initial_velocity_max = 28.0
+	pm.gravity = Vector3(0, -9.8, 0)
+	_rain.process_material = pm
+	var drop := QuadMesh.new()
+	drop.size = Vector2(0.012, 0.45)
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.albedo_color = Color(0.78, 0.84, 0.92, 0.22)
+	m.proximity_fade_enabled = true  # sin gotas gruesas pegadas a la cámara
+	m.proximity_fade_distance = 1.5
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
+	m.billboard_keep_scale = true
+	drop.material = m
+	_rain.draw_pass_1 = drop
+	_rain.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_rain)
+	_rain_sound = AudioStreamPlayer.new()
+	_rain_sound.stream = _rain_loop()
+	_rain_sound.volume_db = -80.0
+	add_child(_rain_sound)
+
+
+## Rumor de lluvia: ruido suave en bucle (sin archivos de audio).
+static func _rain_loop() -> AudioStreamWAV:
+	var rate := 22050
+	var n := rate * 2
+	var data := PackedByteArray()
+	data.resize(n * 2)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var lp := 0.0
+	for i in n:
+		lp = lerpf(lp, rng.randf_range(-1.0, 1.0), 0.35)
+		var crackle := rng.randf_range(-1.0, 1.0) * (0.6 if rng.randf() < 0.004 else 0.0)
+		data.encode_s16(i * 2, int(clampf(lp * 0.35 + crackle, -1.0, 1.0) * 26000.0))
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = rate
+	wav.data = data
+	wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	wav.loop_end = n
+	return wav
 
 
 func _build_stars() -> void:

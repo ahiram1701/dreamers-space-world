@@ -4,6 +4,7 @@ extends Node
 
 const MAX_FACTS := 20
 const MAX_HISTORY := 12  # líneas sueltas; lo importante debería haber quedado como hecho
+const MAX_RECENT := 6    # lo que acaba de pasar físicamente (un golpe, un regalo, irse enfadado)
 
 
 func get_mem(npc_id: String) -> Dictionary:
@@ -29,6 +30,54 @@ func is_following(npc_id: String) -> bool:
 ## Segundos que le quedan al PNJ sin querer hablarte (0 si habla).
 func refusal_left(npc_id: String) -> int:
 	return maxi(0, int(get_mem(npc_id).refuse_until) - int(Time.get_unix_time_from_system()))
+
+
+## Dónde está metido el PNJ ahora (id de puerta) si se fue a un edificio y aún no ha salido.
+## Vacío si está donde diga su rutina.
+func inside(npc_id: String) -> String:
+	var w: Dictionary = get_mem(npc_id).whereabouts
+	if w.is_empty() or WorldClock.absolute_minutes() >= float(w.get("until", 0.0)):
+		return ""
+	return str(w.get("door", ""))
+
+
+func is_locked_in(npc_id: String) -> bool:
+	return not inside(npc_id).is_empty() and bool(get_mem(npc_id).whereabouts.get("locked", false))
+
+
+## El PNJ entra en un edificio y se queda `minutes` minutos de juego (con pestillo si no quiere ver a nadie).
+func go_inside(npc_id: String, door: String, label: String, minutes: float, locked: bool) -> void:
+	set_fields(npc_id, {"whereabouts": {"door": door, "label": label, "locked": locked,
+		"until": WorldClock.absolute_minutes() + minutes}})
+
+
+func come_out(npc_id: String) -> void:
+	set_fields(npc_id, {"whereabouts": {}})
+
+
+## Algo que acaba de pasar de verdad entre el PNJ y el jugador. Lo escribe el motor cuando
+## ocurre (no la IA), así que el PNJ nunca "recuerda" algo que no pasó.
+func add_event(npc_id: String, text: String, relationship_delta: int = 0) -> void:
+	var m := get_mem(npc_id)
+	var recent: Array = m.recent
+	recent.append({"at": WorldClock.absolute_minutes(), "text": text})
+	while recent.size() > MAX_RECENT:
+		recent.pop_front()
+	set_fields(npc_id, {"recent": recent, "met": true,
+		"relationship": clampi(int(m.relationship) + relationship_delta, -100, 100)})
+
+
+## "hace 5 min: te dio un puñetazo" (para el prompt).
+func describe_recent(npc_id: String) -> String:
+	var out := PackedStringArray()
+	var now := WorldClock.absolute_minutes()
+	for e in get_mem(npc_id).recent:
+		var ago := int(now - float(e.at))
+		if ago > 60 * 24 * 3:
+			continue  # de hace días: si fue importante, ya es un recuerdo (facts)
+		var when := "ahora mismo" if ago < 2 else ("hace %d min" % ago if ago < 120 else "hace %d h" % (ago / 60))
+		out.append("- %s: %s" % [when, e.text])
+	return "\n".join(out)
 
 
 ## Lo que el PNJ tiene de ti y lo que te ha dejado, para el prompt.
@@ -94,10 +143,16 @@ func describe(npc_id: String) -> String:
 	if not m.met:
 		return "Nunca has hablado con esta persona."
 	var facts := "ninguno" if m.facts.is_empty() else "- " + "\n- ".join(PackedStringArray(m.facts))
-	return "Relación con el jugador: %d (de -100 a 100). Conversaciones anteriores: %d.\nLo que recuerdas:\n%s" % [
+	var out := "Relación con el jugador: %d (de -100 a 100). Conversaciones anteriores: %d.\nLo que recuerdas:\n%s" % [
 		int(m.relationship), int(m.conversations), facts]
+	if int(m.get("owed", 0)) > 0:
+		out += "\nEl jugador te debe %s." % Wallet.text(int(m.owed))
+	var recent := describe_recent(npc_id)
+	if not recent.is_empty():
+		out += "\nLo que ha pasado hace poco entre tú y el jugador (real, lo viviste):\n" + recent
+	return out
 
 
 func _empty() -> Dictionary:
 	return {"met": false, "relationship": 0, "conversations": 0, "facts": [], "history": [],
-		"possessions": [], "lent": [], "following": false, "refuse_until": 0}
+		"possessions": [], "lent": [], "following": false, "refuse_until": 0, "whereabouts": {}, "recent": [], "owed": 0}

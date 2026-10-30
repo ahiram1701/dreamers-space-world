@@ -1,11 +1,13 @@
 class_name Boat
 extends Node3D
 ## Barca o balsa que flota con el oleaje. Con E te subes (el personaje se sienta y rema) y
-## la manejas con WASD; con E otra vez te bajas en la orilla más cercana, o al agua si no la hay.
-## No entra en tierra: se para al tocar fondo.
+## la manejas con WASD o el stick; con E otra vez te bajas en la orilla más cercana, o al agua si
+## no la hay. Es sólida (no se atraviesa) y por dentro está seca: una tapa invisible que solo
+## escribe profundidad impide que el agua se dibuje dentro del casco.
 
 const MAX_SPEED := 5.5
 const TURN_SPEED := 1.1
+const MASK_SHADER := preload("res://shaders/water_mask.gdshader")
 
 ## Altura del agua y del terreno (la escena los asigna).
 var water_level := -0.45
@@ -16,17 +18,28 @@ var _rider: Player
 var _speed := 0.0
 var _use: Interactable
 var _rowing := false
+var _draft := 0.25        # cuánto se hunde el casco bajo la línea de flotación
+var _hull: AnimatableBody3D
 
 
 ## Monta la barca con un modelo (pack, nombre) de `length` metros de eslora.
 func setup(pack: String, model_name: String, length: float, label: String = "Subir a la barca") -> void:
+	var size := Vector3(length * 0.4, 0.6, length)
 	var model := AssetLibrary.instance(pack, model_name)
 	if model:
 		var b := AssetLibrary.bounds(model)
 		var long_side := maxf(b.size.x, b.size.z)
-		var holder := AssetLibrary.place(self, model, Vector3.ZERO, b.size.y * length / long_side, PI / 2 if b.size.x > b.size.z else 0.0, false)
-		holder.position.y = -0.15
-		seat_height = clampf(b.size.y * length / long_side * 0.35, 0.2, 0.6)
+		var scale := length / long_side
+		var holder := AssetLibrary.place(self, model, Vector3.ZERO, b.size.y * scale, PI / 2 if b.size.x > b.size.z else 0.0, false)
+		size = holder.get_meta("size", size)
+		if b.size.x > b.size.z:
+			size = Vector3(size.z, size.y, size.x)
+		# Casco: hasta la borda (las velas y mástiles no cuentan); se hunde ~30 % de su altura
+		var hull_h := minf(size.y, length * 0.28)
+		_draft = clampf(hull_h * 0.3, 0.12, 0.45)
+		holder.position.y = -_draft
+		seat_height = clampf(hull_h * 0.45 - _draft, 0.1, 0.6)
+		size.y = hull_h
 	else:  # casco sencillo si falta el modelo
 		var hull := MeshInstance3D.new()
 		hull.mesh = BoxMesh.new()
@@ -35,7 +48,36 @@ func setup(pack: String, model_name: String, length: float, label: String = "Sub
 		m.albedo_color = Color("#8b6b4a")
 		hull.material_override = m
 		add_child(hull)
-	_use = Interactable.create(self, Vector3(0, 0.3, 0), maxf(length * 0.5, 2.2), label, _on_use)
+	_add_hull(size)
+	_add_water_mask(size)
+	_use = Interactable.create(self, Vector3(0, 0.6, 0), maxf(length * 0.5, 2.2), label, _on_use, self)
+
+
+## Colisión del casco: se mueve con la barca (el jugador y los PNJs no la atraviesan).
+func _add_hull(size: Vector3) -> void:
+	_hull = AnimatableBody3D.new()
+	_hull.sync_to_physics = false
+	var cs := CollisionShape3D.new()
+	cs.shape = BoxShape3D.new()
+	cs.shape.size = Vector3(size.x * 0.9, size.y, size.z * 0.92)
+	cs.position.y = size.y / 2.0 - _draft
+	_hull.add_child(cs)
+	add_child(_hull)
+
+
+## Tapa a la altura de la borda, un poco más pequeña que el casco por dentro.
+func _add_water_mask(size: Vector3) -> void:
+	var cap := MeshInstance3D.new()
+	var mesh := PlaneMesh.new()
+	mesh.size = Vector2(size.x * 0.8, size.z * 0.85)
+	cap.mesh = mesh
+	var mat := ShaderMaterial.new()
+	mat.shader = MASK_SHADER
+	mat.render_priority = -10
+	cap.material_override = mat
+	cap.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	cap.position.y = maxf(size.y * 0.55 - _draft, 0.08)
+	add_child(cap)
 
 
 func seat_position() -> Vector3:
@@ -50,9 +92,10 @@ func _on_use(player: Player) -> void:
 	if _rider == null:
 		_rider = player
 		player.riding = self
-		player.interact_target = null
+		player.add_collision_exception_with(_hull)
 		player.play_gesture("sit")
 		_use.set_prompt("Bajar")
+		Sfx.at(self, "splash", global_position)
 	else:
 		_leave()
 
@@ -65,15 +108,25 @@ func _leave() -> void:
 	_use.set_prompt("Subir a la barca")
 	# Bajar en tierra firme cercana; si no hay, al agua (a nadar)
 	var here := global_position
-	for dist in [2.0, 3.5, 5.0, 7.0]:
+	var landed := false
+	for dist in [2.5, 3.5, 5.0, 7.0]:
 		for i in 16:
 			var a := TAU * i / 16.0
 			var p: Vector3 = here + Vector3(cos(a), 0, sin(a)) * dist
 			var g: float = ground_at.call(p.x, p.z)
 			if g > water_level + 0.05:
 				player.global_position = Vector3(p.x, g + 0.4, p.z)
-				return
-	player.global_position = here + global_basis.x * 1.6 + Vector3(0, -0.6, 0)
+				landed = true
+				break
+		if landed:
+			break
+	if not landed:
+		player.global_position = here + global_basis.x * 2.2 + Vector3(0, -0.6, 0)
+		Sfx.at(self, "splash", player.global_position)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	if is_instance_valid(player):
+		player.remove_collision_exception_with(_hull)
 
 
 func _process(delta: float) -> void:
@@ -92,8 +145,9 @@ func _process(delta: float) -> void:
 	var throttle := 0.0
 	var turn := 0.0
 	if _rider.controls_enabled:
-		throttle = (1.0 if Input.is_physical_key_pressed(KEY_W) else 0.0) - (0.6 if Input.is_physical_key_pressed(KEY_S) else 0.0)
-		turn = (1.0 if Input.is_physical_key_pressed(KEY_A) else 0.0) - (1.0 if Input.is_physical_key_pressed(KEY_D) else 0.0)
+		var input := Controls.move_vector()
+		throttle = -input.y * (1.0 if input.y < 0.0 else 0.6)
+		turn = -input.x
 	_speed = move_toward(_speed, throttle * MAX_SPEED, (2.5 if throttle != 0.0 else 1.2) * delta)
 	rotation.y += turn * TURN_SPEED * delta * clampf(absf(_speed) / 2.0 + 0.3, 0.3, 1.0)
 	var fwd := global_basis.z

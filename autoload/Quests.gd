@@ -70,7 +70,7 @@ La misión debe ayudar al jugador a seguir la transmisión que le trajo hasta aq
 
 ## Encargo personal que un PNJ hace en una conversación ("tráeme café", "busca a mi hermano").
 ## No tiene objetivo comprobable por el motor: lo da por cumplido el propio PNJ (complete_quest).
-func create_custom(giver: String, title: String, description: String) -> Dictionary:
+func create_custom(giver: String, title: String, description: String, reward: int = 0) -> Dictionary:
 	var all: Dictionary = WorldDB.get_state("quests", {})
 	for q in all.values():
 		if q.giver == giver and q.status == "active" and q.objective == "custom":
@@ -78,7 +78,7 @@ func create_custom(giver: String, title: String, description: String) -> Diction
 	var quest := {
 		"id": "q%d" % (all.size() + 1), "location_id": GameState.current_location(), "giver": giver,
 		"title": title, "description": description, "objective": "custom", "target": "",
-		"target_name": "", "completion_text": "", "status": "active",
+		"target_name": "", "completion_text": "", "status": "active", "reward": clampi(reward, 0, Wallet.MAX_PER_ACTION),
 	}
 	all[quest.id] = quest
 	WorldDB.set_state("quests", all)
@@ -95,7 +95,9 @@ func complete_custom(giver: String) -> Dictionary:
 			all[q.id] = q
 			WorldDB.set_state("quests", all)
 			NPCMemory.add_facts(giver, ["El jugador cumplió tu encargo «%s»." % q.title], 15)
-			quest_completed.emit(q, "%s confía más en ti" % WorldDB.get_entity("npc", giver).get("name", "?"))
+			var paid := Wallet.earn(int(q.get("reward", 0)))
+			quest_completed.emit(q, "%s confía más en ti%s" % [WorldDB.get_entity("npc", giver).get("name", "?"),
+				(" y te paga %s" % Wallet.text(paid)) if paid > 0 else ""])
 			return q
 	return {}
 

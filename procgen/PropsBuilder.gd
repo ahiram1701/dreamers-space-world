@@ -204,7 +204,7 @@ static func _model_at(parent: Node3D, biome: String, kind: int, height_at: Calla
 			_cylinder(parent, p + Vector3(0, height_at.call(p.x, p.z) + height / 2, 0), 0.2, 0.35, height, Color("#5a4030"), true)
 		return
 	var root := AssetLibrary.place(parent, model, p + Vector3(0, height_at.call(p.x, p.z) - 0.1, 0), height, rng.randf() * TAU,
-		("trunk" if kind == 0 else collide) if kind != 1 else false)
+		("trunk" if kind == 0 else collide) if kind != 1 else "bush")
 	if _extras.has("features"):
 		_extras.features.append({"id": fid, "kind": ["tree", "bush", "rock"][kind], "node": root, "pos": p})
 	if tint.a > 0.0:
