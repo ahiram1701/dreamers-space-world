@@ -48,6 +48,8 @@ func create_world(display_name: String) -> String:
 func load_world(id: String) -> bool:
 	flush()  # lo pendiente del mundo anterior
 	var path := _path(id)
+	if id.is_empty() or not (FileAccess.file_exists(path) or FileAccess.file_exists(path + ".bak")):
+		return false  # no hay ninguna partida con ese id (p. ej. la primera vez que se juega)
 	var parsed = _read(path)
 	if typeof(parsed) != TYPE_DICTIONARY:
 		# Archivo dañado o a medio escribir: se recupera la copia anterior
