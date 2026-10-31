@@ -253,6 +253,20 @@ func _follow_schedules(teleport: bool) -> void:
 			npc.set_present(true)
 		if target == Vector3.INF:
 			continue
+		# Llueve y su sitio está a la intemperie: se resguarda bajo el alero de la puerta más cercana
+		if door_id.is_empty() and Weather.is_raining():
+			var best := Vector3.INF
+			for d in _interiors.doors():
+				var p: Vector3 = _interiors.doors()[d].pos
+				if best == Vector3.INF or p.distance_to(npc.global_position) < best.distance_to(npc.global_position):
+					best = p
+			if best != Vector3.INF:
+				target = best + Vector3(randf_range(-1.2, 1.2), 0, randf_range(0.6, 1.4))
+				target.y = _ground_height(target.x, target.z)
+				npc.set_activity("resguardándose de la lluvia", "cross_arms")
+				if not teleport and npc.global_position.distance_to(target) > 2.0:
+					npc.walk_to(target, true)  # deprisa, que se moja
+					continue
 		if teleport:
 			npc.global_position = target + Vector3(0, 0.2, 0)
 		elif npc.global_position.distance_to(target) > 4.0:

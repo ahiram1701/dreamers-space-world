@@ -30,6 +30,8 @@ var _typing: Tween
 var _bars: Array = []
 ## Conversación por teléfono: sin bandas de cine; la persona no está contigo.
 var call_mode := false
+## Lo último que dijo el jugador en esta conversación (para el recuerdo al despedirse).
+var last_player_text := ""
 var _last_line := ""
 var _line: RichTextLabel
 var _choices: VBoxContainer
@@ -195,6 +197,7 @@ func open(npc_id: String, by_phone: bool = false) -> void:
 	_give_btn.visible = not by_phone  # por teléfono no se dan objetos
 	_npc = WorldDB.get_entity("npc", npc_id)
 	_history_lines.clear()
+	last_player_text = ""
 	_history.text = ""
 	_history_scroll.visible = false
 	_last_line = ""
@@ -261,6 +264,7 @@ func _send(text: String) -> void:
 		_add_history(_npc.name.split(" ")[0], _last_line)
 	if not text.is_empty():
 		_add_history("Tú", text)
+		last_player_text = text
 	_line.text = "[color=gray]…[/color]"
 
 	var ctx := scene_context

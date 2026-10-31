@@ -79,6 +79,20 @@ func current_door() -> String:
 	return _current
 
 
+## Dentro del interior actual: la salida y la entrada (posiciones globales), o INF si no hay.
+func exit_position() -> Vector3:
+	return _interior.exit if is_inside() else Vector3.INF
+
+
+func entry_position() -> Vector3:
+	return _interior.spawn if is_inside() else Vector3.INF
+
+
+## ¿Esta posición está en un interior? (los interiores se construyen muy por debajo del mundo)
+static func is_interior_pos(p: Vector3) -> bool:
+	return p.y < ORIGIN.y + 100.0
+
+
 func current_kind() -> String:
 	return _doors[_current].kind if is_inside() else ""
 

@@ -3,6 +3,19 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.6.2] - 2026-10-31
+
+### Añadido
+- **«Llévame a…»**: la gente te lleva de verdad a un sitio. Te dice «Sígueme», camina delante, te espera si te quedas atrás («¿Vienes?») y te lo señala al llegar. Si no existe, te lo dice.
+- La gente **sale y entra por las puertas** al moverse: ya no se queda atascada dentro de un edificio.
+- Con lluvia, los vecinos que estaban fuera **se resguardan** bajo un alero.
+- Si llamas a alguien que está en la escena, se le ve con el celular en la oreja.
+
+### Corregido
+- **Te escribían al celular estando a tu lado**, o justo después de hablar. Ahora no te escriben ni te llaman si estás con esa persona (te lo dice en persona), ni se inventan encuentros.
+- Al volver a hablar con alguien poco después, ya no te saluda como si no te hubiera visto: recuerda lo que acaban de hablar.
+- **Posturas de los brazos**: el codo se doblaba hacia fuera. Al mirar el celular ya no levantas los brazos, y beber, pensar, cruzar los brazos o caminar se ven naturales.
+
 ## [0.6.1] - 2026-10-30
 
 ### Añadido

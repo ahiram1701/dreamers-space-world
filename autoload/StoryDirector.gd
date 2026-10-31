@@ -50,7 +50,7 @@ const INSIDE_WORDS := ["me encierro", "me meto en", "me meto dentro", "entro en"
 ## Hechos que afirman que alguien se movió: los escribe el motor cuando pasa de verdad, no la IA.
 const MOVEMENT_FACT := ["entr", "encerr", "pestillo", "se fue", "se va ", "march", "irse", "largarse", "se larg", "salió", "sale de",
 	"se dirig", "camin", "se metió", "se mete", "cerró la puerta", "dio la espalda y se"]
-const LEAVING_TYPES := ["leave", "go_inside"]
+const LEAVING_TYPES := ["leave", "go_inside", "guide_player"]
 
 
 ## Lo que el PNJ dice que hace, lo hace: si anuncia que se va o se encierra y no trae la acción,
@@ -130,7 +130,7 @@ Reglas:
 - go_to: caminar hasta algo. "target": id (npc:..., tree_..., door:..., seat:1, water…).
 - play: gesto del personaje. "target": chop, hammer, dig, pick_up, search, crouch, sit, sleep, drink, eat, wave, point, give, fish, swim, dance, think, punch, push, kick, hug, handshake, throw, pat, kneel, write, read, listen, call.
 - use: usar algo (sentarse en seat, dormir en bed, entrar por door, subir a boat). "target": id.
-- npc_react: cómo reacciona una persona. "target": su id (npc:...); "emotion": angry, scared, happy, sad, worried, curious, amused o neutral; "gesture" (de la lista); "behavior": stay, flee, approach, follow, go_inside, fight_back o leave; "line": lo que suelta (corto); "amount": cuánto cambia su opinión del jugador (-30 a 30); "text": lo que recordará, desde su punto de vista ("El jugador te dio un puñetazo en el muelle sin motivo").
+- npc_react: cómo reacciona una persona. "target": su id (npc:...); "emotion": angry, scared, happy, sad, worried, curious, amused o neutral; "gesture" (de la lista); "behavior": stay, flee, approach, follow, go_inside, fight_back, leave o guide (te lleva a un sitio: pon el sitio en "item_name"); "line": lo que suelta (corto); "amount": cuánto cambia su opinión del jugador (-30 a 30); "text": lo que recordará, desde su punto de vista ("El jugador te dio un puñetazo en el muelle sin motivo").
 - give_to_npc: das algo que llevas. "target": id de la persona; "item_name": el objeto.
 - give_item: consigue o fabrica algo que se lleva encima ("item_name", "item_description", "item_effect": para qué sirve de verdad en el juego — light (da luz), nourish (se come), hydrate (se bebe), signal (capta señales), warmth (abriga), tool (herramienta), heal (cura) o none).
 - update_item: repara o modifica algo que LLEVA ENCIMA. "target": nombre actual; "item_name": nombre nuevo; "item_description".
@@ -463,6 +463,7 @@ const ACTIONS_GUIDE := """  Tipos de acción ("type") y sus campos:
   · leave: te marchas de aquí (enojo, prisa, fin de la plática). "target": a dónde (opcional). Termina la conversación.
   · go_inside: entras en un edificio (tu casa, tu trabajo…). "target": el sitio; "amount": minutos que te quedas dentro (por defecto 60). Termina la conversación. Con refuse_contact además cierras por dentro.
   · approach: te acercas al jugador (para darle algo, para encararte…).
+  · guide_player: le llevas tú a un sitio de este lugar ("llévame al faro", "¿me enseñas dónde está la panadería?"). "target": el sitio. Terminas la conversación y echas a andar delante; si se queda atrás, le esperas. Solo a sitios que existen aquí (si no sabes dónde está, dilo).
   · change_stat: le curas, le cansas… "target": health, energy o instability; "amount": de -30 a 30.
   · reveal_place: le hablas de un lugar que puede visitar. "target": nombre, "text": cómo es o cómo llegar.
   · give_quest: le pides un favor o un trabajo. "target": título corto, "text": qué tiene que hacer; "price": lo que pagarás al terminar (0 si es un favor).
@@ -489,6 +490,9 @@ func _inventory_text(detailed: bool = false) -> String:
 
 
 func _opening(npc_id: String) -> String:
+	var ago := WorldClock.absolute_minutes() - float(NPCMemory.get_mem(npc_id).get("last_talk", -1e9))
+	if ago < 30.0:
+		return "(El jugador vuelve a hablarte: acaban de hablar hace %d min. No le saludes como si no le hubieras visto; sigue con naturalidad.)" % maxi(int(ago), 1)
 	if NPCMemory.get_mem(npc_id).met:
 		return "(El jugador vuelve a acercarse para hablar contigo. Salúdale teniendo en cuenta lo que recuerdas.)"
 	return "(El jugador se acerca a ti por primera vez. Preséntate a tu manera.)"

@@ -177,6 +177,7 @@ godot --headless --path . -s tests/test_town_life.gd   # testigos y rumores
 godot --headless --path . -s tests/test_routine.gd     # celular, trabajo y construir
 godot --headless --path . -s tests/test_layout.gd      # todo cabe en pantallas de 1024×576 a 1920×1080
 godot --headless --path . -s tests/test_save.gd        # guardado agrupado, atómico y con copia
+godot --headless --path . -s tests/test_people.gd      # guiarte a un sitio, cruzar puertas, celular coherente
 bash tests/smoke.sh                                    # arranca las escenas y busca errores de script
 ```
 

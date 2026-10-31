@@ -220,6 +220,8 @@ const SYNONYMS := {
 	"escribir": "write", "anotar": "write", "leer": "read", "escuchar": "listen", "llamar": "call", "telefonear": "call",
 	"huir": "flee", "escapar": "flee", "run_away": "flee", "quedarse": "stay", "defenderse": "fight_back",
 	"devolver_golpe": "fight_back", "fight": "fight_back",
+	"llevar": "guide_player", "llevar_a": "guide_player", "guiar": "guide_player", "guide": "guide_player", "lead": "guide_player",
+	"lead_player": "guide_player", "guide_to": "guide_player", "mostrar_camino": "guide_player", "show_way": "guide_player",
 	"dar_numero": "share_number", "dar_número": "share_number", "give_number": "share_number", "share_phone": "share_number",
 	"contratar": "hire_player", "hire": "hire_player", "offer_job": "hire_player", "dar_trabajo": "hire_player", "emplear": "hire_player",
 	"despedir": "quit_job", "renunciar": "quit_job", "fire_player": "quit_job", "quit": "quit_job",

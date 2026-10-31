@@ -39,6 +39,7 @@ var _detour := 0.0          # segundos rodeando un obstáculo
 var _detour_side := 1.0
 var _speed_override := 0.0     # > 0: corre (huir, ir con prisa)
 var _walk_time := 0.0
+var _walk_limit := 40.0      # si no llega en este tiempo (atascado), se da por llegado
 var _bubble: Label3D
 var _bubble_t := 0.0
 var _present := true
@@ -132,11 +133,13 @@ func look_at_target(point: Vector3) -> void:
 		_rig.look_at_point = point
 
 
-func walk_to(pos: Vector3, run: bool = false) -> void:
+func walk_to(pos: Vector3, run: bool = false, pace: float = 0.0) -> void:
 	_follow = null
 	_target = pos
 	_walk_time = 0.0
-	_speed_override = RUN_SPEED if run else 0.0
+	_speed_override = RUN_SPEED if run else pace
+	var dist := Vector2(pos.x - global_position.x, pos.z - global_position.z).length()
+	_walk_limit = dist / maxf(_speed_override if _speed_override > 0.0 else WALK_SPEED, 0.5) * 2.5 + 15.0
 
 
 ## Bocadillo sobre la cabeza durante unos segundos (lo que suelta al reaccionar: "¡Eh!").
@@ -186,6 +189,26 @@ func follow(node: Node3D) -> void:
 func stop() -> void:
 	_follow = null
 	_target = Vector3.INF
+
+
+## Pararse un momento sin olvidar a dónde iba (esperar a alguien) y seguir después.
+var _paused_target := Vector3.INF
+
+
+func pause_walk() -> void:
+	if _target != Vector3.INF:
+		_paused_target = _target
+		_target = Vector3.INF
+
+
+func resume_walk() -> void:
+	if _paused_target != Vector3.INF:
+		_target = _paused_target
+		_paused_target = Vector3.INF
+
+
+func is_paused() -> bool:
+	return _paused_target != Vector3.INF
 
 
 func set_activity(text: String, gesture: String) -> void:
@@ -243,7 +266,7 @@ func _physics_process(delta: float) -> void:
 			speed = FOLLOW_SPEED if Vector2(to_player.x, to_player.z).length() > 6.0 else WALK_SPEED * 1.6
 	elif _target != Vector3.INF:
 		_walk_time += delta
-		if Vector2(_target.x - global_position.x, _target.z - global_position.z).length() < 0.8 or _walk_time > 40.0:
+		if Vector2(_target.x - global_position.x, _target.z - global_position.z).length() < 0.8 or _walk_time > _walk_limit:
 			_target = Vector3.INF
 			_speed_override = 0.0
 			arrived.emit()

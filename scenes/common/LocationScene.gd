@@ -28,6 +28,8 @@ var _free_lots: Array = []
 var _added_places := 0
 var _life: TownLife
 var _passersby: Passersby
+## Quien te está llevando a un sitio: npc_id -> {label, lost_t, said_t}
+var _guiding: Dictionary = {}
 var _yawn_t := 0.0
 
 
@@ -107,6 +109,11 @@ func _setup_common() -> void:
 		var door := _door_for(id, "")
 		return {"place": door, "label": _interiors.door_label(door) if not door.is_empty() else "su negocio"}
 	Phone.scene_context = scene_context
+	Phone.is_near = is_with_player
+	Phone.contacted_in_person.connect(func(id):
+		if _npcs.has(id) and _npcs[id].is_present():
+			_npcs[id].face(_player.global_position)
+			_npcs[id].say(["¡Estoy aquí mismo!", "Oye, que estoy aquí al lado.", "¿Me escribes? Si estoy aquí."][randi() % 3], 4.0))
 	Phone.ensure_phone()
 	_ui.start_call = start_call
 	_ui.places = func(): return _places
@@ -146,6 +153,7 @@ func _setup_common() -> void:
 
 func _process_common() -> void:
 	_process_work()
+	_process_guides(get_process_delta_time())
 	# Te caes de sueño: de vez en cuando, un bostezo
 	_yawn_t += get_process_delta_time()
 	if _yawn_t > 35.0:
@@ -256,10 +264,23 @@ func _work() -> void:
 	_ui.toast("%s\nCobras %s por el turno.%s" % [summary, Wallet.text(int(r.get("paid", 0))), late], "money")
 
 
+## ¿Está esa persona aquí contigo? (en tu mismo interior, o fuera a menos de 30 m)
+func is_with_player(npc_id: String) -> bool:
+	if not _npcs.has(npc_id) or not _npcs[npc_id].is_present():
+		return false
+	var npc: TownNPC = _npcs[npc_id]
+	var inside_npc := npc.global_position.y < InteriorManager.ORIGIN.y + 100.0
+	if inside_npc != _interiors.is_inside():
+		return false
+	return npc.global_position.distance_to(_player.global_position) < (40.0 if inside_npc else 30.0)
+
+
 ## Llamar a alguien por el celular: la misma conversación, pero a distancia.
 func start_call(npc_id: String) -> void:
 	_ui.block(true)
 	_player.play_gesture("call", 600.0)
+	if _npcs.has(npc_id) and _npcs[npc_id].is_present():
+		_npcs[npc_id].play_gesture("call", 600.0)  # se le ve con el celular en la oreja
 	Sfx.chime(self)
 	_dialogue.open(npc_id, true)
 
@@ -276,6 +297,15 @@ func _start_dialogue(npc: TownNPC) -> void:
 
 func _on_dialogue_closed(npc_id: String) -> void:
 	_ui.block(false)
+	# Queda constancia de que acabáis de hablar (y de qué), para que nada después lo contradiga
+	NPCMemory.set_fields(npc_id, {"last_talk": WorldClock.absolute_minutes()})
+	var said := _dialogue.last_player_text.left(120)
+	if _dialogue.call_mode:
+		NPCMemory.add_event(npc_id, "Hablaste por teléfono con el jugador%s." % ((". Lo último que te dijo: «%s»" % said) if not said.is_empty() else ""))
+	else:
+		var where := _interiors.current_label() if _interiors.is_inside() else place_near(_player.global_position)
+		NPCMemory.add_event(npc_id, "Acabas de hablar con el jugador en persona%s%s." % [
+			(" (en %s)" % where) if not where.is_empty() else "", (". Lo último que te dijo: «%s»" % said) if not said.is_empty() else ""])
 	if _dialogue.call_mode:
 		_player.stop_gesture()
 	_player.clear_look()
@@ -360,6 +390,12 @@ func dialogue_context(npc_id: String) -> String:
 	var look := player_appearance()
 	if not look.is_empty():
 		lines.append(look)
+	var spots := PackedStringArray(_places.keys())
+	for id in _interiors.doors():
+		var label: String = _interiors.doors()[id].label
+		if not (label in spots) and not label.begins_with("una ") and not label.begins_with("un "):
+			spots.append(label)
+	lines.append("SITIOS DE ESTE LUGAR (a los que puedes ir o llevarle): " + ", ".join(spots) + ".")
 	if Actions.owed(npc_id) > 0:
 		lines.append("El jugador te debe %s (si paga, lo verás en la conversación)." % Wallet.text(Actions.owed(npc_id)))
 	if Jobs.has_job() and Jobs.job().employer == npc_id:
@@ -386,7 +422,7 @@ func _on_npc_action(npc_id: String, a: Dictionary) -> void:
 			if not NPCMemory.is_following(npc_id):
 				var dest := place_position(str(a.get("target", "")))
 				if dest != Vector3.INF:
-					npc.walk_to(dest)
+					npc_go(npc_id, dest)
 		"approach":
 			if not npc.is_present() and not NPCMemory.is_locked_in(npc_id):  # sale de donde estaba para venir
 				var door := _interiors.door_position(NPCMemory.inside(npc_id))
@@ -394,7 +430,9 @@ func _on_npc_action(npc_id: String, a: Dictionary) -> void:
 				npc.set_present(true)
 				if door != Vector3.INF:
 					npc.global_position = door + Vector3(0, 0.3, 0)
-			npc.walk_to(_near_player(npc, 1.4))
+			npc_go(npc_id, _near_player(npc, 1.4) if InteriorManager.is_interior_pos(npc.global_position) == _interiors.is_inside() else _player.global_position)
+		"guide_player":
+			guide(npc_id, str(a.get("target", a.get("item_name", ""))))
 		"give_item", "take_item":
 			npc.play_gesture("give", 2.5)
 		"update_item":
@@ -455,6 +493,8 @@ func _npc_react(npc_id: String, a: Dictionary) -> void:
 			NPCMemory.add_event(npc_id, "Saliste corriendo para alejarte del jugador.")
 		"approach":
 			npc.walk_to(_near_player(npc, 1.2))
+		"guide":
+			guide(npc_id, str(a.get("item_name", a.get("text", ""))))
 		"follow":
 			NPCMemory.set_fields(npc_id, {"following": true})
 			npc.follow(_player)
@@ -487,11 +527,11 @@ func _npc_leave(npc_id: String, target: String) -> void:
 		var away := npc.global_position - _player.global_position
 		away.y = 0
 		dest = _on_ground(npc.global_position + (away.normalized() if away.length() > 0.1 else Vector3.BACK) * 22.0)
+	if InteriorManager.is_interior_pos(npc.global_position) and _interiors.is_inside():
+		dest = _interiors.door_position(_interiors.current_door()) + Vector3(randf_range(-6, 6), 0, randf_range(8, 14))  # sale y se aleja
 	_errands[npc_id] = true
-	npc.walk_to(dest)
 	NPCMemory.add_event(npc_id, "Te marchaste y dejaste al jugador ahí.")
-	var on_arrive := func(): _errands.erase(npc_id)
-	npc.arrived.connect(on_arrive, CONNECT_ONE_SHOT)
+	npc_go(npc_id, dest, func(): _errands.erase(npc_id))
 
 
 ## Camina hasta la puerta de un edificio y entra. Se queda dentro un rato (con pestillo si no
@@ -508,8 +548,7 @@ func _npc_go_inside(npc_id: String, target: String, locked: bool, minutes: int) 
 	if _interiors.current_door() == door:  # ya estás dentro de ese sitio: entra contigo
 		_enter_building(npc_id, door, locked, stay)
 		return
-	npc.walk_to(_interiors.door_position(door))
-	npc.arrived.connect(func(): _enter_building(npc_id, door, locked, stay), CONNECT_ONE_SHOT)
+	npc_go(npc_id, _interiors.door_position(door), func(): _enter_building(npc_id, door, locked, stay))
 
 
 func _enter_building(npc_id: String, door: String, locked: bool, minutes: float) -> void:
@@ -519,6 +558,134 @@ func _enter_building(npc_id: String, door: String, locked: bool, minutes: float)
 	NPCMemory.add_event(npc_id, "Entraste en %s%s." % [label, " y cerraste por dentro para no ver al jugador" if locked else ""])
 	Sfx.at(self, "door", _interiors.door_position(door) + Vector3(0, 1, 0))
 	_refresh_presence()
+
+
+# --- Moverse de verdad: cruzando puertas ----------------------------------------------------
+
+## Lleva a un PNJ a `dest` caminando, aunque haya que salir o entrar por una puerta: los
+## interiores están lejos del mundo, así que se camina hasta la salida, se aparece fuera junto a
+## la puerta y se sigue (y al revés para entrar donde estás tú).
+func npc_go(npc_id: String, dest: Vector3, on_arrive: Callable = Callable(), run: bool = false, pace: float = 0.0) -> void:
+	if not _npcs.has(npc_id):
+		return
+	var npc: TownNPC = _npcs[npc_id]
+	var npc_in := InteriorManager.is_interior_pos(npc.global_position)
+	var dest_in := InteriorManager.is_interior_pos(dest)
+	var door := _interiors.current_door()
+	if npc_in and not dest_in and _interiors.is_inside():
+		# Salir: hasta la puerta de dentro y aparecer fuera
+		var go_out := func():
+			if not is_instance_valid(npc):
+				return
+			var outside := _interiors.door_position(door)
+			var yaw: float = _interiors.doors().get(door, {}).get("yaw", 0.0)
+			npc.global_position = (outside if outside != Vector3.INF else dest) + Vector3(sin(yaw), 0, cos(yaw)) * 1.5 + Vector3(0, 0.3, 0)
+			Sfx.at(self, "door", npc.global_position)
+			_walk(npc, dest, on_arrive, run, pace)
+		npc.walk_to(_interiors.exit_position(), run, pace)
+		npc.arrived.connect(go_out, CONNECT_ONE_SHOT)
+		# Si sales tú antes de que llegue a la puerta, sale contigo (el interior desaparece)
+		var on_exit := func(_k, _id):
+			if is_instance_valid(npc) and InteriorManager.is_interior_pos(npc.global_position):
+				if npc.arrived.is_connected(go_out):
+					npc.arrived.disconnect(go_out)
+				go_out.call()
+		_interiors.exited.connect(on_exit, CONNECT_ONE_SHOT)
+	elif not npc_in and dest_in and _interiors.is_inside():
+		# Entrar donde estás tú: hasta la puerta de fuera y aparecer por la entrada
+		npc.walk_to(_interiors.door_position(door), run, pace)
+		npc.arrived.connect(func():
+			if is_instance_valid(npc) and _interiors.current_door() == door:
+				npc.global_position = _interiors.entry_position() + Vector3(0, 0.3, 0.8)
+				_walk(npc, dest, on_arrive, run, pace), CONNECT_ONE_SHOT)
+	else:
+		_walk(npc, dest, on_arrive, run, pace)
+
+
+func _walk(npc: TownNPC, dest: Vector3, on_arrive: Callable, run: bool, pace: float = 0.0) -> void:
+	npc.walk_to(dest, run, pace)
+	if on_arrive.is_valid():
+		npc.arrived.connect(on_arrive, CONNECT_ONE_SHOT)
+
+
+# --- Llevarte a un sitio ------------------------------------------------------------------
+
+## Un PNJ te lleva a un sitio: "Sígueme", camina (te espera si te quedas atrás) y al llegar te lo señala.
+func guide(npc_id: String, target: String) -> void:
+	if not _npcs.has(npc_id):
+		return
+	var npc: TownNPC = _npcs[npc_id]
+	var dest := place_position(target)
+	var label := target
+	if dest == Vector3.INF:
+		var door := _door_for_text(target)
+		if not door.is_empty():
+			dest = _interiors.door_position(door)
+			label = _interiors.door_label(door)
+	if dest == Vector3.INF or target.strip_edges().is_empty():
+		npc.say("Uy, no sé dónde queda eso, la verdad.", 4.0)
+		NPCMemory.add_event(npc_id, "El jugador te pidió que le llevaras a «%s», pero no sabes dónde está." % target)
+		return
+	NPCMemory.set_fields(npc_id, {"following": false})
+	_errands[npc_id] = true
+	_guiding[npc_id] = {"label": label, "lost_t": 0.0, "said_t": 0.0}
+	npc.say("Sígueme, es por aquí.", 3.5)
+	npc.play_gesture("point", 1.5)
+	# A paso de quien acompaña a alguien (más ágil que un paseo)
+	npc_go(npc_id, _on_ground(dest) + Vector3(randf_range(-1.5, 1.5), 0, randf_range(-1.5, 1.5)), func(): _guide_arrived(npc_id), false, 2.6)
+
+
+## Puerta que nombra un texto, sin caer en la casa del PNJ si no coincide nada.
+func _door_for_text(target: String) -> String:
+	var t := target.to_lower()
+	for id in _interiors.doors():
+		var label: String = str(_interiors.doors()[id].label).to_lower()
+		if not t.is_empty() and (t.contains(str(id).to_lower()) or t.contains(label.trim_prefix("la ").trim_prefix("el ")) or label.contains(t)):
+			return id
+	return ""
+
+
+func _guide_arrived(npc_id: String) -> void:
+	if not _guiding.has(npc_id):
+		return
+	var g: Dictionary = _guiding[npc_id]
+	_guiding.erase(npc_id)
+	_errands.erase(npc_id)
+	var npc: TownNPC = _npcs[npc_id]
+	npc.face(_player.global_position)
+	npc.play_gesture("point", 2.5)
+	npc.say("Aquí es: %s." % g.label, 4.5)
+	NPCMemory.add_event(npc_id, "Llevaste al jugador hasta %s." % g.label, 2)
+
+
+## Mientras te lleva: si te quedas atrás, te espera; si te pierde mucho rato, lo deja.
+func _process_guides(delta: float) -> void:
+	for id in _guiding.keys():
+		var npc: TownNPC = _npcs.get(id)
+		if npc == null or not is_instance_valid(npc):
+			_guiding.erase(id)
+			continue
+		var g: Dictionary = _guiding[id]
+		var same_side := InteriorManager.is_interior_pos(npc.global_position) == _interiors.is_inside()
+		var d := npc.global_position.distance_to(_player.global_position) if same_side else 999.0
+		g.said_t = float(g.said_t) + delta
+		if d > 9.0 and not npc.is_paused():
+			npc.pause_walk()
+			npc.face(_player.global_position)
+		elif d < 5.0 and npc.is_paused():
+			npc.resume_walk()
+		if npc.is_paused() and float(g.said_t) > 7.0 and same_side and d < 30.0:
+			g.said_t = 0.0
+			npc.say(["¿Vienes?", "Por aquí.", "¡Eh, que es por aquí!"][randi() % 3], 3.0)
+		g.lost_t = float(g.lost_t) + delta if d > 45.0 else 0.0
+		if float(g.lost_t) > 60.0:  # te perdió: lo deja
+			_guiding.erase(id)
+			_errands.erase(id)
+			npc.resume_walk()
+			npc.stop()
+			NPCMemory.add_event(id, "Ibas a llevar al jugador a %s, pero se quedó atrás y lo perdiste." % g.label, -1)
+			if bool(NPCMemory.get_mem(id).get("phone", false)):
+				Phone.deliver(id, "Oye, te perdí de vista. ¿Sigues queriendo ir a %s?" % g.label)
 
 
 ## Puerta a la que se refiere un texto ("la cafetería", "casa"…), o la de casa del PNJ.

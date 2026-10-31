@@ -15,6 +15,13 @@ const PER_CONTACT_EVERY := 12 * 60.0
 
 ## Lo asigna la escena: contexto del lugar (para que el PNJ sepa la hora, el tiempo…).
 var scene_context: Callable = func(): return ""
+## Lo asigna la escena: ¿está esa persona aquí contigo? (no tiene sentido escribirse ni llamarse)
+var is_near: Callable = func(_npc_id: String) -> bool: return false
+
+## Le escribes o llamas a alguien que tienes al lado: la escena hace que te lo diga en persona.
+signal contacted_in_person(npc_id: String)
+
+const RECENT_TALK := 120.0   # minutos de juego: si acaban de hablar, no te escribe por su cuenta
 
 var _pending: Array = []         # respuestas que llegan más tarde: {npc_id, text, notes, at_ms}
 var _waiting_morning: Array = [] # mensajes escritos de noche: se contestan por la mañana
@@ -101,6 +108,9 @@ func call_refusal(npc_id: String) -> String:
 	var name: String = WorldDB.get_entity("npc", npc_id).get("name", "Nadie").split(" ")[0]
 	if not has_phone():
 		return "No llevas el celular."
+	if is_near.call(npc_id):
+		contacted_in_person.emit(npc_id)
+		return "%s está aquí contigo: háblale (E)." % name
 	if _asleep(npc_id):
 		return "%s no contesta. A estas horas debe de estar durmiendo." % name
 	if NPCMemory.refusal_left(npc_id) > 0 or int(NPCMemory.get_mem(npc_id).relationship) <= -45:
@@ -131,6 +141,9 @@ func send(npc_id: String, text: String) -> void:
 		return
 	_push(npc_id, "player", text)
 	message_sent.emit(npc_id, text)
+	if is_near.call(npc_id):  # lo tienes delante: te lo dice en persona, sin chat
+		contacted_in_person.emit(npc_id)
+		return
 	if _asleep(npc_id):
 		_waiting_morning.append(npc_id)  # lo leerá al despertar
 		return
@@ -152,7 +165,14 @@ func _reply(npc_id: String, text: String) -> void:
 	_pending.append({"npc_id": npc_id, "text": str(turn.line), "at_ms": Time.get_ticks_msec() + int(clampf(str(turn.line).length() * 90.0, 5000.0, 20000.0))})
 
 
+## Un mensaje que manda el juego en nombre de alguien (te perdió de vista, te despide…).
+func deliver(npc_id: String, text: String) -> void:
+	_deliver(npc_id, text)
+
+
 func _deliver(npc_id: String, text: String) -> void:
+	if is_near.call(npc_id):
+		return  # ya estáis juntos: el mensaje no tiene sentido (te lo diría en persona)
 	_push(npc_id, "npc", text)
 	message_received.emit(npc_id, text)
 
@@ -188,7 +208,9 @@ func _maybe_text_first() -> void:
 	for id in contacts():
 		if _asleep(id) or _busy.get(id, false) or now - float(NPCMemory.get_mem(id).get("texted_at", -1e9)) < PER_CONTACT_EVERY:
 			continue
-		var recent: Array = NPCMemory.get_mem(id).recent
+		if is_near.call(id) or now - float(NPCMemory.get_mem(id).get("last_talk", -1e9)) < RECENT_TALK:
+			continue  # está contigo o acabáis de hablar
+		var recent: Array = NPCMemory.get_mem(id).recent.filter(func(e): return not str(e.text).begins_with("Acabas de hablar") and not str(e.text).begins_with("Hablaste por teléfono"))
 		var news: String = recent[-1].text if not recent.is_empty() and now - float(recent[-1].at) < 600.0 else ""
 		var friendly := int(NPCMemory.get_mem(id).relationship) >= 15
 		if news.is_empty() and not (friendly and randf() < 0.3):
@@ -198,7 +220,7 @@ func _maybe_text_first() -> void:
 		_busy[id] = true
 		var why := ("Te acabas de enterar de esto y se lo quieres comentar o preguntar: «%s»." % news) if not news.is_empty() \
 			else "Hace un rato que no saben el uno del otro y te apetece escribirle (por algo de tu vida, del pueblo o de lo raro que está pasando)."
-		var turn: Dictionary = await StoryDirector.talk(id, "(Esto no lo escribe el jugador: decides TÚ mandarle un mensaje por el celular. %s Escribe solo tu mensaje.)" % why,
+		var turn: Dictionary = await StoryDirector.talk(id, "(Esto no lo escribe el jugador: decides TÚ mandarle un mensaje por el celular. %s Escribe solo tu mensaje. No estás con él/ella ahora. Cuenta SOLO cosas que estén en tu memoria: no te inventes que le viste, que pasó por algún sitio ni encuentros que no constan.)" % why,
 			remote_context(id, false))
 		StoryDirector.end_conversation(id)
 		_busy[id] = false

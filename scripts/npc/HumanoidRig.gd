@@ -410,19 +410,12 @@ func _gesture_pose(g: String, t: float) -> Dictionary:
 			_kneel(p, 1.0)
 			_both_arms(p, Vector3(35, 0, 6), Vector3(40, 0, 0))
 			p["Head"] = Vector3(15, 0, 0)
-		"write", "read":  # algo en las manos a la altura del pecho (un libro, el celular)
-			p["UpperArm.L"] = Vector3(12, 18, 4)
-			p["LowerArm.L"] = Vector3(78, 0, 0)
-			p["UpperArm.R"] = Vector3(14, -14, 4)
-			p["LowerArm.R"] = Vector3(76 + (sin(t * 9.0) * 6 if g == "write" else 0.0), 0, 0)
-			p["Head"] = Vector3(26, 0, 0)
-		"wipe":  # limpiar una barra o una mesa: la mano dibuja círculos
-			p["UpperArm.R"] = Vector3(55 + sin(t * 4.0) * 10, cos(t * 4.0) * 14, 6)
-			p["LowerArm.R"] = Vector3(35, 0, 0)
+		"write", "read":  # algo en las manos delante del cuerpo (un libro, el celular), mirando hacia abajo
+			p["UpperArm.R"] = Vector3(30, 0, 8)
+			p["LowerArm.R"] = Vector3(80 + (sin(t * 9.0) * 5 if g == "write" else 0.0), 0, 0)
 			p["UpperArm.L"] = Vector3(30, 0, 8)
-			p["LowerArm.L"] = Vector3(40, 0, 0)
-			p["Torso"] = Vector3(14, 0, 0)
-			p["Head"] = Vector3(14, 0, 0)
+			p["LowerArm.L"] = Vector3(80, 0, 0)
+			p["Head"] = Vector3(28, 0, 0)
 		"listen", "call":  # una radio o un teléfono junto a la oreja
 			p["UpperArm.R"] = Vector3(25, 0, 62)
 			p["LowerArm.R"] = Vector3(140, 0, 0)
@@ -487,6 +480,10 @@ func _apply_look(p: Dictionary) -> void:
 func _apply() -> void:
 	for b in BONES:
 		var e: Vector3 = _pose[b]
+		if b.begins_with("LowerArm"):
+			# El codo de estos modelos se dobla girando sobre el eje frontal (en el de lado el antebrazo
+			# se abriría hacia fuera): "doblar x grados" lleva el antebrazo hacia delante y arriba.
+			e = Vector3(e.x * 0.3, e.y, e.z - e.x)
 		var i: int = _idx[b]
 		if e == Vector3.ZERO:
 			_sk.set_bone_pose_rotation(i, _base[b])
