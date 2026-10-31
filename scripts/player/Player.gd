@@ -54,6 +54,7 @@ var _zoom := 4.0               # distancia que elige el jugador
 var _zoom_override := -1.0     # la impone una conversación o una acción (o -1)
 var _first_person := false
 var _zoom_dirty := false
+var _frame_v := 0.0   # desplazamiento vertical de la cámara al conversar
 var _auto_target := Vector3.INF  # caminata automática (acciones con F)
 var _auto_stop := 1.0
 var _auto_time := 0.0
@@ -74,25 +75,7 @@ func _ready() -> void:
 
 	_body = Node3D.new()
 	add_child(_body)
-	var look := {"outfit": "casual", "primary_color": "#3b6ea5", "secondary_color": "#2b2f3a"}
-	if not Settings.player_figure.is_empty():
-		look["figure"] = Settings.player_figure
-	var model := AssetLibrary.character(look, hash(WorldDB.world_id) + 7)
-	if model:
-		AssetLibrary.place(_body, model, Vector3.ZERO, 1.78, 0.0, false)
-		_rig = HumanoidRig.new()
-		_rig.full_rate = true
-		model.add_child(_rig)
-		if not _rig.setup(model):
-			_rig = null
-		else:
-			_rig.footstep.connect(func(_run): Sfx.footstep(self, water_level))
-	else:
-		var mesh := MeshInstance3D.new()
-		mesh.mesh = CapsuleMesh.new()
-		mesh.position.y = 0.9
-		mesh.material_override = _mat(Color("#e8d5b5"))
-		_body.add_child(mesh)
+	rebuild_look()
 
 	_yaw = Node3D.new()
 	_yaw.position.y = 1.6
@@ -160,6 +143,29 @@ func view_forward() -> Vector3:
 
 
 ## El personaje hace un gesto (talar, sentarse, saludar…). Ver HumanoidRig.
+## Pone (o cambia en caliente) el modelo según el aspecto elegido para esta vida (PlayerLook).
+func rebuild_look() -> void:
+	var lamp_on := _lamp != null and _lamp.visible
+	for c in _body.get_children():
+		c.queue_free()
+	_lamp = null
+	_rig = null
+	var built := PlayerLook.build(_body, PlayerLook.current(), hash(WorldDB.world_id) + 7)
+	if built.is_empty():
+		var mesh := MeshInstance3D.new()
+		mesh.mesh = CapsuleMesh.new()
+		mesh.position.y = 0.9
+		mesh.material_override = _mat(Color("#e8d5b5"))
+		_body.add_child(mesh)
+	elif built.rig:
+		_rig = built.rig
+		_rig.footstep.connect(func(_run): Sfx.footstep(self, water_level))
+	if lamp_on:
+		set_light(true)
+	if _first_person:
+		_set_body_shadow_only.call_deferred(true)
+
+
 ## Linterna o farol encendido: una luz que te acompaña.
 var _lamp: SpotLight3D
 
@@ -212,12 +218,14 @@ func clear_look() -> void:
 
 
 ## Encuadre de conversación: la cámara mira al PNJ por encima del hombro del jugador.
+## (La cara de quien te habla queda en el tercio de arriba, por encima de la conversación.)
 func focus_on(point: Vector3) -> void:
 	var d := point - global_position
 	if Vector2(d.x, d.z).length() > 0.1:
-		_yaw.rotation.y = atan2(-d.x, -d.z) + 0.25
-	_spring.rotation.x = -0.12
-	_zoom_override = 2.4
+		_yaw.rotation.y = atan2(-d.x, -d.z) + 0.32
+	_spring.rotation.x = -0.05
+	_zoom_override = 2.1
+	_frame_v = -0.38
 
 
 ## Durante una acción con F la cámara se aleja un poco para ver al personaje hacerla.
@@ -227,6 +235,7 @@ func frame_action(on: bool) -> void:
 
 func end_focus() -> void:
 	_zoom_override = -1.0
+	_frame_v = 0.0
 
 
 func is_swimming() -> bool:
@@ -337,9 +346,9 @@ func _process(delta: float) -> void:
 		_shake_time -= delta
 		_cam.h_offset = randf_range(-_shake_strength, _shake_strength)
 		_cam.v_offset = randf_range(-_shake_strength, _shake_strength)
-	elif _cam.h_offset != 0.0 or _cam.v_offset != 0.0:
+	else:  # encuadre (bajar la cámara un poco en las conversaciones)
 		_cam.h_offset = 0.0
-		_cam.v_offset = 0.0
+		_cam.v_offset = lerpf(_cam.v_offset, _frame_v, 1.0 - exp(-6.0 * delta))
 
 
 func _set_body_shadow_only(on: bool) -> void:

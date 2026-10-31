@@ -4,7 +4,6 @@ extends Control
 
 const DEV := "res://scenes/dev/AITestScene.tscn"
 
-var _name: LineEdit
 var _status: Label
 var _main_box: VBoxContainer
 var _saves_box: VBoxContainer
@@ -64,10 +63,6 @@ func _ready() -> void:
 	gap.custom_minimum_size.y = 18
 	_main_box.add_child(gap)
 
-	_name = LineEdit.new()
-	_name.placeholder_text = "¿Cómo te llamas?"
-	_name.max_length = 30
-	_main_box.add_child(_name)
 	_button(_main_box, "Nueva vida", _on_new)
 	var cont := _button(_main_box, "Continuar", _on_continue)
 	cont.disabled = WorldDB.last_world_id().is_empty()
@@ -114,14 +109,15 @@ func _ready() -> void:
 		_on_update_state(Updater.state)
 
 
+## Nueva vida: primero creas a tu personaje (nombre, hombre o mujer, aspecto) y luego empieza.
 func _on_new() -> void:
-	var player_name := _name.text.strip_edges()
-	if player_name.is_empty():
-		_status.text = "Escribe tu nombre para empezar."
-		return
-	WorldDB.create_world("Mundo de " + player_name)
-	PlayerProfile.set_player_name(player_name)
-	get_tree().change_scene_to_file(Travel.TOWN_SCENE)
+	var creator := CharacterCreator.new()
+	add_child(creator)
+	creator.done.connect(func(look: Dictionary, player_name: String):
+		WorldDB.create_world("Mundo de " + player_name)
+		PlayerProfile.set_player_name(player_name)
+		PlayerLook.save(look)
+		get_tree().change_scene_to_file(Travel.TOWN_SCENE))
 
 
 func _on_continue() -> void:

@@ -15,7 +15,6 @@ var _sens: HSlider
 var _volume: HSlider
 var _music: HSlider
 var _quality: OptionButton
-var _figure: OptionButton
 var _day: OptionButton
 var _fov: HSlider
 var _invert: CheckBox
@@ -61,8 +60,6 @@ func _ready() -> void:
 	var controls := _page(tabs, "Controles")
 	var ai := _page(tabs, "IA")
 
-	_figure = _option(game, "Tu personaje", ["Lo decide el mundo", "Hombre", "Mujer"],
-		["", "masculine", "feminine"].find(Settings.player_figure))
 	_day = _option(game, "Duración del día", ["24 minutos", "1 hora", "2 horas", "4 horas", "Tiempo real (24 h)"],
 		DAY_OPTIONS.find(Settings.day_minutes) if DAY_OPTIONS.has(Settings.day_minutes) else 2)
 	_text_speed = _slider(game, "Velocidad del texto", 0.5, 3.0, Settings.text_speed)
@@ -153,7 +150,6 @@ func _save() -> void:
 	Settings.volume = _volume.value
 	Settings.music_volume = _music.value
 	Settings.graphics_quality = _quality.selected
-	Settings.player_figure = ["", "masculine", "feminine"][maxi(_figure.selected, 0)]
 	Settings.day_minutes = DAY_OPTIONS[maxi(_day.selected, 0)]
 	Settings.fov = _fov.value
 	Settings.text_speed = _text_speed.value

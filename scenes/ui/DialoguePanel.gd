@@ -34,7 +34,8 @@ var call_mode := false
 var last_player_text := ""
 var _last_line := ""
 var _line: RichTextLabel
-var _choices: VBoxContainer
+var _choices: Container
+var _show_history := false
 var _input: LineEdit
 var _say_btn: Button
 var _give_btn: MenuButton
@@ -55,22 +56,26 @@ func _ready() -> void:
 		bar.anchor_right = 1.0
 		bar.anchor_top = 0.0 if top else 1.0
 		bar.anchor_bottom = 0.0 if top else 1.0
-		bar.offset_top = 0.0 if top else -34.0
-		bar.offset_bottom = 34.0 if top else 0.0
+		bar.offset_top = 0.0 if top else -18.0
+		bar.offset_bottom = 18.0 if top else 0.0
 		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(bar)
 		_bars.append(bar)
+	# Franja baja y algo transparente: arriba queda a la vista la persona con quien hablas
 	var panel := PanelContainer.new()
-	panel.anchor_left = 0.12
-	panel.anchor_right = 0.88
-	panel.anchor_top = 0.42
+	panel.anchor_left = 0.14
+	panel.anchor_right = 0.86
+	panel.anchor_top = 0.64
 	panel.anchor_bottom = 1.0
-	panel.offset_bottom = -46
+	panel.offset_bottom = -24
 	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN  # si el contenido no cabe, crece hacia arriba
-	UIStyle.apply(panel)
+	var style := UITheme.box(Color(UITheme.BG, 0.8), Color(UITheme.ACCENT, 0.3), 14, 14)
+	style.content_margin_left = 18
+	style.content_margin_right = 18
+	panel.add_theme_stylebox_override("panel", style)
 	add_child(panel)
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
+	box.add_theme_constant_override("separation", 6)
 	panel.add_child(box)
 
 	# Placa: nombre, a qué se dedica y cómo te trata
@@ -78,7 +83,7 @@ func _ready() -> void:
 	head.add_theme_constant_override("separation", 12)
 	box.add_child(head)
 	_speaker = Label.new()
-	_speaker.add_theme_font_size_override("font_size", 22)
+	_speaker.add_theme_font_size_override("font_size", 19)
 	_speaker.add_theme_font_override("font", UITheme.font_bold)
 	head.add_child(_speaker)
 	_role = Label.new()
@@ -93,10 +98,19 @@ func _ready() -> void:
 	_mood.add_theme_font_size_override("font_size", 14)
 	_mood.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	head.add_child(_mood)
+	var history_btn := Button.new()  # lo dicho antes, plegado para no tapar
+	history_btn.text = "Historial"
+	history_btn.flat = true
+	history_btn.add_theme_font_size_override("font_size", 13)
+	history_btn.pressed.connect(func():
+		_show_history = not _show_history
+		_history_scroll.visible = _show_history and not _history_lines.is_empty())
+	head.add_child(history_btn)
 
 	# Lo dicho antes en esta conversación (desplazable) y la frase actual
 	_history_scroll = ScrollContainer.new()
-	_history_scroll.custom_minimum_size.y = 48
+	_history_scroll.custom_minimum_size.y = 90
+	_history_scroll.visible = false
 	_history_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	box.add_child(_history_scroll)
 	_history = RichTextLabel.new()
@@ -109,17 +123,20 @@ func _ready() -> void:
 	_line = RichTextLabel.new()
 	_line.bbcode_enabled = true
 	_line.fit_content = true
-	_line.custom_minimum_size.y = 56
-	_line.add_theme_font_size_override("normal_font_size", 19)
+	_line.custom_minimum_size.y = 40
+	_line.add_theme_font_size_override("normal_font_size", 17)
 	_line.gui_input.connect(func(e): if e is InputEventMouseButton and e.pressed: _skip_typing())
 	box.add_child(_line)
 	var choices_scroll := ScrollContainer.new()  # opciones largas: se desplazan en vez de salirse
 	choices_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	choices_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	box.add_child(choices_scroll)
-	_choices = VBoxContainer.new()
+	var grid := GridContainer.new()  # respuestas en dos columnas: ocupan la mitad de alto
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 6)
+	grid.add_theme_constant_override("v_separation", 6)
+	_choices = grid
 	_choices.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_choices.add_theme_constant_override("separation", 6)
 	choices_scroll.add_child(_choices)
 
 	var row := HBoxContainer.new()
@@ -179,7 +196,7 @@ func _add_history(who: String, text: String) -> void:
 	while _history_lines.size() > 12:
 		_history_lines.pop_front()
 	_history.text = "\n".join(_history_lines)
-	_history_scroll.visible = not _history_lines.is_empty()
+	_history_scroll.visible = _show_history and not _history_lines.is_empty()
 	await get_tree().process_frame
 	_history_scroll.scroll_vertical = int(_history_scroll.get_v_scroll_bar().max_value)
 
@@ -311,6 +328,8 @@ func _send(text: String) -> void:
 		b.text = "%d   %s" % [_choices.get_child_count() + 1, c.text]
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.add_theme_font_size_override("font_size", 15)
 		b.pressed.connect(_send.bind(c.text))
 		_choices.add_child(b)
 		UIAnim.show(b, Vector2(0, 8))

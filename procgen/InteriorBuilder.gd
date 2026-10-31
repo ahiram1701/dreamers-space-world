@@ -186,6 +186,7 @@ static func _shell(root: Node3D, w: float, d: float, wall: Color, floor_color: C
 		light.omni_range = maxf(w, d) * 0.8
 		light.light_energy = 1.3
 		light.shadow_enabled = Settings.graphics_quality >= 2
+		light.add_to_group("quality_shadows")
 		light.position = Vector3(x, HEIGHT - 0.4, 0)
 		root.add_child(light)
 		_put(root, "Light_Ceiling1", Vector3(x, HEIGHT, 0), 0.0)

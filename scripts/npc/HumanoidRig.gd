@@ -39,6 +39,11 @@ var emotion := "neutral"
 var look_at_point := Vector3.INF
 ## Animar siempre a pleno ritmo (el jugador). El resto, según la distancia y si se ve.
 var full_rate := false
+## Cómo se dobla el codo al andar y correr (x: flexión hacia delante, y: hacia dentro). Los gestos
+## (sujetar el celular, beber…) usan GESTURE_ELBOW, que junta las manos delante del cuerpo.
+static var loco_elbow := Vector2(1.0, 0.0)
+const GESTURE_ELBOW := Vector2(0.3, 1.0)
+var _bend := {"LowerArm.L": 0.0, "LowerArm.R": 0.0}   # cuánto del codo viene de un gesto (0..1)
 const LOD_NEAR := 35.0   # más lejos (o fuera de cámara): una de cada 4 frames
 const LOD_FAR := 70.0    # más lejos aún: quieto
 var _skip := 0
@@ -137,6 +142,8 @@ func _process(delta: float) -> void:
 		_acc = 0.0
 	_t += delta
 	var target := _locomotion(delta)
+	for k in _bend:  # el peso de los gestos en el codo se desvanece si ya no lo usan
+		_bend[k] = move_toward(_bend[k], 0.0, delta * 4.0)
 	# Capa de gesto
 	if not _gesture.is_empty():
 		_gesture_t += delta
@@ -146,10 +153,18 @@ func _process(delta: float) -> void:
 			_gesture = ""
 			_set_tool("")
 		else:
-			_mix(target, _gesture_pose(_gesture, _gesture_t), _gesture_w)
+			var gp := _gesture_pose(_gesture, _gesture_t)
+			_mix(target, gp, _gesture_w)
+			for k in _bend:
+				if gp.has(k):
+					_bend[k] = maxf(_bend[k], _gesture_w)
 	# Capa de expresión al hablar (más suave si ya hay un gesto)
 	if talking and _gesture_w < 0.5:
-		_mix(target, _talk_pose(), 1.0 - _gesture_w * 2.0)
+		var tp := _talk_pose()
+		_mix(target, tp, 1.0 - _gesture_w * 2.0)
+		for k in _bend:
+			if tp.has(k):
+				_bend[k] = maxf(_bend[k], 1.0 - _gesture_w * 2.0)
 	_apply_look(target)
 	# Suavizado: nada salta de una pose a otra
 	var k := 1.0 - exp(-14.0 * delta)
@@ -481,9 +496,10 @@ func _apply() -> void:
 	for b in BONES:
 		var e: Vector3 = _pose[b]
 		if b.begins_with("LowerArm"):
-			# El codo de estos modelos se dobla girando sobre el eje frontal (en el de lado el antebrazo
-			# se abriría hacia fuera): "doblar x grados" lleva el antebrazo hacia delante y arriba.
-			e = Vector3(e.x * 0.3, e.y, e.z - e.x)
+			# El codo: al andar se dobla hacia delante; en los gestos, además hacia dentro (las manos
+			# se juntan delante del cuerpo). Se mezcla según cuánto pesa el gesto ahora.
+			var m: Vector2 = loco_elbow.lerp(GESTURE_ELBOW, _bend[b])
+			e = Vector3(e.x * m.x, e.y, e.z - e.x * m.y)
 		var i: int = _idx[b]
 		if e == Vector3.ZERO:
 			_sk.set_bone_pose_rotation(i, _base[b])

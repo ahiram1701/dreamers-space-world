@@ -25,12 +25,30 @@ func _ready() -> void:
 	get_tree().root.theme = theme
 	apply_scale()
 	Settings.changed.connect(apply_scale)
+	get_tree().node_added.connect(_on_node_added)
 
 
-## Tamaño del texto (la escala general de la interfaz la pone el autoload Display).
+## Tamaño del texto (la escala general de la interfaz la pone el autoload Display). También los
+## textos con tamaño propio, ya abiertos o que aparezcan después, en plena partida.
 func apply_scale() -> void:
+	for c in get_tree().root.find_children("*", "Control", true, false):
+		scale_text(c)
 	if theme:
 		theme.default_font_size = roundi(17 * Settings.text_scale)
+
+
+## Ajusta un texto con tamaño propio al "Tamaño del texto" (recordando su tamaño original).
+func scale_text(c: Control) -> void:
+	for prop in ["font_size", "normal_font_size", "bold_font_size"]:
+		if c.has_theme_font_size_override(prop):
+			if not c.has_meta("base_" + prop):
+				c.set_meta("base_" + prop, c.get_theme_font_size(prop))
+			c.add_theme_font_size_override(prop, roundi(int(c.get_meta("base_" + prop)) * Settings.text_scale))
+
+
+func _on_node_added(n: Node) -> void:
+	if n is Control and not is_equal_approx(Settings.text_scale, 1.0):
+		(func(): if is_instance_valid(n): scale_text(n)).call_deferred()
 
 
 func _system_font(weight: int) -> Font:

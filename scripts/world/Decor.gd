@@ -37,7 +37,8 @@ static func water(parent: Node3D, center: Vector3, size: Vector2, shallow: Color
 ## Hierba en una zona. `accept(x, z)` decide dónde puede crecer; `height_at(x, z)` la altura.
 static func grass(parent: Node3D, center: Vector2, half_size: Vector2, density: float, rng: RandomNumberGenerator,
 		height_at: Callable, accept: Callable, tip: Color = Color("#8fae4a"), base: Color = Color("#2e4a1c")) -> void:
-	var count := int(half_size.x * half_size.y * 4.0 * density * [0.35, 0.7, 1.0][Settings.graphics_quality])
+	# Se crea entera y la calidad decide cuánta se ve (así cambiarla en Ajustes se nota al momento)
+	var count := int(half_size.x * half_size.y * 4.0 * density)
 	if count <= 0:
 		return
 	var mm := MultiMesh.new()
@@ -68,7 +69,18 @@ static func grass(parent: Node3D, center: Vector2, half_size: Vector2, density: 
 	mmi.material_override = m
 	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mmi.visibility_range_end = 70.0
+	mmi.add_to_group("grass")
 	parent.add_child(mmi)
+	apply_grass_quality(mmi)
+
+
+const GRASS_DENSITY := [0.35, 0.7, 1.0]
+
+
+## Cuánta hierba se ve según la calidad gráfica (sin reconstruirla).
+static func apply_grass_quality(mmi: MultiMeshInstance3D) -> void:
+	var mm := mmi.multimesh
+	mm.visible_instance_count = int(mm.instance_count * GRASS_DENSITY[clampi(Settings.graphics_quality, 0, 2)])
 
 
 ## Mata de hierba: 7 briznas finas en abanico (UV.y = 0 en la punta, para el viento).

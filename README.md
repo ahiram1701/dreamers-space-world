@@ -72,6 +72,7 @@ Si la IA no está disponible, el juego usa contenido de respaldo y **nunca se qu
 | ✅ | Edificios con interior, barcas que se manejan, nadar, dormir hasta la mañana; todo es sólido |
 | ✅ | PNJs coherentes: si dicen que se van o se encierran, lo hacen, y solo recuerdan lo que pasó de verdad |
 | ✅ | Cámara con zoom y primera persona, mando, pasos y sonidos del mundo |
+| ✅ | **Crea tu personaje** (nombre, sexo, complexión, ropa y colores) y cámbialo desde la pausa; los ajustes se aplican al momento |
 | ✅ | **Vida real**: hambre, sed, descanso e higiene, dinero (dólares), tiempo atmosférico y días de la semana |
 | ✅ | **Celular**: mensajes y llamadas con la gente (la IA contesta), banco y mapa con destino |
 | ✅ | **Trabajo** con horario y sueldo, retrasos, faltas y despido |
@@ -178,6 +179,7 @@ godot --headless --path . -s tests/test_routine.gd     # celular, trabajo y cons
 godot --headless --path . -s tests/test_layout.gd      # todo cabe en pantallas de 1024×576 a 1920×1080
 godot --headless --path . -s tests/test_save.gd        # guardado agrupado, atómico y con copia
 godot --headless --path . -s tests/test_people.gd      # guiarte a un sitio, cruzar puertas, celular coherente
+godot --headless --path . -s tests/test_settings_live.gd  # ajustes y aspecto aplicados en plena partida
 bash tests/smoke.sh                                    # arranca las escenas y busca errores de script
 ```
 

@@ -66,6 +66,7 @@ func _ready() -> void:
 	_menu.add_child(HSeparator.new())
 	_button(_menu, "Continuar", close)
 	_button(_menu, "Controles", _toggle_controls)
+	_button(_menu, "Tu aspecto", _appearance)
 	_button(_menu, "Ajustes", _settings)
 	_button(_menu, "Salir al menú principal", func(): WorldDB.flush(); get_tree().change_scene_to_file("res://scenes/main_menu/MainMenu.tscn"))
 
@@ -154,6 +155,20 @@ func _key_cell(text: String) -> Control:
 	var c := HBoxContainer.new()
 	c.add_child(UITheme.keycap(text))
 	return c
+
+
+func _appearance() -> void:
+	_root.visible = false
+	var creator := CharacterCreator.new()
+	creator.ask_name = false
+	creator.look = PlayerLook.current().merged({"figure": PlayerLook.current().get("figure", "masculine")}, true)
+	add_child(creator)
+	creator.done.connect(func(look: Dictionary, _n: String):
+		PlayerLook.save(look)
+		for p in get_tree().get_nodes_in_group("player"):
+			p.rebuild_look()
+		_root.visible = true)
+	creator.cancelled.connect(func(): _root.visible = true)
 
 
 func _settings() -> void:

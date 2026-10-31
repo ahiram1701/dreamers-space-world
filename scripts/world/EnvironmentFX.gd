@@ -77,6 +77,7 @@ func _ready() -> void:
 	_build_stars()
 	if not space:
 		_build_rain()
+	Settings.changed.connect(_on_settings_changed)
 	_update(true)
 
 
@@ -163,6 +164,20 @@ func _update(force: bool) -> void:
 	if force or absf(n - _last_night) > 0.02:
 		_last_night = n
 		night_changed.emit(n)
+
+
+## Cambiar la calidad en Ajustes (también en plena partida) se aplica al momento.
+func _on_settings_changed() -> void:
+	_apply_quality()
+	if _rain:
+		_rain.amount = [600, 1400, 2600][clampi(Settings.graphics_quality, 0, 2)]
+	for g in get_tree().get_nodes_in_group("grass"):
+		Decor.apply_grass_quality(g)
+	for l in get_tree().get_nodes_in_group("quality_shadows"):
+		l.shadow_enabled = Settings.graphics_quality >= 2
+	for p in get_tree().get_nodes_in_group("player"):
+		if p._lamp:
+			p._lamp.shadow_enabled = Settings.graphics_quality >= 1
 
 
 func _apply_quality() -> void:

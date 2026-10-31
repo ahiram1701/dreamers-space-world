@@ -3,6 +3,20 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.6.3] - 2026-10-31
+
+### Añadido
+- **Crea tu personaje** antes de empezar una vida nueva: nombre, hombre o mujer, complexión, ropa y colores, con una vista previa en 3D que gira. Ya no apareces con un aspecto al azar.
+- **Tu aspecto** en el menú de pausa: cambia cómo te ves sin salir de la partida. Cada vida guarda su propio aspecto.
+
+### Cambiado
+- **Los ajustes se aplican al momento**, en plena partida: la calidad gráfica (efectos, hierba, lluvia, sombras de las luces) y el tamaño del texto, también en los textos con tamaño propio.
+- **Conversaciones que dejan ver**: el panel es más bajo y algo transparente, las respuestas van en dos columnas, el historial se pliega tras un botón y la cámara encuadra la cara de quien te habla por encima del panel.
+
+### Corregido
+- **Al correr parecía que cruzabas los brazos**: ahora los brazos van hacia delante y hacia atrás junto al cuerpo. Los gestos (celular, beber, pensar) conservan su postura.
+- «Tu personaje» ya no está en Ajustes: se elige al crear la vida o en la pausa.
+
 ## [0.6.2] - 2026-10-31
 
 ### Añadido
