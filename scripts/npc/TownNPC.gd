@@ -155,6 +155,11 @@ func say(text: String, seconds: float = 4.0) -> void:
 		add_child(_bubble)
 	_bubble.text = "«%s»" % text
 	_bubble.visible = true
+	# Lo que dice cerca de ti queda en el registro del Cuaderno
+	var players := get_tree().get_nodes_in_group("player")
+	if not players.is_empty() and players[0].global_position.distance_to(global_position) < 20.0:
+		var who := _display_name.capitalize() if _display_name != "alguien" else "Alguien"
+		Journal.log_event("%s: «%s»" % [who, text], "say")
 	_bubble_t = seconds
 
 

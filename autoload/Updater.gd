@@ -118,6 +118,7 @@ func download_and_install() -> void:
 		return
 	DirAccess.remove_absolute(zip_path)
 	OS.create_process(installed.executable, [])
+	WorldDB.flush()  # nada pendiente sin guardar antes de reiniciar
 	get_tree().quit()
 
 

@@ -7,6 +7,25 @@ signal added(entry: Dictionary)
 const MAX_ENTRIES := 60
 
 
+const MAX_LOG := 60
+
+
+## Registro: todo lo que te pasó y te dijeron (los avisos que se van de la pantalla y las frases
+## que suelta la gente), para poder volver a leerlo en el Cuaderno.
+func log_event(text: String, kind: String = "info") -> void:
+	if not WorldDB.is_loaded() or text.strip_edges().is_empty():
+		return
+	var list: Array = WorldDB.get_state("log", [])
+	list.append({"text": text, "kind": kind, "at": WorldClock.absolute_minutes()})
+	while list.size() > MAX_LOG:
+		list.pop_front()
+	WorldDB.set_state("log", list)
+
+
+func log_entries() -> Array:
+	return WorldDB.get_state("log", []) if WorldDB.is_loaded() else []
+
+
 func entries() -> Array:
 	return WorldDB.get_state("journal", [])
 

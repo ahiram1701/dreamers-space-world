@@ -10,8 +10,18 @@ const ROOT := "user://worlds/"
 const FORMAT_VERSION := 1
 const LAST_WORLD_PATH := "user://last_world.txt"
 
+## Guardar no escribe en el acto: marca "pendiente" y se escribe como mucho cada SAVE_DELAY
+## segundos (y siempre al salir). Así cien cambios seguidos son una sola escritura.
+const SAVE_DELAY := 2.0
+
+signal saved
+
 var world_id: String = ""
 var _data: Dictionary = {}
+var _dirty := false
+var _dirty_t := 0.0
+## Cuántas veces se ha escrito a disco (para las pruebas).
+var writes := 0
 
 
 func is_loaded() -> bool:
@@ -29,20 +39,24 @@ func create_world(display_name: String) -> String:
 		"canon": [],     # hechos confirmados que la IA no puede contradecir
 		"state": {},     # memorias de PNJ, perfil del jugador, progreso de actos...
 	}
-	save()
+	flush()
 	_remember_last(id)
 	world_loaded.emit(world_id)
 	return id
 
 
 func load_world(id: String) -> bool:
+	flush()  # lo pendiente del mundo anterior
 	var path := _path(id)
-	if not FileAccess.file_exists(path):
-		return false
-	var parsed = JSON.parse_string(FileAccess.get_file_as_string(path))
+	var parsed = _read(path)
 	if typeof(parsed) != TYPE_DICTIONARY:
-		push_error("Mundo corrupto: %s" % path)
-		return false
+		# Archivo dañado o a medio escribir: se recupera la copia anterior
+		parsed = _read(path + ".bak")
+		if typeof(parsed) != TYPE_DICTIONARY:
+			push_error("Mundo corrupto y sin copia: %s" % path)
+			return false
+		push_warning("Mundo dañado: se ha recuperado la copia anterior (%s)" % path)
+		recovered_from_backup = true
 	world_id = id
 	_data = parsed
 	_remember_last(id)
@@ -108,7 +122,10 @@ func update_entity(type: String, id: String, fields: Dictionary) -> void:
 ## Borra un mundo del disco (lo usan las pruebas para no dejar basura).
 func delete_world(id: String) -> void:
 	var dir := ROOT + id
-	DirAccess.remove_absolute(_path(id))
+	if id == world_id:
+		_dirty = false
+	for ext in ["", ".bak", ".tmp"]:
+		DirAccess.remove_absolute(_path(id) + ext)
 	DirAccess.remove_absolute(dir)
 	if id == world_id:
 		world_id = ""
@@ -147,15 +164,56 @@ func set_state(key: String, value: Variant) -> void:
 	save()
 
 
+## Pide guardar (se escribe enseguida, agrupando cambios). Para escribir YA: flush().
 func save() -> void:
-	if not is_loaded():
+	if is_loaded():
+		_dirty = true
+
+
+## true si al cargar hubo que usar la copia de seguridad.
+var recovered_from_backup := false
+
+
+## Escribe a disco sin riesgo: primero a .tmp, luego el anterior pasa a .bak y el .tmp ocupa su sitio.
+## Si el juego se cierra a mitad, queda el archivo bueno o su copia.
+func flush() -> void:
+	if not is_loaded() or (not _dirty and FileAccess.file_exists(_path(world_id))):
 		return
+	_dirty = false
+	_dirty_t = 0.0
 	DirAccess.make_dir_recursive_absolute(ROOT + world_id)
-	var f := FileAccess.open(_path(world_id), FileAccess.WRITE)
+	var path := _path(world_id)
+	var f := FileAccess.open(path + ".tmp", FileAccess.WRITE)
 	if f == null:
 		push_error("No se pudo guardar el mundo: %s" % error_string(FileAccess.get_open_error()))
 		return
-	f.store_string(JSON.stringify(_data, "\t"))
+	f.store_string(JSON.stringify(_data))
+	f.close()
+	if FileAccess.file_exists(path):
+		if FileAccess.file_exists(path + ".bak"):
+			DirAccess.remove_absolute(path + ".bak")
+		DirAccess.rename_absolute(path, path + ".bak")
+	DirAccess.rename_absolute(path + ".tmp", path)
+	writes += 1
+	saved.emit()
+
+
+func _process(delta: float) -> void:
+	if _dirty:
+		_dirty_t += delta
+		if _dirty_t >= SAVE_DELAY:
+			flush()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_PREDELETE or what == NOTIFICATION_EXIT_TREE:
+		flush()
+
+
+func _read(path: String) -> Variant:
+	if not FileAccess.file_exists(path):
+		return null
+	return JSON.parse_string(FileAccess.get_file_as_string(path))
 
 
 func _path(id: String) -> String:

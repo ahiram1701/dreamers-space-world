@@ -81,6 +81,7 @@ func _ready() -> void:
 	if model:
 		AssetLibrary.place(_body, model, Vector3.ZERO, 1.78, 0.0, false)
 		_rig = HumanoidRig.new()
+		_rig.full_rate = true
 		model.add_child(_rig)
 		if not _rig.setup(model):
 			_rig = null

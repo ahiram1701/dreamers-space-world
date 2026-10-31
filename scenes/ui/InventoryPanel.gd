@@ -24,6 +24,7 @@ var _detail: VBoxContainer
 var _errands: VBoxContainer
 var _journal: VBoxContainer
 var _people: VBoxContainer
+var _log: VBoxContainer
 var _selected := ""
 
 
@@ -88,6 +89,7 @@ func _ready() -> void:
 	_errands = _tab("Encargos")
 	_journal = _tab("Diario")
 	_people = _tab("Personas")
+	_log = _tab("Registro")
 
 
 func _tab(title: String) -> VBoxContainer:
@@ -116,7 +118,17 @@ func toggle() -> void:
 func open() -> void:
 	_rebuild()
 	UIAnim.show(_root, Vector2.ZERO)
+	_focus_first.call_deferred()
 	opened.emit()
+
+
+## Con mando: el foco empieza en algo que se pueda pulsar.
+func _focus_first() -> void:
+	await get_tree().process_frame
+	if _grid.get_child_count() > 0 and _grid.get_child(0) is Button:
+		_grid.get_child(0).grab_focus()
+	else:
+		_tabs.get_tab_bar().grab_focus()
 
 
 func close() -> void:
@@ -131,6 +143,7 @@ func _rebuild() -> void:
 	_build_errands()
 	_build_journal()
 	_build_people()
+	_build_log()
 
 
 # --- Objetos -------------------------------------------------------------------------------
@@ -283,6 +296,33 @@ func _build_people() -> void:
 		card.tooltip_text = ", ".join(PackedStringArray(e.get("personality", [])))
 	if known.is_empty():
 		_people.add_child(_muted("Todavía no conoces a nadie. Acércate a alguien y pulsa E."))
+
+
+## Lo que te pasó y te dijeron, lo más reciente arriba.
+func _build_log() -> void:
+	_clear(_log)
+	var list := Journal.log_entries()
+	var colors := {"item": UITheme.GOOD, "money": UITheme.MONEY, "quest": UITheme.WARN, "memory": Color("#c9a7ff"), "warn": UITheme.DANGER, "say": UITheme.TEXT}
+	for i in range(list.size() - 1, -1, -1):
+		var e: Dictionary = list[i]
+		var m := int(e.get("at", 0))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 12)
+		_log.add_child(row)
+		var when := Label.new()
+		when.text = "%s %02d:%02d" % [WorldClock.WEEKDAYS[(m / 1440 + 3) % 7].left(3).capitalize(), (m % 1440) / 60, m % 60]
+		when.add_theme_color_override("font_color", UITheme.MUTED)
+		when.add_theme_font_size_override("font_size", 13)
+		when.custom_minimum_size.x = 80
+		row.add_child(when)
+		var text := Label.new()
+		text.text = str(e.get("text", ""))
+		text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		text.add_theme_color_override("font_color", colors.get(e.get("kind", "info"), UITheme.ACCENT))
+		row.add_child(text)
+	if list.is_empty():
+		_log.add_child(_muted("Aquí irá quedando todo lo que te pase y te digan."))
 
 
 func _entry(parent: Node, title: String, body: String, accent: Color) -> PanelContainer:

@@ -75,7 +75,7 @@ func _ready() -> void:
 	saves.disabled = WorldDB.list_worlds().is_empty()
 	_button(_main_box, "Ajustes", func(): add_child(SettingsPanel.new()))
 	_button(_main_box, "Herramientas de desarrollo", func(): get_tree().change_scene_to_file(DEV))
-	_button(_main_box, "Salir", func(): get_tree().quit())
+	_button(_main_box, "Salir", func(): WorldDB.flush(); get_tree().quit())
 
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

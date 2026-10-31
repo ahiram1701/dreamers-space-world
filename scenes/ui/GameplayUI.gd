@@ -138,6 +138,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			return  # una conversación abierta: Esc es despedirse (lo gestiona el diálogo)
 		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("back"):  # B del mando: cerrar lo que esté abierto
+		for panel in [phone, stash, actions, inventory, anchor, pause]:
+			if panel.is_open():
+				panel.close()
+				get_viewport().set_input_as_handled()
+				return
 	elif event.is_action_pressed("inventory"):
 		if not pause.is_open():
 			inventory.toggle()

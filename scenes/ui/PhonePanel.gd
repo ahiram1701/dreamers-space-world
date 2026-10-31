@@ -37,12 +37,10 @@ func _ready() -> void:
 	_phone = PanelContainer.new()
 	_phone.anchor_left = 1.0
 	_phone.anchor_right = 1.0
-	_phone.anchor_top = 1.0
-	_phone.anchor_bottom = 1.0
-	_phone.offset_left = -410
-	_phone.offset_right = -40
-	_phone.offset_top = -660
-	_phone.offset_bottom = -30
+	_phone.anchor_top = 0.05
+	_phone.anchor_bottom = 0.96
+	_phone.offset_left = -400
+	_phone.offset_right = -36
 	var frame := UITheme.box(Color("#06080d"), Color(1, 1, 1, 0.16), 34, 14, 2)
 	frame.shadow_color = Color(0, 0, 0, 0.5)
 	frame.shadow_size = 14
@@ -146,6 +144,8 @@ func _home() -> void:
 		b.add_theme_stylebox_override("hover", sb_h)
 		b.pressed.connect(app[1])
 		grid.add_child(b)
+		if grid.get_child_count() == 1:
+			b.grab_focus.call_deferred()  # con mando, se empieza por la primera app
 	var hint := Label.new()
 	hint.text = Jobs.describe() if Jobs.has_job() else "Sin trabajo. Puedes pedirlo hablando con la gente."
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -341,7 +341,7 @@ func _show_map() -> void:
 	_title.text = "Mapa"
 	_back.visible = true
 	var map := MapView.new()
-	map.custom_minimum_size = Vector2(320, 300)
+	map.custom_minimum_size = Vector2(300, 220)
 	map.places = places.call() if places.is_valid() else {}
 	map.player = player
 	_screen.add_child(map)

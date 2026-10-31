@@ -7,7 +7,7 @@ config_version=5
 
 config/name="Dreamer's Space World"
 config/description="Un multiverso que crece contigo: la IA genera el mundo según tus decisiones."
-config/version="0.6.0"
+config/version="0.6.1"
 run/main_scene="res://scenes/main_menu/MainMenu.tscn"
 config/features=PackedStringArray("4.7")
 
@@ -16,6 +16,7 @@ config/features=PackedStringArray("4.7")
 Settings="*res://autoload/Settings.gd"
 Controls="*res://autoload/Controls.gd"
 UITheme="*res://autoload/UITheme.gd"
+Display="*res://autoload/Display.gd"
 AIClient="*res://autoload/AIClient.gd"
 ContentValidator="*res://autoload/ContentValidator.gd"
 WorldDB="*res://autoload/WorldDB.gd"
@@ -39,11 +40,12 @@ Jobs="*res://autoload/Jobs.gd"
 
 [display]
 
-window/size/viewport_width=1280
-window/size/viewport_height=720
+window/size/viewport_width=1210
+window/size/viewport_height=680
 window/size/mode=2
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+window/dpi/allow_hidpi=true
 
 [layer_names]
 

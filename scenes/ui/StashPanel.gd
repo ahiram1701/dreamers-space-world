@@ -79,6 +79,7 @@ func open(key: String, title: String) -> void:
 	_title.text = title if not title.is_empty() and not title.begins_with("@") else "Guardar cosas"
 	_rebuild()
 	UIAnim.show(_root, Vector2.ZERO)
+	(func(): if _mine.get_child_count() > 0: _mine.get_child(0).grab_focus()).call_deferred()
 	opened.emit()
 
 

@@ -30,6 +30,7 @@ var _waypoint := Vector3.INF
 var _waypoint_label := ""
 var _arrow: Label
 var _vignette: ColorRect
+var _fps: Label
 
 
 func _ready() -> void:
@@ -44,6 +45,16 @@ func _ready() -> void:
 	_vignette.material = vm
 	_vignette.modulate.a = 0.0
 	add_child(_vignette)
+	_fps = Label.new()  # contador de FPS (Ajustes → Imagen)
+	_fps.anchor_left = 1.0
+	_fps.anchor_right = 1.0
+	_fps.anchor_top = 1.0
+	_fps.anchor_bottom = 1.0
+	_fps.offset_left = -90
+	_fps.offset_top = -30
+	_fps.add_theme_font_size_override("font_size", 13)
+	_fps.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
+	add_child(_fps)
 	# Flecha hacia el destino marcado en el mapa
 	_arrow = Label.new()
 	_arrow.anchor_left = 0.5
@@ -164,6 +175,7 @@ func set_tracker(text: String) -> void:
 func notify(text: String, kind: String = "info") -> void:
 	if text.strip_edges().is_empty():
 		return
+	Journal.log_event(text, kind)
 	while _notes.get_child_count() >= 3:
 		var old := _notes.get_child(0)
 		_notes.remove_child(old)
@@ -239,6 +251,9 @@ func _process(delta: float) -> void:
 		_tick = 0.0
 		_refresh(false)
 		_update_waypoint()
+		_fps.visible = Settings.show_fps
+		if _fps.visible:
+			_fps.text = "%d FPS" % Engine.get_frames_per_second()
 	# Te caes de sueño: los bordes se oscurecen un poco y respiran
 	var tired := clampf((15.0 - Body.get_need("rest")) / 15.0, 0.0, 1.0)
 	_vignette.modulate.a = lerpf(_vignette.modulate.a, tired * (0.75 + 0.25 * sin(Time.get_ticks_msec() / 900.0)), 1.0 - exp(-2.0 * delta))

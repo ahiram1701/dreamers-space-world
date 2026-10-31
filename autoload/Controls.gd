@@ -6,12 +6,12 @@ const KEYS := {
 	"move_forward": [KEY_W, KEY_UP], "move_back": [KEY_S, KEY_DOWN],
 	"move_left": [KEY_A, KEY_LEFT], "move_right": [KEY_D, KEY_RIGHT],
 	"run": [KEY_SHIFT], "jump": [KEY_SPACE], "interact": [KEY_E], "act": [KEY_F],
-	"inventory": [KEY_I], "anchor": [KEY_T], "pause": [KEY_ESCAPE], "phone": [KEY_C],
+	"inventory": [KEY_I], "anchor": [KEY_T], "pause": [KEY_ESCAPE], "phone": [KEY_C], "fullscreen": [KEY_F11],
 	"choice_1": [KEY_1], "choice_2": [KEY_2], "choice_3": [KEY_3], "choice_4": [KEY_4],
 }
 const BUTTONS := {
 	"jump": [JOY_BUTTON_A], "interact": [JOY_BUTTON_X], "act": [JOY_BUTTON_Y],
-	"inventory": [JOY_BUTTON_BACK], "anchor": [JOY_BUTTON_LEFT_SHOULDER], "pause": [JOY_BUTTON_START],
+	"inventory": [JOY_BUTTON_BACK], "back": [JOY_BUTTON_B], "anchor": [JOY_BUTTON_LEFT_SHOULDER], "pause": [JOY_BUTTON_START],
 	"run": [JOY_BUTTON_LEFT_STICK], "phone": [JOY_BUTTON_RIGHT_SHOULDER], "zoom_in": [JOY_BUTTON_DPAD_UP], "zoom_out": [JOY_BUTTON_DPAD_DOWN],
 }
 const AXES := {

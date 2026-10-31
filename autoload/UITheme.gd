@@ -27,9 +27,8 @@ func _ready() -> void:
 	Settings.changed.connect(apply_scale)
 
 
-## Escala de la interfaz (ajuste del jugador, 0.85 a 1.3).
+## Tamaño del texto (la escala general de la interfaz la pone el autoload Display).
 func apply_scale() -> void:
-	get_tree().root.content_scale_factor = clampf(Settings.ui_scale, 0.85, 1.3)
 	if theme:
 		theme.default_font_size = roundi(17 * Settings.text_scale)
 

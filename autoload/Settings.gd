@@ -28,11 +28,16 @@ var fov: float = 70.0
 var invert_y: bool = false
 var camera_distance: float = 4.0
 ## Interfaz: escala general, tamaño del texto y velocidad a la que aparecen las frases (1 = normal).
-var ui_scale: float = 1.0
+var ui_scale: float = 0.0   # 0 = automático (según el tamaño de la pantalla)
 var text_scale: float = 1.0
 var text_speed: float = 1.0
 ## Consejos de primera vez que ya se han visto (no se repiten).
 var seen_hints: Array = []
+## Pantalla: "maximized", "fullscreen" o "windowed"; FPS máximos (0 = sin límite); VSync; contador de FPS.
+var window_mode: String = "maximized"
+var max_fps: int = 60
+var vsync: bool = true
+var show_fps: bool = false
 
 
 func _ready() -> void:
@@ -62,7 +67,11 @@ func load_settings() -> void:
 	fov = cfg.get_value("game", "fov", 70.0)
 	invert_y = cfg.get_value("game", "invert_y", false)
 	camera_distance = cfg.get_value("game", "camera_distance", 4.0)
-	ui_scale = cfg.get_value("game", "ui_scale", 1.0)
+	ui_scale = cfg.get_value("game", "ui_scale", 0.0)
+	window_mode = cfg.get_value("game", "window_mode", "maximized")
+	max_fps = cfg.get_value("game", "max_fps", 60)
+	vsync = cfg.get_value("game", "vsync", true)
+	show_fps = cfg.get_value("game", "show_fps", false)
 	text_scale = cfg.get_value("game", "text_scale", 1.0)
 	text_speed = cfg.get_value("game", "text_speed", 1.0)
 	seen_hints = cfg.get_value("game", "seen_hints", [])
@@ -91,6 +100,10 @@ func save_settings() -> void:
 	cfg.set_value("game", "invert_y", invert_y)
 	cfg.set_value("game", "camera_distance", camera_distance)
 	cfg.set_value("game", "ui_scale", ui_scale)
+	cfg.set_value("game", "window_mode", window_mode)
+	cfg.set_value("game", "max_fps", max_fps)
+	cfg.set_value("game", "vsync", vsync)
+	cfg.set_value("game", "show_fps", show_fps)
 	cfg.set_value("game", "text_scale", text_scale)
 	cfg.set_value("game", "text_speed", text_speed)
 	cfg.set_value("game", "seen_hints", seen_hints)

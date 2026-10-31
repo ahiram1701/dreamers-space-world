@@ -15,6 +15,7 @@ const ACTIONS := [
 	["inventory", "Cuaderno: objetos, encargos, diario y personas", "", ""],
 	["phone", "Celular: mensajes, llamadas, banco y mapa", "", ""], ["anchor", "Ancla (tras El Despertar)", "", ""],
 	["choice_1", "Elegir respuesta en una conversación", "1 – 4", "Cruceta y A"], ["pause", "Pausa", "", ""],
+	["fullscreen", "Pantalla completa / ventana", "F11", "—"],
 ]
 
 var _root: Control
@@ -34,15 +35,19 @@ func _ready() -> void:
 	dim.color = Color(0.01, 0.02, 0.04, 0.72)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.add_child(dim)
-	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_root.add_child(center)
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	for side in ["left", "right", "top", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, 36)
+	_root.add_child(margin)
 	var stack := HBoxContainer.new()
+	stack.alignment = BoxContainer.ALIGNMENT_CENTER
 	stack.add_theme_constant_override("separation", 24)
-	center.add_child(stack)
+	margin.add_child(stack)
 
 	var panel := PanelContainer.new()
 	UIStyle.apply(panel)
+	panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	stack.add_child(panel)
 	_menu = VBoxContainer.new()
 	_menu.custom_minimum_size.x = 340
@@ -62,10 +67,11 @@ func _ready() -> void:
 	_button(_menu, "Continuar", close)
 	_button(_menu, "Controles", _toggle_controls)
 	_button(_menu, "Ajustes", _settings)
-	_button(_menu, "Salir al menú principal", func(): get_tree().change_scene_to_file("res://scenes/main_menu/MainMenu.tscn"))
+	_button(_menu, "Salir al menú principal", func(): WorldDB.flush(); get_tree().change_scene_to_file("res://scenes/main_menu/MainMenu.tscn"))
 
 	_controls = PanelContainer.new()
 	UIStyle.apply(_controls)
+	_controls.size_flags_vertical = Control.SIZE_FILL
 	_controls.visible = false
 	stack.add_child(_controls)
 
@@ -86,7 +92,8 @@ func open() -> void:
 	_info.text = "%s · %s\n%s, %s" % [WorldDB.get_state("profile", {}).get("name", ""), where, WorldClock.weekday().capitalize(), WorldClock.text()]
 	if GameState.is_awakened():
 		_info.text += "\nCoordenadas %d/%d · Ramas recorridas: %d" % [GameState.fragments(), GameState.FRAGMENTS_NEEDED, TimelineManager.depth()]
-	_info.text += "\nLa partida se guarda sola."
+	WorldDB.flush()  # al pausar, todo queda escrito
+	_info.text += "\nPartida guardada."
 	_controls.visible = false
 	UIAnim.show(_root, Vector2.ZERO)
 	_menu.get_child(3).grab_focus.call_deferred()
@@ -104,9 +111,14 @@ func _toggle_controls() -> void:
 		return
 	for c in _controls.get_children():
 		c.queue_free()
+	var scroll := ScrollContainer.new()  # la tabla entera se desplaza si la ventana es baja
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.custom_minimum_size.x = 600
+	_controls.add_child(scroll)
 	var box := VBoxContainer.new()
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.add_theme_constant_override("separation", 8)
-	_controls.add_child(box)
+	scroll.add_child(box)
 	var title := Label.new()
 	title.text = "Controles"
 	title.add_theme_font_size_override("font_size", 24)

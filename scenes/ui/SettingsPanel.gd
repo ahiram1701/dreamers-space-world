@@ -5,6 +5,7 @@ extends CanvasLayer
 signal closed
 
 const DAY_OPTIONS := [24.0, 60.0, 120.0, 240.0, 1440.0]
+const UI_SIZES := [0.0, 0.85, 1.0, 1.15, 1.3]
 
 var _key: LineEdit
 var _model: LineEdit
@@ -20,7 +21,11 @@ var _fov: HSlider
 var _invert: CheckBox
 var _status: Label
 var _text_speed: HSlider
-var _ui_scale: HSlider
+var _ui_size: OptionButton
+var _window: OptionButton
+var _fps: OptionButton
+var _vsync: CheckBox
+var _show_fps: CheckBox
 var _text_scale: HSlider
 
 
@@ -30,13 +35,14 @@ func _ready() -> void:
 	dim.color = Color(0, 0, 0, 0.6)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
-	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(center)
+	# Anclado a la pantalla (no un tamaño fijo): cabe en cualquier ventana
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(520, 0)
+	panel.anchor_left = 0.18
+	panel.anchor_right = 0.82
+	panel.anchor_top = 0.05
+	panel.anchor_bottom = 0.95
 	UIStyle.apply(panel)
-	center.add_child(panel)
+	add_child(panel)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	panel.add_child(box)
@@ -47,7 +53,7 @@ func _ready() -> void:
 	box.add_child(title)
 
 	var tabs := TabContainer.new()
-	tabs.custom_minimum_size = Vector2(560, 380)
+	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(tabs)
 	var game := _page(tabs, "Juego")
 	var gfx := _page(tabs, "Imagen")
@@ -65,7 +71,12 @@ func _ready() -> void:
 	_quality = _option(gfx, "Calidad gráfica", ["Baja (PCs modestos)", "Media", "Alta"], Settings.graphics_quality)
 	_fov = _slider(gfx, "Campo de visión de la cámara", 55.0, 95.0, Settings.fov)
 	_fov.step = 1.0
-	_ui_scale = _slider(gfx, "Tamaño de la interfaz", 0.85, 1.3, Settings.ui_scale)
+	_window = _option(gfx, "Pantalla (F11 alterna)", ["Ventana maximizada", "Pantalla completa", "Ventana"], maxi(Display.MODES.find(Settings.window_mode), 0))
+	_fps = _option(gfx, "Límite de FPS", ["30", "60", "120", "Sin límite"], maxi(Display.FPS_OPTIONS.find(Settings.max_fps), 1))
+	_vsync = _check(gfx, "Sincronización vertical (VSync)", Settings.vsync)
+	_show_fps = _check(gfx, "Mostrar FPS", Settings.show_fps)
+	_ui_size = _option(gfx, "Tamaño de la interfaz", ["Automático", "Pequeño", "Normal", "Grande", "Muy grande"],
+		maxi(UI_SIZES.find(Settings.ui_scale), 0))
 	_text_scale = _slider(gfx, "Tamaño del texto", 0.85, 1.4, Settings.text_scale)
 
 	_volume = _slider(sound, "Volumen", 0.0, 1.0, Settings.volume)
@@ -146,7 +157,11 @@ func _save() -> void:
 	Settings.day_minutes = DAY_OPTIONS[maxi(_day.selected, 0)]
 	Settings.fov = _fov.value
 	Settings.text_speed = _text_speed.value
-	Settings.ui_scale = _ui_scale.value
+	Settings.ui_scale = UI_SIZES[maxi(_ui_size.selected, 0)]
+	Settings.window_mode = Display.MODES[maxi(_window.selected, 0)]
+	Settings.max_fps = Display.FPS_OPTIONS[maxi(_fps.selected, 0)]
+	Settings.vsync = _vsync.button_pressed
+	Settings.show_fps = _show_fps.button_pressed
 	Settings.text_scale = _text_scale.value
 	Settings.invert_y = _invert.button_pressed
 	Settings.save_settings()
@@ -161,10 +176,14 @@ func _close() -> void:
 
 
 func _page(tabs: TabContainer, title: String) -> VBoxContainer:
+	var scroll := ScrollContainer.new()  # si no cabe, se desplaza
+	scroll.name = title
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	tabs.add_child(scroll)
 	var v := VBoxContainer.new()
-	v.name = title
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	v.add_theme_constant_override("separation", 10)
-	tabs.add_child(v)
+	scroll.add_child(v)
 	return v
 
 

@@ -118,6 +118,7 @@ Desde la **v0.2.0**, el juego comprueba al arrancar si hay una versión estable 
 | Ancla (saltar) | <kbd>T</kbd> |
 | Cuaderno: objetos, encargos, diario y personas | <kbd>I</kbd> |
 | Celular | <kbd>C</kbd> |
+| Pantalla completa | <kbd>F11</kbd> |
 | Pausa | <kbd>Esc</kbd> |
 
 Con mando: stick izquierdo para moverse, derecho para la cámara, <kbd>A</kbd> saltar, <kbd>X</kbd> interactuar, <kbd>Y</kbd> hacer algo, <kbd>LB</kbd> Ancla, <kbd>Back</kbd> inventario, <kbd>RB</kbd> celular y <kbd>Start</kbd> pausa.
@@ -174,6 +175,8 @@ godot --headless --path . -s tests/test_collision.gd   # nada sólido se atravie
 godot --headless --path . -s tests/test_life.gd        # cuerpo, dinero y lo que crea la IA
 godot --headless --path . -s tests/test_town_life.gd   # testigos y rumores
 godot --headless --path . -s tests/test_routine.gd     # celular, trabajo y construir
+godot --headless --path . -s tests/test_layout.gd      # todo cabe en pantallas de 1024×576 a 1920×1080
+godot --headless --path . -s tests/test_save.gd        # guardado agrupado, atómico y con copia
 bash tests/smoke.sh                                    # arranca las escenas y busca errores de script
 ```
 

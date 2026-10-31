@@ -61,9 +61,10 @@ func _ready() -> void:
 	var panel := PanelContainer.new()
 	panel.anchor_left = 0.12
 	panel.anchor_right = 0.88
-	panel.anchor_top = 0.5
+	panel.anchor_top = 0.42
 	panel.anchor_bottom = 1.0
 	panel.offset_bottom = -46
+	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN  # si el contenido no cabe, crece hacia arriba
 	UIStyle.apply(panel)
 	add_child(panel)
 	var box := VBoxContainer.new()
@@ -93,7 +94,7 @@ func _ready() -> void:
 
 	# Lo dicho antes en esta conversación (desplazable) y la frase actual
 	_history_scroll = ScrollContainer.new()
-	_history_scroll.custom_minimum_size.y = 64
+	_history_scroll.custom_minimum_size.y = 48
 	_history_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	box.add_child(_history_scroll)
 	_history = RichTextLabel.new()
@@ -110,9 +111,14 @@ func _ready() -> void:
 	_line.add_theme_font_size_override("normal_font_size", 19)
 	_line.gui_input.connect(func(e): if e is InputEventMouseButton and e.pressed: _skip_typing())
 	box.add_child(_line)
+	var choices_scroll := ScrollContainer.new()  # opciones largas: se desplazan en vez de salirse
+	choices_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	choices_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	box.add_child(choices_scroll)
 	_choices = VBoxContainer.new()
+	_choices.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_choices.add_theme_constant_override("separation", 6)
-	box.add_child(_choices)
+	choices_scroll.add_child(_choices)
 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
@@ -304,6 +310,8 @@ func _send(text: String) -> void:
 		b.pressed.connect(_send.bind(c.text))
 		_choices.add_child(b)
 		UIAnim.show(b, Vector2(0, 8))
+		if _choices.get_child_count() == 1 and Controls.using_gamepad:
+			b.grab_focus.call_deferred()  # con mando: la primera respuesta, lista para pulsar A
 
 
 func _unhandled_input(event: InputEvent) -> void:

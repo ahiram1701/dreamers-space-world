@@ -3,6 +3,23 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.6.1] - 2026-10-30
+
+### Añadido
+- **Modo de pantalla**: ventana maximizada, pantalla completa o ventana (Ajustes → Imagen). **F11** o **Alt+Enter** alternan la pantalla completa.
+- Ajustes de **límite de FPS**, **VSync** y **mostrar FPS**, y tamaño de la interfaz en «Automático».
+- **Registro** en el Cuaderno: todo lo que te pasó y lo que te dijeron, con su hora, aunque el aviso ya se haya ido.
+- Con mando: los menús empiezan con un botón seleccionado y **B** cierra el panel abierto.
+
+### Cambiado
+- La partida se guarda **agrupando los cambios** (como mucho una vez cada 2 s, y siempre al pausar o salir): menos tirones.
+- La gente lejana o fuera de cámara se anima con menos detalle: más fluidez con mucha gente.
+
+### Corregido
+- **La ventana no cabía en algunas pantallas**: ahora siempre se ajusta a la zona útil (sin taparse con la barra de tareas).
+- Los paneles (celular, ajustes, controles, conversación) se salían en pantallas bajas; ahora se adaptan y se desplazan.
+- Si el juego se cerraba a mitad de guardar, la partida podía dañarse: ahora se escribe en una copia y, si el archivo se daña, se recupera la anterior.
+
 ## [0.6.0] - 2026-10-30
 
 ### Añadido

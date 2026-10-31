@@ -37,6 +37,12 @@ var talking := false
 var emotion := "neutral"
 ## Punto del mundo al que mira la cabeza (Vector3.INF: mira alrededor).
 var look_at_point := Vector3.INF
+## Animar siempre a pleno ritmo (el jugador). El resto, según la distancia y si se ve.
+var full_rate := false
+const LOD_NEAR := 35.0   # más lejos (o fuera de cámara): una de cada 4 frames
+const LOD_FAR := 70.0    # más lejos aún: quieto
+var _skip := 0
+var _acc := 0.0
 
 var _sk: Skeleton3D
 var _model: Node3D
@@ -115,6 +121,20 @@ func gesture() -> String:
 func _process(delta: float) -> void:
 	if _sk == null:
 		return
+	if not full_rate:  # nivel de detalle: lejos o fuera de la vista, menos trabajo
+		var cam := get_viewport().get_camera_3d()
+		if cam:
+			var at := _sk.global_position
+			var d := cam.global_position.distance_to(at)
+			if d > LOD_FAR:
+				return
+			if d > LOD_NEAR or not cam.is_position_in_frustum(at + Vector3(0, 1, 0)):
+				_acc += delta
+				_skip = (_skip + 1) % 4
+				if _skip != 0:
+					return
+				delta = _acc
+		_acc = 0.0
 	_t += delta
 	var target := _locomotion(delta)
 	# Capa de gesto
