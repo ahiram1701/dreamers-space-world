@@ -72,7 +72,9 @@ Si la IA no está disponible, el juego usa contenido de respaldo y **nunca se qu
 | ✅ | Edificios con interior, barcas que se manejan, nadar, dormir hasta la mañana; todo es sólido |
 | ✅ | PNJs coherentes: si dicen que se van o se encierran, lo hacen, y solo recuerdan lo que pasó de verdad |
 | ✅ | Cámara con zoom y primera persona, mando, pasos y sonidos del mundo |
-| ✅ | **Crea tu personaje** (nombre, sexo, complexión, ropa y colores) y cámbialo desde la pausa; los ajustes se aplican al momento |
+| ✅ | **Crea tu personaje** (nombre, sexo, piel, peinado, pelo, altura, complexión, ropa); los ajustes se aplican al momento |
+| ✅ | **Familias en sus casas** que duermen, cocinan y comen según la hora; quien ves entrar, está dentro |
+| ✅ | **Ropa, tienda y peluquería**: tu ropa es tuya, te mojas con la lluvia, te ensucias trabajando y te duchas |
 | ✅ | **Vida real**: hambre, sed, descanso e higiene, dinero (dólares), tiempo atmosférico y días de la semana |
 | ✅ | **Celular**: mensajes y llamadas con la gente (la IA contesta), banco y mapa con destino |
 | ✅ | **Trabajo** con horario y sueldo, retrasos, faltas y despido |
@@ -180,6 +182,9 @@ godot --headless --path . -s tests/test_layout.gd      # todo cabe en pantallas 
 godot --headless --path . -s tests/test_save.gd        # guardado agrupado, atómico y con copia
 godot --headless --path . -s tests/test_people.gd      # guiarte a un sitio, cruzar puertas, celular coherente
 godot --headless --path . -s tests/test_settings_live.gd  # ajustes y aspecto aplicados en plena partida
+godot --headless --path . -s tests/test_unstuck.gd     # nunca atrapado al salir de un edificio
+godot --headless --path . -s tests/test_homes.gd       # familias en sus casas, visitas y vecinos que duermen en casa
+godot --headless --path . -s tests/test_wardrobe.gd    # ropa, tienda, peluquería, lluvia, suciedad y cuerpo
 bash tests/smoke.sh                                    # arranca las escenas y busca errores de script
 ```
 

@@ -90,21 +90,30 @@ func _wander(npc: TownNPC) -> void:
 			get_tree().create_timer(randf_range(4.0, 12.0)).timeout.connect(func(): _wander(npc)), CONNECT_ONE_SHOT)
 
 
-## Se va por la puerta más cercana (si no hay, se aleja) y desaparece.
+## Entra por la puerta más cercana y se queda dentro un rato (si entras, la ves ahí: de visita
+## en una casa, de cliente en la cafetería). Si no hay puertas cerca, se aleja y desaparece.
 func _send_home(npc: TownNPC) -> void:
 	if not is_instance_valid(npc):
 		return
-	var best := Vector3.INF
+	var best := ""
 	for id in scene._interiors.doors():
 		var p: Vector3 = scene._interiors.doors()[id].pos
-		if best == Vector3.INF or p.distance_to(npc.global_position) < best.distance_to(npc.global_position):
-			best = p
+		if scene._interiors.locked.has(id) or scene._interiors.doors()[id].kind == "home":
+			continue  # ni a una puerta cerrada ni a tu casa
+		if best.is_empty() or p.distance_to(npc.global_position) < scene._interiors.door_position(best).distance_to(npc.global_position):
+			best = id
 	_walkers.erase(npc)
-	if best == Vector3.INF or best.distance_to(npc.global_position) > 60.0:
+	if best.is_empty() or scene._interiors.door_position(best).distance_to(npc.global_position) > 60.0:
 		npc.queue_free()
 		return
-	npc.walk_to(best)
-	npc.arrived.connect(func(): if is_instance_valid(npc): npc.queue_free(), CONNECT_ONE_SHOT)
+	npc.walk_to(scene._interiors.door_position(best))
+	npc.arrived.connect(func():
+		if not is_instance_valid(npc):
+			return
+		var info: Dictionary = npc.get_meta("passerby", {})
+		Households.add_guest(best, info.get("look", {}), info.get("fem", false), randf_range(40.0, 150.0))
+		Sfx.at(scene, "door", npc.global_position + Vector3(0, 1, 0))
+		npc.queue_free(), CONNECT_ONE_SHOT)
 
 
 ## Le hablas a alguien de paso: pasa a existir de verdad (ficha, memoria, se queda a vivir aquí).
@@ -116,7 +125,12 @@ func promote(npc: TownNPC) -> String:
 	var id := Actions.build_npc(name, job, "Alguien del lugar con quien te cruzaste por la calle.", "¿Sí? ¿Te puedo ayudar en algo?", info.get("look", {}))
 	if id.is_empty():
 		return ""
-	Actions.add_resident(id, npc.global_position)
+	var home := npc.global_position
+	if InteriorManager.is_interior_pos(home):  # la conociste dentro de un edificio: vive por aquí fuera
+		var door: String = info.get("door", scene._interiors.current_door())
+		home = scene._interiors.door_position(door) + Vector3(randf_range(-3, 3), 0, randf_range(2, 4))
+		Households.remove_guest(door, info.get("look", {}))
+	Actions.add_resident(id, home)
 	_walkers.erase(npc)
 	npc.npc_id = id
 	npc.remove_meta("passerby")

@@ -43,6 +43,8 @@ var _walk_limit := 40.0      # si no llega en este tiempo (atascado), se da por 
 var _bubble: Label3D
 var _bubble_t := 0.0
 var _present := true
+var _shape: CollisionShape3D
+var _settled := false      # quieto en un mueble (dormido, sentado, cocinando)
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
 
@@ -59,6 +61,7 @@ func setup(entity: Dictionary) -> void:
 	shape.shape = capsule
 	shape.position.y = HEIGHT * s.y / 2.0
 	add_child(shape)
+	_shape = shape
 
 	_body = Node3D.new()
 	add_child(_body)
@@ -134,6 +137,7 @@ func look_at_target(point: Vector3) -> void:
 
 
 func walk_to(pos: Vector3, run: bool = false, pace: float = 0.0) -> void:
+	unsettle()
 	_follow = null
 	_target = pos
 	_walk_time = 0.0
@@ -172,9 +176,48 @@ func set_present(on: bool) -> void:
 	visible = on
 	process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
 	for c in find_children("*", "CollisionShape3D", true, false):
-		c.set_deferred("disabled", not on)
+		c.set_deferred("disabled", not on or (c == _shape and _settled))
 	if not on:
 		stop()
+
+
+## Se queda en un sitio haciendo algo (dormir en la cama, sentarse en el sofá, cocinar): sin
+## gravedad ni choques con el mueble. Moverse (walk_to, follow) o unsettle() lo levanta.
+func settle(pos: Vector3, look_to: Vector3, gesture: String, text: String) -> void:
+	_target = Vector3.INF
+	_follow = null
+	_settled = true
+	velocity = Vector3.ZERO
+	set_physics_process(false)
+	if _shape:
+		_shape.set_deferred("disabled", true)
+	global_position = pos
+	face(look_to)
+	_name_label.visible = gesture != "sleep"  # tumbado, el nombre quedaría flotando
+	set_activity(text, gesture)
+	if _rig and not gesture.is_empty():
+		_rig.play(gesture, 1.0e6)
+
+
+func unsettle() -> void:
+	if not _settled:
+		return
+	_settled = false
+	_name_label.visible = true
+	set_physics_process(true)
+	if _shape:
+		_shape.set_deferred("disabled", not _present)
+	if _rig:
+		_rig.stop_gesture()
+	global_position += _body.global_basis.z * 0.6 + Vector3(0, 0.2, 0)  # se pone de pie al lado
+
+
+func is_settled() -> bool:
+	return _settled
+
+
+func is_asleep() -> bool:
+	return _settled and activity_gesture == "sleep"
 
 
 func is_present() -> bool:
@@ -182,6 +225,7 @@ func is_present() -> bool:
 
 
 func follow(node: Node3D) -> void:
+	unsettle()
 	_follow = node
 	_target = Vector3.INF
 
@@ -217,7 +261,7 @@ func set_activity(text: String, gesture: String) -> void:
 
 
 func is_idle() -> bool:
-	return _present and not talking and not is_walking() and not is_following()
+	return _present and not talking and not is_walking() and not is_following() and not is_asleep()
 
 
 func current_gesture() -> String:
@@ -270,6 +314,8 @@ func _physics_process(delta: float) -> void:
 			_target = Vector3.INF
 			_speed_override = 0.0
 			arrived.emit()
+			if not _present or _settled:
+				return  # al llegar entró en un edificio (o se sentó): ya no se mueve aquí
 		else:
 			goal = _target
 			if _speed_override > 0.0:

@@ -14,6 +14,11 @@ const SAVE_EVERY := 20.0
 
 ## Esfuerzo actual (1 andar, ~1.8 correr o nadar): cansa más deprisa. Lo pone el jugador.
 var exertion := 1.0
+## Lo que se ve en ti (0..1): mojado (lluvia, nadar, ducha) y sucio (talar, cavar, trabajar).
+var wet := 0.0
+var dirt := 0.0
+## Complexión que cambia despacio con cómo vives (-1 más delgado … +1 más ancho).
+var shape := 0.0
 
 var _values := {"hunger": 85.0, "thirst": 85.0, "rest": 90.0, "hygiene": 90.0}
 var _last_minutes := -1.0
@@ -33,6 +38,7 @@ func _process(delta: float) -> void:
 	_last_minutes = now
 	if minutes > 0.0 and minutes < 60.0 * 24.0 * 3.0:
 		_decay(minutes)
+	_weather(delta)
 	_since_save += delta
 	if _since_save > SAVE_EVERY:
 		_since_save = 0.0
@@ -44,12 +50,19 @@ func _load() -> void:
 	var saved: Dictionary = WorldDB.get_state("body", {})
 	for n in NEEDS:
 		_values[n] = float(saved.get(n, 85.0))
+	wet = float(saved.get("wet", 0.0))
+	dirt = float(saved.get("dirt", 0.0))
+	shape = float(saved.get("shape", 0.0))
 	_last_minutes = WorldClock.absolute_minutes()
 
 
 func save() -> void:
 	if WorldDB.is_loaded():
-		WorldDB.set_state("body", _values.duplicate())
+		var out := _values.duplicate()
+		out["wet"] = snappedf(wet, 0.01)
+		out["dirt"] = snappedf(dirt, 0.01)
+		out["shape"] = snappedf(shape, 0.001)
+		WorldDB.set_state("body", out)
 
 
 func _decay(minutes: float) -> void:
@@ -57,7 +70,47 @@ func _decay(minutes: float) -> void:
 		var rate: float = 100.0 / (HOURS_TO_EMPTY[n] * 60.0)
 		if n == "rest" or n == "thirst":
 			rate *= exertion
+		if n == "hygiene":
+			rate *= 1.0 + dirt * 2.0  # sucio, la higiene se va antes
 		_store(n, _values[n] - rate * minutes)
+	# El cuerpo cambia despacio (semanas de juego): bien comido y sin moverte, te ensanchas; moverte
+	# mucho o pasar hambre te afina. Muy poco por hora.
+	var fed := 1.0 if get_need("hunger") > 75.0 else (-1.0 if get_need("hunger") < 25.0 else 0.0)
+	var active := 1.0 if exertion > 1.2 else 0.0
+	shape = clampf(shape + (fed * 0.6 - active * 1.2 - 0.05) * minutes / (60.0 * 24.0 * 14.0), -1.0, 1.0)
+
+
+## Lluvia y agua: sin techo te mojas; bajo techo o al sol te secas poco a poco.
+func _weather(delta: float) -> void:
+	var player := get_tree().get_first_node_in_group("player") as Node3D
+	if player == null:
+		return
+	var swimming: bool = player.get("_swimming") == true
+	var indoors := player.global_position.y < -300.0  # en un interior (bajo InteriorManager.ORIGIN)
+	if swimming:
+		wet = 1.0
+	elif Weather.is_raining() and not indoors:
+		wet = minf(wet + delta / 40.0, 1.0)   # en menos de un minuto, calado
+	else:
+		wet = maxf(wet - delta / (150.0 if indoors else 240.0), 0.0)
+
+
+## Ensuciarte haciendo algo (talar, cavar, arrodillarte en el suelo, trabajar).
+func soil(amount: float) -> void:
+	dirt = clampf(dirt + amount, 0.0, 1.0)
+
+
+## Ducha: limpio (y un poco mojado, el pelo).
+func shower() -> void:
+	dirt = 0.0
+	wet = maxf(wet, 0.35)
+	set_need("hygiene", 100.0)
+
+
+## Ropa limpia: lo sucio era la ropa, la piel sigue igual (la mitad).
+func set_clean_clothes() -> void:
+	dirt *= 0.5
+	wet *= 0.3
 
 
 func get_need(n: String) -> float:
@@ -111,6 +164,14 @@ func describe() -> String:
 			parts.append(words[n][1])
 		elif v < 45.0:
 			parts.append(words[n][2])
+	if wet > 0.6:
+		parts.append("estás empapado/a")
+	elif wet > 0.25:
+		parts.append("vas algo mojado/a")
+	if dirt > 0.5:
+		parts.append("llevas la ropa manchada de tierra")
+	elif dirt > 0.2:
+		parts.append("tienes la ropa algo sucia")
 	if parts.is_empty():
 		return "Te encuentras bien."
 	var s := ", ".join(parts)

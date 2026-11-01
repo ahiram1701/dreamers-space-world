@@ -62,6 +62,7 @@ var _auto_check := Vector3.ZERO
 var _auto_check_t := 0.0
 var _auto_detour := 0.0
 var _auto_side := 1.0
+var _stuck_t := 0.0   # tiempo intentando moverse sin avanzar
 
 
 func _ready() -> void:
@@ -160,10 +161,44 @@ func rebuild_look() -> void:
 	elif built.rig:
 		_rig = built.rig
 		_rig.footstep.connect(func(_run): Sfx.footstep(self, water_level))
+	_look_mats.clear()
+	if not built.is_empty():  # los materiales que se mojan y se ensucian
+		for mi in (built.model as Node).find_children("*", "MeshInstance3D", true, false):
+			for i in (mi as MeshInstance3D).mesh.get_surface_count():
+				var m := (mi as MeshInstance3D).get_surface_override_material(i) as StandardMaterial3D
+				if m and m.has_meta("part"):
+					_look_mats.append([m, m.albedo_color, m.roughness, str(m.get_meta("part"))])
+	_apply_condition()
 	if lamp_on:
 		set_light(true)
 	if _first_person:
 		_set_body_shadow_only.call_deferred(true)
+
+
+var _look_mats: Array = []   # [material, color base, rugosidad base, "cloth"|"skin"|"hair"]
+var _condition_t := 0.0
+const MUD := Color("#5a4630")
+
+
+## Se te ve como estás: la ropa mojada se oscurece y brilla, el barro la mancha, y con los meses
+## la complexión cambia un poco según cómo vives (Body).
+func _apply_condition() -> void:
+	var w := Body.wet
+	var d := Body.dirt
+	for e in _look_mats:
+		var m: StandardMaterial3D = e[0]
+		var base: Color = e[1]
+		match e[3]:
+			"cloth":
+				m.albedo_color = base.darkened(0.35 * w).lerp(MUD, 0.45 * d)
+				m.roughness = lerpf(e[2], 0.28, w * 0.8)
+			"skin":
+				m.albedo_color = base.lerp(MUD, 0.18 * d)
+				m.roughness = lerpf(e[2], 0.35, w * 0.5)
+			"hair":
+				m.albedo_color = base.darkened(0.3 * w)
+	var wide := 1.0 + Body.shape * 0.06
+	_body.scale = Vector3(wide, 1.0, wide)
 
 
 ## Linterna o farol encendido: una luz que te acompaña.
@@ -185,9 +220,28 @@ func set_light(on: bool) -> void:
 		_lamp.visible = on
 
 
-func play_gesture(gesture: String, duration: float = -1.0) -> void:
+## provided: la herramienta te la dan (en el trabajo); si no, solo sale si la tienes.
+func play_gesture(gesture: String, duration: float = -1.0, provided: bool = false) -> void:
 	if _rig:
-		_rig.play(gesture, duration)
+		_rig.play(gesture, duration, provided or has_tool_for(gesture))
+	Body.soil(DIRTY.get(gesture, 0.0))
+
+
+## Cuánto ensucia cada cosa que haces con las manos o en el suelo.
+const DIRTY := {"chop": 0.12, "dig": 0.2, "hammer": 0.06, "kneel": 0.05, "crouch": 0.03, "search": 0.03, "pick_up": 0.02}
+
+
+## Qué objeto hace falta para que se vea la herramienta del gesto ("" = siempre la llevas).
+const TOOL_ITEMS := {"chop": ["hacha"], "dig": ["pala"], "hammer": ["martillo", "hacha", "herramienta"], "fish": ["caña", "cana"]}
+
+
+func has_tool_for(gesture: String) -> bool:
+	if not TOOL_ITEMS.has(gesture):
+		return true
+	for word in TOOL_ITEMS[gesture]:
+		if not Inventory.find_by_name(word).is_empty():
+			return true
+	return false
 
 
 func stop_gesture() -> void:
@@ -327,6 +381,10 @@ func _auto_direction(delta: float) -> Vector3:
 
 
 func _process(delta: float) -> void:
+	_condition_t += delta
+	if _condition_t > 0.5:
+		_condition_t = 0.0
+		_apply_condition()
 	if controls_enabled:
 		var look := Controls.look_vector()
 		if look != Vector2.ZERO:
@@ -411,13 +469,35 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.x = move_toward(velocity.x, 0, speed * 8.0 * delta)
 		velocity.z = move_toward(velocity.z, 0, speed * 8.0 * delta)
+	var before := global_position
 	move_and_slide()
+	_check_stuck(dir, speed, before, delta)
 	if _rig:
 		_rig.speed = Vector2(velocity.x, velocity.z).length()
 		_rig.airborne = not is_on_floor() and not swimming and velocity.y > -12.0
 		_rig.swimming = swimming
 		if dir != Vector3.ZERO and _rig.gesture() in ["sit", "sleep", "crouch", "search", "chop", "hammer", "dig", "fish", "think", "kneel", "read", "write", "listen"]:
 			_rig.stop_gesture()  # moverse interrumpe lo que estaba haciendo
+
+
+## Si llevas un rato empujando sin avanzar y estás metido dentro de algo (un arbusto, un mueble),
+## te saca al hueco libre más cercano. Contra una pared normal no hace nada: ahí no estás dentro.
+func _check_stuck(dir: Vector3, speed: float, before: Vector3, delta: float) -> void:
+	if dir == Vector3.ZERO or riding != null or _swimming:
+		_stuck_t = maxf(_stuck_t - delta, 0.0)
+		return
+	var moved := Vector2(global_position.x - before.x, global_position.z - before.z).length()
+	if moved < speed * delta * 0.15:
+		_stuck_t += delta
+	else:
+		_stuck_t = maxf(_stuck_t - delta * 2.0, 0.0)
+	if _stuck_t < 1.0:
+		return
+	_stuck_t = 0.0
+	var feet := global_position
+	if not InteriorManager.is_free(self, feet, [self], 0.26):  # de verdad estás dentro de algo
+		global_position = InteriorManager.free_spot_near(self, feet, dir, [self]) + Vector3(0, 0.15, 0)
+		velocity = Vector3.ZERO
 
 
 func _mat(c: Color) -> StandardMaterial3D:

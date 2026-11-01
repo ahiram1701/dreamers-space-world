@@ -19,16 +19,28 @@ const SPINE := ["Hips", "Abdomen", "Torso", "Chest", "Neck", "Head"]
 const BLEND := 0.25            # segundos para entrar o salir de un gesto
 ## Gestos que duran hasta que se paran (los demás son de un par de segundos).
 const LOOPING := ["chop", "hammer", "dig", "search", "fish", "dance", "sleep", "sit", "crouch", "row", "swim", "think", "cross_arms",
-	"kneel", "write", "read", "listen", "call", "hug", "wipe"]
+	"kneel", "write", "read", "listen", "call", "hug", "wipe", "cook", "sit_eat", "sit_read"]
 
 ## Cada vez que un pie toca el suelo al andar o correr (para el sonido de los pasos).
 signal footstep(running: bool)
-## Herramienta en la mano derecha durante el gesto: [modelo, altura en m, giro en grados]
+## Herramienta en la mano derecha durante el gesto: [modelo, largo en m, dónde la agarra la mano
+## derecha y dónde la izquierda (fracción del largo desde el extremo del mango; < 0: una sola mano)].
+## La dirección de la herramienta es la del antebrazo girada "_tool" grados (lo marca cada gesto):
+## la muñeca se dobla al levantar el hacha y se estira al golpear.
 const TOOLS := {
-	"chop": ["survival_pack/Axe", 0.75, Vector3(0, 0, -90)], "dig": ["survival_pack/Shovel", 1.1, Vector3(0, 0, -90)],
-	"hammer": ["survival_pack/Axe_Small", 0.38, Vector3(0, 0, -90)], "fish": ["", 1.8, Vector3(0, 0, -60)],
-	"drink": ["survival_pack/WaterBottle_1", 0.22, Vector3.ZERO], "row": ["survival_pack/Raft_Paddle", 1.4, Vector3(90, 0, 0)],
+	"chop": ["survival_pack/Axe", 0.75, 0.2, 0.05], "dig": ["survival_pack/Shovel", 1.1, 0.04, 0.42],
+	"hammer": ["survival_pack/Axe_Small", 0.38, 0.22, -1.0], "fish": ["", 1.8, 0.08, 0.24],
+	"drink": ["survival_pack/WaterBottle_1", 0.22, 0.45, -1.0], "row": ["survival_pack/Raft_Paddle", 1.4, 0.12, 0.45],
+	"call": ["survival_pack/Phone", 0.14, 0.5, -1.0], "read": ["survival_pack/Phone", 0.14, 0.5, -1.0],
+	"sit_read": ["survival_pack/Phone", 0.14, 0.5, -1.0],
 }
+const TOOL_ANGLE := {"sit_read": 10.0, "chop": 60.0, "dig": -35.0, "hammer": 70.0, "fish": 80.0, "drink": -90.0, "row": -70.0, "call": -15.0, "read": 10.0}
+const FINGERS := ["Index2", "Index3", "Index4", "Middle2", "Middle3", "Middle4", "Ring2", "Ring3", "Ring4",
+	"Pinky2", "Pinky3", "Pinky4", "Thumb2", "Thumb3"]
+const PALM := 0.075   # de la muñeca al centro de la palma (m)
+static var _shapes := {}   # análisis de la forma de cada modelo de herramienta (mango, cabeza)
+## Si los dedos se cierran hacia la palma con el signo + (se decide al cargar, ver _finger_sign)
+static var finger_sign := 1.0
 
 var speed := 0.0
 var airborne := false
@@ -69,7 +81,12 @@ var _gesture_t := 0.0
 var _gesture_len := 0.0
 var _gesture_w := 0.0
 var _tool: Node3D
-var _hand_attach: BoneAttachment3D
+var _tool_shape := {}
+var _grip := 0.0      # fracción del mango donde agarra la derecha
+var _second := -1.0   # y la izquierda (< 0: no la usa)
+var _tool_len := 0.0
+var _fingers := {}    # hueso del dedo -> [índice, rotación base]
+var _grip_w := 0.0    # cuánto se cierra el puño
 
 
 func setup(model: Node3D) -> bool:
@@ -97,22 +114,29 @@ func setup(model: Node3D) -> bool:
 		_base[b] = _sk.get_bone_pose_rotation(_idx[b])
 		_parent_of[b] = _sk.get_bone_parent(_idx[b])
 		_pose[b] = Vector3.ZERO
+	for side in [".L", ".R"]:
+		for f in FINGERS:
+			var fi := _sk.find_bone(f + side)
+			if fi != -1:
+				_fingers[f + side] = [fi, _sk.get_bone_pose_rotation(fi)]
 	_pose["_y"] = 0.0
 	_pose["_lie"] = 0.0
 	_pose["_swim"] = 0.0
+	_pose["_tool"] = 0.0
 	_phase = randf() * TAU
 	_t = randf() * 10.0
 	return true
 
 
 ## Empieza un gesto. duration < 0: el de por defecto (los de bucle duran hasta stop_gesture()).
-func play(gesture: String, duration: float = -1.0) -> void:
+## with_tool: false si no tiene con qué (lo hace con las manos vacías).
+func play(gesture: String, duration: float = -1.0, with_tool: bool = true) -> void:
 	if _sk == null or gesture.is_empty():
 		return
 	_gesture = gesture
 	_gesture_t = 0.0
 	_gesture_len = duration if duration > 0.0 else (INF if gesture in LOOPING else 2.2)
-	_set_tool(gesture)
+	_set_tool(gesture if with_tool else "")
 
 
 func stop_gesture() -> void:
@@ -154,6 +178,8 @@ func _process(delta: float) -> void:
 			_set_tool("")
 		else:
 			var gp := _gesture_pose(_gesture, _gesture_t)
+			if not gp.has("_tool"):
+				gp["_tool"] = TOOL_ANGLE.get(_gesture, 0.0)
 			_mix(target, gp, _gesture_w)
 			for k in _bend:
 				if gp.has(k):
@@ -171,6 +197,11 @@ func _process(delta: float) -> void:
 	for key in target:
 		_pose[key] = lerp(_pose.get(key, target[key] * 0.0), target[key], k)
 	_apply()
+	_grip_w = move_toward(_grip_w, _gesture_w if _tool else 0.0, delta * 5.0)
+	_hand_to_face()
+	if _tool:
+		_place_tool()
+	_curl_fingers()
 
 
 # --- Capa 1: locomoción --------------------------------------------------------------
@@ -259,6 +290,7 @@ func _gesture_pose(g: String, t: float) -> Dictionary:
 			var cyc := fmod(t, 1.2) / 1.2
 			var up := smoothstep(0.0, 0.55, cyc) - smoothstep(0.62, 0.78, cyc)
 			_both_arms(p, Vector3(40 + up * 120, 0, -8), Vector3(20 + up * 30, 0, 0))
+			p["_tool"] = 20.0 + up * 85.0   # arriba, la muñeca doblada; al golpear, el hacha sigue al brazo
 			p["Torso"] = Vector3(25 - up * 30, 15 - up * 15, 0)
 			p["Chest"] = Vector3(8, 0, 0)
 			_legs_apart(p, 12)
@@ -268,6 +300,7 @@ func _gesture_pose(g: String, t: float) -> Dictionary:
 			var hit := absf(sin(t * 5.0))
 			p["UpperArm.R"] = Vector3(55 + hit * 35, 0, 5)
 			p["LowerArm.R"] = Vector3(60 - hit * 30, 0, 0)
+			p["_tool"] = 45.0 + hit * 40.0
 			p["UpperArm.L"] = Vector3(45, 0, -5)
 			p["LowerArm.L"] = Vector3(55, 0, 0)
 			_kneel(p, 0.55)
@@ -275,6 +308,7 @@ func _gesture_pose(g: String, t: float) -> Dictionary:
 		"dig":
 			var cyc := sin(t * 2.4)
 			_both_arms(p, Vector3(55 + cyc * 25, 0, -5), Vector3(30 - cyc * 15, 0, 0))
+			p["_tool"] = -35.0 - cyc * 10.0
 			p["Torso"] = Vector3(30 + cyc * 12, 0, 0)
 			_legs_apart(p, 10)
 			p["UpperLeg.L"] = Vector3(20, 0, 8)
@@ -287,7 +321,7 @@ func _gesture_pose(g: String, t: float) -> Dictionary:
 				p["LowerArm.R"] = Vector3(20, 0, 0)
 				p["LowerArm.L"] = Vector3(25, 0, 0)
 				p["Head"] = Vector3(25, w * 15, 0)
-		"sit", "row":
+		"sit", "row", "sit_eat", "sit_read":
 			p["_y"] = -0.48
 			p["UpperLeg.L"] = Vector3(88, 0, 6)
 			p["UpperLeg.R"] = Vector3(88, 0, 6)
@@ -297,6 +331,19 @@ func _gesture_pose(g: String, t: float) -> Dictionary:
 			p["UpperArm.R"] = Vector3(25, 0, 6)
 			p["LowerArm.L"] = Vector3(40, 0, 0)
 			p["LowerArm.R"] = Vector3(40, 0, 0)
+			if g == "sit_eat":  # come a la mesa: la mano va del plato a la boca
+				var lift := 0.5 + 0.5 * sin(t * 1.4)
+				p["UpperArm.R"] = Vector3(30 + lift * 20, 0, 10)
+				p["LowerArm.R"] = Vector3(70 + lift * 55, 0, 0)
+				p["UpperArm.L"] = Vector3(35, 0, 8)
+				p["LowerArm.L"] = Vector3(60, 0, 0)
+				p["Head"] = Vector3(12 - 8 * lift, 0, 0)
+			elif g == "sit_read":
+				p["UpperArm.R"] = Vector3(30, 0, 8)
+				p["LowerArm.R"] = Vector3(80, 0, 0)
+				p["UpperArm.L"] = Vector3(30, 0, 8)
+				p["LowerArm.L"] = Vector3(80, 0, 0)
+				p["Head"] = Vector3(25, 0, 0)
 			if g == "row":
 				var pull := sin(t * 2.2)
 				_both_arms(p, Vector3(55 + pull * 30, 0, 10), Vector3(35 - pull * 30, 0, 0))
@@ -314,6 +361,7 @@ func _gesture_pose(g: String, t: float) -> Dictionary:
 			var lift := 0.6 + 0.4 * sin(t * 1.6)
 			p["UpperArm.R"] = Vector3(35 + lift * 20, 0, 12)
 			p["LowerArm.R"] = Vector3(70 + lift * 60, 0, 0)
+			p["_tool"] = -90.0 + lift * 60.0   # la botella se inclina al beber
 			p["Head"] = Vector3(-10 * lift, 0, 0)
 		"wave":
 			p["UpperArm.R"] = Vector3(20, 0, 145)
@@ -431,6 +479,21 @@ func _gesture_pose(g: String, t: float) -> Dictionary:
 			p["UpperArm.L"] = Vector3(30, 0, 8)
 			p["LowerArm.L"] = Vector3(80, 0, 0)
 			p["Head"] = Vector3(28, 0, 0)
+		"wipe":  # limpiar una barra o una mesa: la mano en círculos
+			var c := t * 3.0
+			p["UpperArm.R"] = Vector3(45 + sin(c) * 8, 0, 10 + cos(c) * 10)
+			p["LowerArm.R"] = Vector3(55, 0, 0)
+			p["UpperArm.L"] = Vector3(30, 0, 8)
+			p["LowerArm.L"] = Vector3(50, 0, 0)
+			p["Torso"] = Vector3(14, 0, 0)
+			p["Head"] = Vector3(18, 0, 0)
+		"cook":  # delante del fogón: remueve con una mano y sujeta con la otra
+			p["UpperArm.R"] = Vector3(38, 0, 10 + sin(t * 4.0) * 6)
+			p["LowerArm.R"] = Vector3(75 + sin(t * 4.0) * 10, 0, 0)
+			p["UpperArm.L"] = Vector3(32, 0, 6)
+			p["LowerArm.L"] = Vector3(80, 0, 0)
+			p["Torso"] = Vector3(8, 0, 0)
+			p["Head"] = Vector3(24, sin(t * 0.6) * 10, 0)
 		"listen", "call":  # una radio o un teléfono junto a la oreja
 			p["UpperArm.R"] = Vector3(25, 0, 62)
 			p["LowerArm.R"] = Vector3(140, 0, 0)
@@ -525,42 +588,179 @@ func _set_tool(g: String) -> void:
 	if _tool:
 		_tool.queue_free()
 		_tool = null
-	if not TOOLS.has(g) or not is_inside_tree():
+	if not TOOLS.has(g) or not is_inside_tree() or _model == null:
 		return
-	if _hand_attach == null:
-		_hand_attach = BoneAttachment3D.new()
-		_hand_attach.bone_name = "Hand.R"
-		_sk.add_child(_hand_attach)
 	var spec: Array = TOOLS[g]
 	var model: Node3D = null
-	var b := AABB(Vector3(-0.025, -0.5, -0.025), Vector3(0.05, 1.0, 0.05))
 	if not str(spec[0]).is_empty():
 		var parts := str(spec[0]).split("/")
 		model = AssetLibrary.instance(parts[0], parts[1])
-		if model:
-			b = AssetLibrary.bounds(model)
 	if model == null:  # caña o herramienta sin modelo: una vara
 		model = MeshInstance3D.new()
 		var rod := CylinderMesh.new()
-		rod.top_radius = 0.01
-		rod.bottom_radius = 0.025
+		rod.top_radius = 0.008
+		rod.bottom_radius = 0.022
 		rod.height = 1.0
 		(model as MeshInstance3D).mesh = rod
 		var m := StandardMaterial3D.new()
 		m.albedo_color = Color("#6b4a2b")
 		(model as MeshInstance3D).material_override = m
-	_tool = Node3D.new()
-	_hand_attach.add_child(_tool)
-	var holder := Node3D.new()
-	_tool.add_child(holder)
-	var s: float = float(spec[1]) / maxf(maxf(b.size.x, b.size.y), maxf(b.size.z, 0.01))  # por su lado más largo
-	model.scale = Vector3.ONE * s
-	model.position = -b.get_center() * s
-	holder.add_child(model)
-	holder.rotation_degrees = spec[2]
-	# Contrarrestar la escala del esqueleto (el armature viene escalado ~100x) para que la
-	# herramienta mida lo que debe. El esqueleto ya está en el árbol; el BoneAttachment aún no.
-	_tool.scale = Vector3.ONE / maxf(_sk.global_basis.get_scale().x, 0.0001)
+	_tool_shape = _shape_of(str(spec[0]), model)
+	_tool_len = float(spec[1])
+	_grip = float(spec[2])
+	_second = float(spec[3])
+	# Fuera de la jerarquía de huesos: se coloca cada frame según el antebrazo (ver _place_tool)
+	_tool = model
+	_tool.top_level = true
+	_model.add_child(_tool)
+	_place_tool()
+
+
+## Pone la herramienta en la palma derecha, en la dirección del antebrazo girada "_tool" grados,
+## con la cabeza (filo, pala) hacia donde va el golpe. Si es de dos manos, la izquierda va al mango.
+func _place_tool() -> void:
+	var sh := _tool_shape
+	var to_world := _sk.global_transform
+	var elbow := _sk.get_bone_global_pose(_idx["LowerArm.R"]).origin
+	var wrist := _sk.get_bone_global_pose(_idx["Hand.R"]).origin
+	var fore := (wrist - elbow).normalized()
+	var aim := Quaternion(_pitch_axis, deg_to_rad(float(_pose.get("_tool", 0.0)))) * fore
+	var lead := Quaternion(_pitch_axis, -PI / 2) * aim   # hacia donde avanza el golpe
+	var d_w := (to_world.basis * aim).normalized()
+	var h_w := (to_world.basis * lead).normalized()
+	h_w = (h_w - d_w * h_w.dot(d_w)).normalized()
+	var palm_w := to_world * wrist + (to_world.basis * fore).normalized() * PALM
+	var local_b := Basis(sh.long, sh.head, sh.long.cross(sh.head))
+	var world_b := Basis(d_w, h_w, d_w.cross(h_w))
+	var rot := world_b * local_b.inverse()
+	var s: float = _tool_len / sh.length
+	var grip_local: Vector3 = sh.start + sh.long * sh.length * _grip
+	_tool.global_transform = Transform3D(rot * Basis.from_scale(Vector3.ONE * s), palm_w - rot * (grip_local * s))
+	if _second >= 0.0 and _gesture_w > 0.01:
+		var hold_w := palm_w + d_w * (_second - _grip) * _tool_len
+		_reach("UpperArm.L", "LowerArm.L", "Hand.L", to_world.affine_inverse() * hold_w, _gesture_w)
+
+
+## Beber y hablar por teléfono: la mano derecha va de verdad a la boca o a la oreja.
+func _hand_to_face() -> void:
+	if _gesture_w <= 0.01 or not (_gesture in ["drink", "eat", "call", "listen", "sit_eat"]):
+		return
+	var head := _sk.get_bone_global_pose(_idx["Head"]).origin
+	var neck := _sk.get_bone_global_pose(_idx["Neck"]).origin
+	var up := (head - neck).normalized()
+	var unit := 1.0 / maxf(_sk.global_basis.get_scale().y, 0.0001)   # 1 m en unidades del esqueleto
+	var target: Vector3
+	if _gesture in ["call", "listen"]:
+		target = head + up * 0.06 * unit + _side * 0.11 * unit
+	else:
+		var lift := 0.6 + 0.4 * sin(_gesture_t * 1.6)   # acerca y aleja la botella
+		target = head + up * 0.02 * unit + _fwd * (0.16 + 0.12 * (1.0 - lift)) * unit + _side * 0.03 * unit - up * 0.12 * (1.0 - lift) * unit
+	_reach("UpperArm.R", "LowerArm.R", "Hand.R", target, _gesture_w)
+
+
+## IK de dos huesos: lleva la palma de la mano a `target` (espacio del esqueleto), con el codo hacia
+## fuera y abajo. `w`: cuánto (se mezcla con la pose que ya tiene).
+func _reach(upper: String, lower: String, hand: String, target: Vector3, w: float) -> void:
+	var s := _sk.get_bone_global_pose(_idx[upper]).origin
+	var e := _sk.get_bone_global_pose(_idx[lower]).origin
+	var h := _sk.get_bone_global_pose(_idx[hand]).origin
+	var l1 := s.distance_to(e)
+	var palm := PALM / maxf(_sk.global_basis.get_scale().y, 0.0001)
+	var l2 := e.distance_to(h) + palm
+	var to := target - s
+	var d := clampf(to.length(), absf(l1 - l2) + 0.001, l1 + l2 - 0.001)
+	var dir := to.normalized()
+	var a := (l1 * l1 + d * d - l2 * l2) / (2.0 * d)
+	var lift := sqrt(maxf(l1 * l1 - a * a, 0.0))
+	var out := -_side if upper.ends_with(".L") else _side
+	var pole := (out + _down * 0.6 - _fwd * 0.3)
+	pole = (pole - dir * pole.dot(dir)).normalized()
+	var elbow := s + dir * a + pole * lift
+	_aim(upper, lower, (elbow - s).normalized(), w)
+	_aim(lower, hand, (s + dir * d - elbow).normalized(), w)
+
+
+## Cierra los dedos alrededor de lo que lleva en la mano derecha (y en la izquierda si la usa).
+func _curl_fingers() -> void:
+	if _fingers.is_empty():
+		return
+	for key in _fingers:
+		var both := _second >= 0.0
+		var w := _grip_w if (key.ends_with(".R") or both) else 0.0
+		var fi: int = _fingers[key][0]
+		if w <= 0.001:
+			_sk.set_bone_pose_rotation(fi, _fingers[key][1])
+			continue
+		var thumb: bool = key.begins_with("Thumb")
+		var deg := (35.0 if thumb else 75.0) * w * finger_sign
+		var pg := _sk.get_bone_global_pose(_sk.get_bone_parent(fi)).basis.orthonormalized().get_rotation_quaternion()
+		var hand_side := ".L" if key.ends_with(".L") else ".R"
+		var across := (_sk.get_bone_global_pose(_sk.find_bone("Index2" + hand_side)).origin
+			- _sk.get_bone_global_pose(_sk.find_bone("Pinky2" + hand_side)).origin).normalized()
+		var axis := across if not thumb else (_sk.get_bone_global_pose(_idx["Hand" + hand_side]).origin
+			- _sk.get_bone_global_pose(_idx["LowerArm" + hand_side]).origin).normalized()
+		if hand_side == ".L":
+			axis = -axis
+		var q := Quaternion(axis, deg_to_rad(deg))
+		_sk.set_bone_pose_rotation(fi, (pg.inverse() * q * pg) * _fingers[key][1])
+
+
+## Forma de una herramienta (en espacio del modelo): eje largo del mango a la cabeza, hacia qué
+## lado sale la cabeza, dónde empieza el mango y el largo. El mango es el extremo más fino.
+static func _shape_of(key: String, model: Node3D) -> Dictionary:
+	if _shapes.has(key) and not key.is_empty():
+		return _shapes[key]
+	var pts := PackedVector3Array()
+	var meshes: Array = [model] if model is MeshInstance3D else AssetLibrary._meshes(model)
+	for mi in meshes:
+		var t := Transform3D.IDENTITY
+		var n: Node = mi
+		while n != model and n != null:
+			if n is Node3D:
+				t = (n as Node3D).transform * t
+			n = n.get_parent()
+		if mi == model:
+			t = Transform3D.IDENTITY
+		for v in (mi as MeshInstance3D).mesh.get_faces():
+			pts.append(t * v)
+	var box := AABB(pts[0], Vector3.ZERO)
+	for v in pts:
+		box = box.expand(v)
+	var ax := box.get_longest_axis_index()
+	var axis := Vector3.ZERO
+	axis[ax] = 1.0
+	var length: float = box.size[ax]
+	var lo := box.position[ax]
+	var hi := lo + length
+	# Lo que hay en cada punta (15 % del largo): centro y grosor
+	var ends := [[Vector3.ZERO, 0, AABB()], [Vector3.ZERO, 0, AABB()]]
+	for v in pts:
+		var which := 0 if v[ax] < lo + length * 0.15 else (1 if v[ax] > hi - length * 0.15 else -1)
+		if which < 0:
+			continue
+		var e: Array = ends[which]
+		e[2] = AABB(v, Vector3.ZERO) if e[1] == 0 else (e[2] as AABB).expand(v)
+		e[0] += v
+		e[1] += 1
+	var thick := func(e: Array) -> float:
+		var sz: Vector3 = (e[2] as AABB).size
+		sz[ax] = 0.0
+		return sz.length()
+	var handle_lo: bool = thick.call(ends[0]) <= thick.call(ends[1])
+	var hc: Vector3 = ends[0 if handle_lo else 1][0] / maxf(ends[0 if handle_lo else 1][1], 1)
+	var kc: Vector3 = ends[1 if handle_lo else 0][0] / maxf(ends[1 if handle_lo else 0][1], 1)
+	var long := axis if handle_lo else -axis
+	var head := kc - hc
+	head -= long * head.dot(long)
+	if head.length() < length * 0.02:  # simétrica (botella, celular): cualquier lado perpendicular
+		head = Vector3(1, 0, 0) if ax != 0 else Vector3(0, 1, 0)
+	head = head.normalized()
+	var start := hc
+	start[ax] = lo if handle_lo else hi
+	var out := {"long": long, "head": head, "start": start, "length": maxf(length, 0.001)}
+	if not key.is_empty():
+		_shapes[key] = out
+	return out
 
 
 # --- Utilidades -----------------------------------------------------------------------
@@ -569,6 +769,7 @@ func _empty() -> Dictionary:
 	var p := {}
 	for b in BONES:
 		p[b] = Vector3.ZERO
+	p["_tool"] = 0.0
 	p["_y"] = 0.0
 	p["_lie"] = 0.0
 	p["_swim"] = 0.0
@@ -616,11 +817,13 @@ func _kneel(p: Dictionary, depth: float) -> void:
 	p["Foot.R"] = Vector3(40, 0, 0)
 
 
-## Orienta un hueso para que apunte hacia `dir` (en espacio del esqueleto).
-func _aim(bone: String, child: String, dir: Vector3) -> void:
+## Orienta un hueso para que apunte hacia `dir` (en espacio del esqueleto); `w` < 1: solo en parte.
+func _aim(bone: String, child: String, dir: Vector3, w: float = 1.0) -> void:
 	var i: int = _idx[bone]
 	var g := _sk.get_bone_global_pose(i)
 	var cur := (_sk.get_bone_global_pose(_idx[child]).origin - g.origin).normalized()
+	if w < 1.0:
+		dir = cur.slerp(dir.normalized(), clampf(w, 0.0, 1.0))
 	var new_basis := Basis(Quaternion(cur, dir)) * g.basis.orthonormalized()
 	var parent := _sk.get_bone_parent(i)
 	var pg := _sk.get_bone_global_pose(parent).basis.orthonormalized() if parent >= 0 else Basis()

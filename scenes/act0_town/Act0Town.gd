@@ -34,6 +34,8 @@ var _activities: Dictionary = {}  # npc_id -> {sitio: [qué hace, gesto]}
 var _homes: Dictionary = {}       # npc_id -> id de la puerta de su casa
 var _removed: Array = []         # los que ya talaste (no vuelven)
 var _house_count := 0
+var _going_home := {}
+var _shops_to_open := [["clothes", "la tienda de ropa", "Ropa"], ["salon", "la peluquería", "Peluquería"]]  # en casas de la calle   # npc_id -> true mientras camina a su casa para dormir
 
 
 func _ready() -> void:
@@ -138,6 +140,13 @@ func _shop_hours() -> void:
 	var open := h >= 7.0 and h < 22.0
 	if not NPCMemory.is_locked_in("npc_teo"):
 		_interiors.set_locked("cafe", "" if open else "La cafetería está cerrada. Abre a las 7:00.")
+	var shop_open := h >= 9.0 and h < 20.0
+	for id in _interiors.doors():
+		var kind: String = _interiors.doors()[id].kind
+		if kind in ["clothes", "salon"]:
+			var label := _interiors.door_label(id)
+			label = label.left(1).to_upper() + label.substr(1)
+			_interiors.set_locked(id, "" if shop_open else "%s está cerrada. Abre de 9:00 a 20:00." % label)
 
 
 ## De quién es cada casa (para reaccionar si entras sin permiso).
@@ -146,7 +155,14 @@ func owner_of_door(door: String) -> String:
 		var home: String = _homes[id]
 		if home == door or (not home.is_empty() and _interiors.door_of_kind(home) == door):
 			return id
-	return ""
+	return super(door)  # la familia que vive en esa casa
+
+
+func home_door_of(npc_id: String) -> String:
+	var home: String = _homes.get(npc_id, "")
+	if home.is_empty():
+		return super(npc_id)
+	return home if _interiors.doors().has(home) else _interiors.door_of_kind(home)
 
 
 func ground_at(x: float, z: float) -> float:
@@ -157,8 +173,11 @@ func scene_context() -> String:
 	return SCENE_CONTEXT
 
 
-## Si un vecino se mete "en casa" sin decir dónde, va al edificio de su rutina (Teo, a la cafetería).
+## Si un vecino se mete "dentro" sin decir dónde, va a su casa (o, si no tiene, a su trabajo).
 func _npc_home_door(npc_id: String) -> String:
+	var home := home_door_of(npc_id)
+	if not home.is_empty():
+		return home
 	for slot in _schedules.get(npc_id, []):
 		var kind: String = INDOOR.get(slot[1], "")
 		if not kind.is_empty() and kind != "home":
@@ -170,7 +189,7 @@ func _after_dialogue(npc_id: String) -> void:
 	var p := _progress()
 	if not (npc_id in p.talked):
 		p.talked.append(npc_id)
-	p.awakening_ready = p.talked.size() >= _npcs.size()
+	p.awakening_ready = _base_talked(p) >= _schedules.size()
 	WorldDB.set_state("act0", p)
 	_update_objective()
 
@@ -182,7 +201,12 @@ func _update_objective() -> void:
 	elif p.awakening_ready:
 		_set_objective("Son casi las 3:33. Ve al faro.")
 	else:
-		_set_objective("Habla con tus vecinos (%d/%d)" % [p.talked.size(), _npcs.size()])
+		_set_objective("Habla con tus vecinos (%d/%d)" % [_base_talked(p), _schedules.size()])
+
+
+## Cuántos de tus vecinos de siempre (los del Acto 0) te conocen ya.
+func _base_talked(p: Dictionary) -> int:
+	return p.talked.filter(func(id): return _schedules.has(id)).size()
 
 
 func _on_lighthouse_entered(body: Node3D) -> void:
@@ -208,69 +232,97 @@ func _on_lighthouse_entered(body: Node3D) -> void:
 
 ## Rutinas: cada vecino va a su sitio según la hora (salvo si te acompaña o está hablando).
 func _follow_schedules(teleport: bool) -> void:
+	for id in _npcs.keys():
+		_follow_one(id, teleport)
+
+
+func _follow_one(id: String, teleport: bool) -> void:
 	var h := WorldClock.hour()
-	for id in _npcs:
-		var npc: TownNPC = _npcs[id]
-		if npc_busy(id):
-			continue  # se fue o se encerró: no sigue su rutina hasta que salga
-		if NPCMemory.is_following(id):
-			if teleport:
-				npc.global_position = _player.global_position + Vector3(1.5, 0.3, 1.0)
-			npc.follow(_player)
-			continue
-		var plan: Array = _schedules.get(id, [])
-		if plan.is_empty() or npc.talking:
-			continue
-		var place: String = plan[plan.size() - 1][1]  # antes de la primera hora: donde acabó ayer
-		for slot in plan:
-			if h >= float(slot[0]):
-				place = slot[1]
-		var act: Array = _activities.get(id, {}).get(place, ["", ""])
-		npc.set_activity(act[0], act[1])
-		var night := h >= 23.0 or h < 7.0
-		# Dentro de un edificio: su casa ("casa") o un sitio cubierto (la cafetería, la estación…)
-		var door_id := ""
-		if place == "casa":
-			door_id = _homes.get(id, "")
-		elif INDOOR.has(place):
-			door_id = _interiors.door_of_kind(INDOOR[place])
-		var target := place_position(place) + Vector3(randf_range(-2, 2), 0, randf_range(-2, 2)) if place != "casa" else Vector3.INF
-		if not door_id.is_empty():
-			if _interiors.current_door() == door_id:  # estás dentro: está ahí, en su sitio
-				npc.set_present(true)
-				npc.stop()
-				npc.global_position = _interiors.npc_spot(_npcs.keys().find(id)) + Vector3(0, 0.2, 0)
-				continue
-			if night:  # de noche está dentro (no se le ve en la calle)
-				npc.set_present(false)
-				continue
-			npc.set_present(true)
-			var door := _interiors.door_position(door_id)
-			if door != Vector3.INF:  # de día y estás fuera: lo ves junto a la puerta
-				target = door + Vector3(randf_range(-2, 2), 0, randf_range(1.5, 3))
-				target.y = _ground_height(target.x, target.z)
-		elif not npc.is_present():
-			npc.set_present(true)
-		if target == Vector3.INF:
-			continue
-		# Llueve y su sitio está a la intemperie: se resguarda bajo el alero de la puerta más cercana
-		if door_id.is_empty() and Weather.is_raining():
-			var best := Vector3.INF
-			for d in _interiors.doors():
-				var p: Vector3 = _interiors.doors()[d].pos
-				if best == Vector3.INF or p.distance_to(npc.global_position) < best.distance_to(npc.global_position):
-					best = p
-			if best != Vector3.INF:
-				target = best + Vector3(randf_range(-1.2, 1.2), 0, randf_range(0.6, 1.4))
-				target.y = _ground_height(target.x, target.z)
-				npc.set_activity("resguardándose de la lluvia", "cross_arms")
-				if not teleport and npc.global_position.distance_to(target) > 2.0:
-					npc.walk_to(target, true)  # deprisa, que se moja
-					continue
+	var npc: TownNPC = _npcs[id]
+	if npc_busy(id):
+		return  # se fue o se encerró: no sigue su rutina hasta que salga
+	if _going_home.has(id):
+		if not teleport:
+			return  # sigue caminando a casa
+		_going_home.erase(id)
+		npc.stop()
+	if NPCMemory.is_following(id):
 		if teleport:
-			npc.global_position = target + Vector3(0, 0.2, 0)
-		elif npc.global_position.distance_to(target) > 4.0:
-			npc.walk_to(target)
+			npc.global_position = _player.global_position + Vector3(1.5, 0.3, 1.0)
+		npc.follow(_player)
+		return
+	var plan: Array = _schedules.get(id, [])
+	if plan.is_empty() or npc.talking:
+		return
+	var place: String = plan[plan.size() - 1][1]  # antes de la primera hora: donde acabó ayer
+	for slot in plan:
+		if h >= float(slot[0]):
+			place = slot[1]
+	var act: Array = _activities.get(id, {}).get(place, ["", ""])
+	npc.set_activity(act[0], act[1])
+	var night := h >= 23.0 or h < 7.0
+	# Dentro de un edificio: su casa ("casa") o un sitio cubierto (la cafetería, la estación…)
+	var door_id := ""
+	if place == "casa":
+		door_id = _homes.get(id, "")
+	elif INDOOR.has(place):
+		door_id = _interiors.door_of_kind(INDOOR[place])
+	var target := place_position(place) + Vector3(randf_range(-2, 2), 0, randf_range(-2, 2)) if place != "casa" else Vector3.INF
+	if not door_id.is_empty():
+		if _interiors.current_door() == door_id:  # estás dentro: está ahí, en su sitio
+			npc.set_present(true)
+			var home := door_id == home_door_of(id)
+			var spot := _interiors.activity_spot("bed", 0) if night and home else {}
+			if not spot.is_empty():  # de noche, en su casa: dormido
+				npc.settle(spot.pos, spot.face, "sleep", "durmiendo")
+			elif npc.activity != act[0] or not npc.is_settled():
+				npc.stop()
+				var p := _interiors.npc_spot(_npcs.keys().find(id))
+				npc.settle(p + Vector3(0, 0.1, 0), p + Vector3(0, 0, 1), act[1], act[0])
+			return
+		if night:  # de noche se va a dormir: camina hasta su puerta y entra
+			if npc.is_present() and not teleport and not InteriorManager.is_interior_pos(npc.global_position):
+				var door_at := _interiors.door_position(door_id)
+				_going_home[id] = true
+				npc_go(id, door_at, func():
+					_going_home.erase(id)
+					Sfx.at(self, "door", door_at + Vector3(0, 1, 0))
+					if _interiors.current_door() == door_id:  # llegas tú antes: entra y se acuesta
+						npc.global_position = _interiors.entry_position() + Vector3(0, 0.3, 0)
+						_follow_one(id, true)
+					else:
+						npc.set_present(false))
+			else:
+				npc.set_present(false)
+			return
+		npc.unsettle()
+		npc.set_present(true)
+		var door := _interiors.door_position(door_id)
+		if door != Vector3.INF:  # de día y estás fuera: lo ves junto a la puerta
+			target = door + Vector3(randf_range(-2, 2), 0, randf_range(1.5, 3))
+			target.y = _ground_height(target.x, target.z)
+	elif not npc.is_present():
+		npc.set_present(true)
+	if target == Vector3.INF:
+		return
+	# Llueve y su sitio está a la intemperie: se resguarda bajo el alero de la puerta más cercana
+	if door_id.is_empty() and Weather.is_raining():
+		var best := Vector3.INF
+		for d in _interiors.doors():
+			var p: Vector3 = _interiors.doors()[d].pos
+			if best == Vector3.INF or p.distance_to(npc.global_position) < best.distance_to(npc.global_position):
+				best = p
+		if best != Vector3.INF:
+			target = best + Vector3(randf_range(-1.2, 1.2), 0, randf_range(0.6, 1.4))
+			target.y = _ground_height(target.x, target.z)
+			npc.set_activity("resguardándose de la lluvia", "cross_arms")
+			if not teleport and npc.global_position.distance_to(target) > 2.0:
+				npc.walk_to(target, true)  # deprisa, que se moja
+				return
+	if teleport:
+		npc.global_position = target + Vector3(0, 0.2, 0)
+	elif npc.global_position.distance_to(target) > 4.0:
+		npc.walk_to(target)
 
 
 # --- Construcción del mundo -----------------------------------------------------------
@@ -416,10 +468,26 @@ func _build_town() -> void:
 		var h := rng.randf_range(0.5, 1.1)
 		var yaw := rng.randf() * TAU
 		var fid := "bush_%d_%d" % [roundi(x), roundi(z)]
+		if _near_door(Vector3(x, 0, z), 3.5):  # delante de una puerta no: se sale por ahí
+			if bush:
+				bush.free()
+			continue
 		if bush and not (fid in _removed):
 			_features.append({"id": fid, "kind": "bush", "pos": Vector3(x, 0, z), "node": AssetLibrary.place(self, bush, Vector3(x, 0, z), h, yaw, "bush")})
 		elif bush:
 			bush.free()
+
+
+## ¿Hay una puerta (o el sitio donde se sale de ella) a menos de `dist`?
+func _near_door(p: Vector3, dist: float) -> bool:
+	var doors: Dictionary = _interiors.doors()
+	for id in doors:
+		var d: Dictionary = doors[id]
+		var out := Vector3(sin(d.yaw), 0, cos(d.yaw))
+		for q in [d.pos, d.pos + out * 1.2, d.pos + out * 2.4]:
+			if Vector2(p.x - q.x, p.z - q.z).length() < dist:
+				return true
+	return false
 
 
 func _build_landmarks() -> void:
@@ -517,6 +585,12 @@ func _house(base: Vector3, side: int, size_class: String, wall: Color, rng: Rand
 	var root := AssetLibrary.place(self, model, base, b.size.y * 2.7, PI / 2 if side < 0 else -PI / 2, true)
 	_house_count += 1
 	var home := base.is_equal_approx(Vector3(-16, 0, -4))
+	if not home and side > 0 and absf(base.z) <= 14.0 and not _shops_to_open.is_empty():
+		var shop: Array = _shops_to_open.pop_front()  # en el centro del pueblo: la tienda de ropa y la peluquería
+		_add_door(root, shop[0], "casa_%d" % _house_count, shop[1])
+		var door := _interiors.door_position("casa_%d" % _house_count)
+		_label3d(door + Vector3(0, 3.6, 0), shop[2])
+		return
 	_add_door(root, "home" if home else "house", "casa_%d" % _house_count, "tu casa" if home else "una casa")
 
 

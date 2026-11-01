@@ -160,11 +160,17 @@ func _key_cell(text: String) -> Control:
 func _appearance() -> void:
 	_root.visible = false
 	var creator := CharacterCreator.new()
-	creator.ask_name = false
+	creator.mode = "body"  # solo el cuerpo: la ropa y el pelo se cambian en el mundo
 	creator.look = PlayerLook.current().merged({"figure": PlayerLook.current().get("figure", "masculine")}, true)
 	add_child(creator)
 	creator.done.connect(func(look: Dictionary, _n: String):
-		PlayerLook.save(look)
+		var now := PlayerLook.current()
+		for k in ["figure", "skin", "height", "body"]:
+			if look.has(k):
+				now[k] = look[k]
+		if look.figure != PlayerLook.current().get("figure", ""):
+			now["hair"] = AssetLibrary.HAIRSTYLES[look.figure][0][0]  # el peinado depende del modelo
+		PlayerLook.save(now)
 		for p in get_tree().get_nodes_in_group("player"):
 			p.rebuild_look()
 		_root.visible = true)

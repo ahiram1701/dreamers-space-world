@@ -46,7 +46,7 @@ func witness(what: String, at: Vector3, exclude: Array = []) -> Array:
 		if id in exclude:
 			continue
 		var npc: TownNPC = scene._npcs[id]
-		if not npc.is_present() or npc.global_position.distance_to(at) > WITNESS_RADIUS:
+		if not npc.is_present() or npc.is_asleep() or npc.global_position.distance_to(at) > WITNESS_RADIUS:
 			continue
 		if not _sees(npc, at):
 			continue

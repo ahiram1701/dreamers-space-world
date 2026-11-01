@@ -117,6 +117,7 @@ func _on_new() -> void:
 		WorldDB.create_world("Mundo de " + player_name)
 		PlayerProfile.set_player_name(player_name)
 		PlayerLook.save(look)
+		PlayerLook.start_clothes(look)  # la ropa que llevas (y una muda en el armario de casa)
 		get_tree().change_scene_to_file(Travel.TOWN_SCENE))
 
 

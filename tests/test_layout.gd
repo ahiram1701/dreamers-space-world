@@ -44,6 +44,13 @@ func _run() -> void:
 				var p = load("res://scenes/ui/StashPanel.gd").new(); root.add_child(p); p.open("x", "Baúl"); return p,
 			"crear personaje": func():
 				var p = load("res://scenes/main_menu/CharacterCreator.gd").new(); root.add_child(p); return p,
+			"tu cuerpo (pausa)": func():
+				var p = load("res://scenes/main_menu/CharacterCreator.gd").new(); p.mode = "body"; p.look.figure = "feminine"; root.add_child(p); return p,
+			"peluquería": func():
+				var p = load("res://scenes/main_menu/CharacterCreator.gd").new(); p.mode = "hair"; p.look.figure = "masculine"; root.add_child(p); return p,
+			"tienda de ropa": func():
+				var p = load("res://scenes/main_menu/CharacterCreator.gd").new(); p.mode = "shop"; p.look.figure = "masculine"
+				p.choices = load("res://scripts/player/PlayerLook.gd").shop_offers("casa_x"); root.add_child(p); return p,
 			"barra de F": func():
 				var p = load("res://scenes/ui/ActionPanel.gd").new(); root.add_child(p); p.open("Talo el árbol"); return p,
 		}

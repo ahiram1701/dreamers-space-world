@@ -7,8 +7,13 @@ extends Node3D
 signal entered(kind: String, door_id: String)
 signal exited(kind: String, door_id: String)
 signal message(text: String)
+## Algo de dentro que abre un panel en la escena (armario, tienda de ropa, peluquería).
+signal wants(what: String)
+## Justo antes de construir el interior (para decidir cuánta gente vive ahí, etc.).
+signal entering(kind: String, door_id: String)
 
-const ORIGIN := Vector3(0, -400, 0)   # bajo el mundo: nada de fuera se ve desde dentro
+const ORIGIN := Vector3(0, -400, 0)
+const BED_TOP := 0.1   # a qué altura queda alguien tumbado sobre la cama   # bajo el mundo: nada de fuera se ve desde dentro
 
 var player: Player
 var _doors := {}          # id -> { pos, yaw, kind, seed, label, node }
@@ -37,6 +42,14 @@ func add_door(id: String, pos: Vector3, yaw: float, kind: String, seed: int, lab
 	var door := Interactable.create(get_parent(), pos + Vector3(0, 1.0, 0), 1.6, "Entrar: %s" % label, func(p): enter(id))
 	door.name = "Puerta_%s" % id.validate_node_name()
 	_doors[id] = {"pos": pos, "yaw": yaw, "kind": kind, "seed": seed, "label": label, "node": door}
+
+
+## Datos extra de una puerta para construir su interior (p. ej. cuánta gente duerme en la casa).
+func set_door_option(id: String, key: String, value: Variant) -> void:
+	if _doors.has(id):
+		var o: Dictionary = _doors[id].get("opts", {})
+		o[key] = value
+		_doors[id]["opts"] = o
 
 
 func doors() -> Dictionary:
@@ -88,6 +101,45 @@ func entry_position() -> Vector3:
 	return _interior.spawn if is_inside() else Vector3.INF
 
 
+## Hueco libre para un cuerpo de persona cerca de `pos` (los pies): el mismo punto si está libre;
+## si no, el más cercano en anillos alrededor, mejor hacia `prefer`. Así nadie aparece dentro de
+## un arbusto, un mueble u otra persona al salir de un edificio.
+static func free_spot_near(at: Node3D, pos: Vector3, prefer: Vector3 = Vector3.ZERO, exclude: Array = [], radius: float = 0.36) -> Vector3:
+	if at == null or not at.is_inside_tree():
+		return pos
+	if is_free(at, pos, exclude, radius):
+		return pos
+	var base_angle := atan2(prefer.x, prefer.z) if prefer.length() > 0.01 else 0.0
+	for ring in range(1, 10):
+		var r := ring * 0.45
+		var steps := 8 + ring * 2
+		for k in steps:
+			# Primero hacia donde se prefiere, luego a un lado y a otro
+			var turn := ceili(k / 2.0) * (1.0 if k % 2 == 1 else -1.0) * TAU / steps
+			var a := base_angle + turn
+			var p := pos + Vector3(sin(a), 0, cos(a)) * r
+			if is_free(at, p, exclude, radius):
+				return p
+	return pos
+
+
+## ¿Cabe una persona de pie en `pos` (pies) sin tocar nada sólido?
+static func is_free(at: Node3D, pos: Vector3, exclude: Array = [], radius: float = 0.36) -> bool:
+	var shape := CapsuleShape3D.new()
+	shape.radius = radius
+	shape.height = 1.6
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = shape
+	q.transform = Transform3D(Basis(), pos + Vector3(0, 0.95, 0))
+	q.collision_mask = Layers.WORLD | Layers.CHARACTERS
+	var rids: Array[RID] = []
+	for e in exclude:
+		if e is CollisionObject3D:
+			rids.append((e as CollisionObject3D).get_rid())
+	q.exclude = rids
+	return at.get_world_3d().direct_space_state.intersect_shape(q, 1).is_empty()
+
+
 ## ¿Esta posición está en un interior? (los interiores se construyen muy por debajo del mundo)
 static func is_interior_pos(p: Vector3) -> bool:
 	return p.y < ORIGIN.y + 100.0
@@ -107,6 +159,46 @@ func npc_spot(i: int) -> Vector3:
 	return spots[i % spots.size()] if not spots.is_empty() else Vector3.INF
 
 
+## Dónde hace algo una persona dentro del interior actual: "bed" (dormir), "sofa", "table"
+## (sentarse), "kitchen" (cocinar). El i-ésimo sitio de ese tipo. Devuelve {pos, face, node} o {}.
+func activity_spot(what: String, i: int) -> Dictionary:
+	if not is_inside():
+		return {}
+	match what:
+		"bed":  # una plaza por cama individual, dos en la de matrimonio; si no hay más, {}
+			var slots := []
+			for b in _interior.beds:
+				var bed: Node3D = b.node
+				var side := bed.global_basis.x.normalized()
+				if str(b.name).contains("King"):
+					slots.append([bed, -side * 0.42])
+					slots.append([bed, side * 0.42])
+				else:
+					slots.append([bed, Vector3.ZERO])
+			if i >= slots.size():
+				return {}
+			var bed: Node3D = slots[i][0]
+			var along := bed.global_basis.z.normalized()
+			# Los pies hacia el borde de la cama: al tumbarse, la cabeza queda en la almohada
+			var at: Vector3 = bed.global_position + slots[i][1] + along * 0.85 + Vector3(0, BED_TOP, 0)
+			return {"pos": at, "face": at + along * 3.0, "node": bed}
+		"sofa", "table":
+			var seats: Array = _interior.get(what, [])
+			if seats.is_empty():
+				seats = _interior.seats
+			if seats.is_empty():
+				return {}
+			var seat: Node3D = seats[i % seats.size()].node
+			return {"pos": seat.global_position + Vector3(0, 0.05, 0), "face": seat.global_position + seat.global_basis.z * 2.0, "node": seat}
+		"kitchen":
+			var k: Array = _interior.get("kitchen", [])
+			if not k.is_empty():
+				var s: Dictionary = k[i % k.size()]
+				return {"pos": s.pos, "face": s.face}
+	var p := npc_spot(i)
+	return {} if p == Vector3.INF else {"pos": p, "face": p + Vector3(0, 0, 1)}
+
+
 func enter(id: String) -> void:
 	if _busy or not _doors.has(id):
 		return
@@ -118,8 +210,9 @@ func enter(id: String) -> void:
 	Sfx.door(self)
 	await _fade_to(1.0)
 	_clear_interior()
+	entering.emit(_doors[id].kind, id)
 	var door: Dictionary = _doors[id]
-	_interior = InteriorBuilder.build(self, door.kind, door.seed, ORIGIN)
+	_interior = InteriorBuilder.build(self, door.kind, door.seed, ORIGIN, door.get("opts", {}))
 	_current = id
 	var exit_it := Interactable.create(_interior.root, _interior.exit - ORIGIN + Vector3(0, 1.0, 0), 1.9, "Salir", func(p): leave())
 	exit_it.name = "Salida"
@@ -155,7 +248,7 @@ func leave() -> void:
 	player.velocity = Vector3.ZERO
 	player.stop_gesture()
 	var outward := Vector3(sin(door.yaw), 0, cos(door.yaw))
-	player.global_position = door.pos + outward * 1.2 + Vector3(0, 0.3, 0)
+	player.global_position = free_spot_near(self, door.pos + outward * 1.2, outward, [player]) + Vector3(0, 0.3, 0)
 	player.look_direction(outward)
 	exited.emit(door.kind, id)
 	await _fade_to(0.0)
@@ -193,9 +286,13 @@ func use_fixture(what: String, node: Node3D) -> void:
 			Body.change("thirst", 60.0)
 			WorldClock.advance(2)
 			message.emit("Bebes agua fresca del grifo.")
+		"wardrobe", "clothes_shop", "haircut":
+			_busy = false
+			wants.emit(what)
+			return
 		"shower":
 			await _fade_to(1.0)
-			Body.set_need("hygiene", 100.0)
+			Body.shower()
 			WorldClock.advance(15)
 			await get_tree().create_timer(0.6).timeout
 			await _fade_to(0.0)

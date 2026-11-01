@@ -3,6 +3,28 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.6.4] - 2026-10-31
+
+### Añadido
+- **La gente vive en sus casas.** Cada casa tiene su hogar: una persona sola, una pareja, una familia con hijos o una pareja mayor, siempre los mismos. Al entrar los ves haciendo lo que toca por la hora: de noche duermen en sus camas, por la mañana desayunan, a mediodía cocinan y comen, por la tarde leen o ven la tele. Quien trabaja fuera no está en su horario, y los niños están en la escuela.
+- **Lo que ves entrar, está dentro.** La gente de paso que entra en una casa o en la cafetería ya no desaparece: la encuentras dentro, de visita o tomando algo.
+- Los vecinos **se van a dormir a su casa** caminando, y si llegas antes que ellos, entran y se acuestan. Si a alguien se le acaba su rato dentro estando tú, se despide y sale por la puerta.
+- Si entras en una casa ajena, quien vive ahí reacciona según la hora y si te conoce («¿Quién eres? ¿Qué haces en mi casa?»). Si duermen, no se enteran… salvo que les hables.
+- **Más opciones de aspecto:** tono de piel, peinado (13 entre hombre y mujer), color de pelo, altura (de 1,55 a 1,95 m) y complexión baja. La gente del pueblo también tiene ahora tonos de piel variados.
+- **La ropa es tuya:** empiezas con la que elegiste y una muda en el armario de casa. Te cambias en el armario, y en la nueva **tienda de ropa** del centro compras y te pruebas conjuntos (cambian cada día).
+- **Peluquería:** te cortas el pelo o te lo tiñes, pagando.
+- **Tu cuerpo se nota:** la lluvia te moja y luego te secas (la ropa mojada se oscurece y brilla); talar, cavar o trabajar te ensucian, y la ducha te limpia. Con las semanas, según comas y te muevas, tu complexión cambia un poco. La gente lo ve y lo comenta.
+
+### Cambiado
+- Las herramientas **se agarran por el mango**: el hacha, la pala o el remo ya no atraviesan el brazo. Con las dos manos (talar, cavar, remar), la otra mano va al mango, y los dedos se cierran alrededor de lo que sujetas. Al beber, la botella llega a la boca, y el celular a la oreja al llamar.
+- Solo se ve la herramienta si la tienes: sin hacha, talas con las manos vacías (en el trabajo te dan las suyas).
+- «Tu aspecto» en la pausa ahora solo corrige rasgos del cuerpo; la ropa y el pelo se cambian en el mundo.
+
+### Corregido
+- **Quedarse atrapado al salir de una casa:** ahora apareces siempre en un hueco libre, ningún arbusto tapa una puerta y, si te quedas metido dentro de algo, te despegas al intentar moverte.
+- «Me voy a mi casa» llevaba a cualquiera a la primera casa del pueblo; ahora cada uno va a la suya.
+- El objetivo «Habla con tus vecinos» ya no cuenta a la gente que conoces por el camino.
+
 ## [0.6.3] - 2026-10-31
 
 ### Añadido

@@ -4,7 +4,9 @@ extends RefCounted
 ## cáscaras sin interior, así que al cruzar la puerta se construye la habitación en una zona
 ## apartada de la escena. Determinista: el mismo edificio tiene siempre los mismos muebles.
 ##
-## build() devuelve { root, spawn, exit, npc_spots: [Vector3], seats: [], beds: [] }
+## build() devuelve { root, spawn, exit, npc_spots: [Vector3], seats: [], beds: [], uses: [],
+##   sofa: [], table: [] (asientos por función), kitchen: [{pos, face}] (donde se cocina) }
+## opts.sleepers: cuánta gente duerme en la casa (camas para todos).
 
 const FURNITURE := "house_interior_pack"
 const SCALE := 0.5          # los muebles de este pack vienen al doble de tamaño real
@@ -21,10 +23,12 @@ const ROOMS := {
 	"shop": {"size": Vector2(12, 9), "wall": "#efe3c8", "floor": "#9c7b56", "name": "Tienda"},
 	"workshop": {"size": Vector2(12, 10), "wall": "#a39a8c", "floor": "#55524d", "name": "Taller"},
 	"office": {"size": Vector2(11, 9), "wall": "#dfe4e8", "floor": "#6f6a64", "name": "Oficina"},
+	"clothes": {"size": Vector2(12, 9), "wall": "#f1e9e4", "floor": "#a8907a", "name": "Tienda de ropa"},
+	"salon": {"size": Vector2(10, 8), "wall": "#e6eef0", "floor": "#c9c2b8", "name": "Peluquería"},
 }
 
 
-static func build(parent: Node3D, kind: String, seed: int, origin: Vector3) -> Dictionary:
+static func build(parent: Node3D, kind: String, seed: int, origin: Vector3, opts: Dictionary = {}) -> Dictionary:
 	var room: Dictionary = ROOMS.get(kind, ROOMS.house)
 	var w: float = room.size.x
 	var d: float = room.size.y
@@ -37,20 +41,22 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3) -> D
 	_shell(root, w, d, wall, Color(room.floor), kind == "scifi")
 
 	var out := {"root": root, "spawn": origin + Vector3(0, 0.1, d / 2.0 - 2.4), "exit": origin + Vector3(0, 0.1, d / 2.0 - 0.4),
-		"npc_spots": [], "seats": [], "beds": [], "uses": []}
+		"npc_spots": [], "seats": [], "beds": [], "uses": [], "sofa": [], "table": [], "kitchen": []}
 	match kind:
 		"home":
 			_put(root, "Bed_Single", Vector3(-w / 2 + 1.2, 0, -d / 2 + 1.3), 0.0, out.beds)
 			_put(root, "NightStand_1", Vector3(-w / 2 + 2.4, 0, -d / 2 + 0.5), 0.0)
-			_put(root, "Couch_Medium1", Vector3(2.0, 0, -d / 2 + 0.8), 0.0, out.seats)
+			_seat(root, "Couch_Medium1", Vector3(2.0, 0, -d / 2 + 0.8), 0.0, out, "sofa")
 			_put(root, "Carpet_1", Vector3(2.0, 0, -0.6), 0.0)
 			_put(root, "Table_RoundSmall", Vector3(-1.2, 0, 0.6), 0.0)
-			_put(root, "Chair_1", Vector3(-1.9, 0, 0.6), PI / 2, out.seats)
-			_put(root, "Chair_1", Vector3(-0.5, 0, 0.6), -PI / 2, out.seats)
+			_seat(root, "Chair_1", Vector3(-1.9, 0, 0.6), PI / 2, out, "table")
+			_seat(root, "Chair_1", Vector3(-0.5, 0, 0.6), -PI / 2, out, "table")
+			out.kitchen = [{"pos": origin + Vector3(w / 2 - 1.4, 0, 0.4), "face": origin + Vector3(w / 2, 0, 0.4)}]
 			_use(root, "Kitchen_Fridge", Vector3(w / 2 - 0.6, 0, 1.5), -PI / 2, out, "eat", "Comer algo de la nevera")
 			_put(root, "Kitchen_3Drawers", Vector3(w / 2 - 0.5, 0, 0.4), -PI / 2)
 			_use(root, "Kitchen_Sink", Vector3(w / 2 - 0.5, 0, -0.5), -PI / 2, out, "drink", "Beber agua")
 			_put(root, "Bookshelf", Vector3(-w / 2 + 0.4, 0, 1.0), PI / 2)
+			_use(root, "Drawer_5", Vector3(-w / 2 + 0.45, 0, 2.6), PI / 2, out, "wardrobe", "Cambiarte de ropa")
 			_use(root, "Bathroom_Shower1", Vector3(w / 2 - 0.8, 0, -d / 2 + 0.8), 0.0, out, "shower", "Ducharse")
 			_put(root, "Bathroom_Toilet", Vector3(w / 2 - 2.2, 0, -d / 2 + 0.45), 0.0)
 			_put(root, "Light_Floor1", Vector3(-w / 2 + 0.6, 0, -0.6), 0.0)
@@ -62,21 +68,22 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3) -> D
 			_put(root, "Kitchen_Fridge", Vector3(-1.4, 0, -d / 2 + 0.5), 0.0)
 			_put(root, "Shelf_Small1", Vector3(0.4, 1.3, -d / 2 + 0.25), 0.0)
 			for i in 4:
-				_put(root, "Stool", Vector3(-3.0 + i * 0.75, 0, -d / 2 + 3.1), 0.0, out.seats)
+				_seat(root, "Stool", Vector3(-3.0 + i * 0.75, 0, -d / 2 + 3.1), 0.0, out, "table")
 			for t in [Vector3(3.0, 0, -1.5), Vector3(4.5, 0, 1.5), Vector3(1.5, 0, 2.0)]:
 				_put(root, "Table_RoundSmall", t, 0.0)
-				_put(root, "Chair_2", t + Vector3(-0.75, 0, 0), PI / 2, out.seats)
-				_put(root, "Chair_2", t + Vector3(0.75, 0, 0), -PI / 2, out.seats)
+				_seat(root, "Chair_2", t + Vector3(-0.75, 0, 0), PI / 2, out, "table")
+				_seat(root, "Chair_2", t + Vector3(0.75, 0, 0), -PI / 2, out, "table")
 			_put(root, "Houseplant_3", Vector3(w / 2 - 0.6, 0, -d / 2 + 0.6), 0.0)
 			_put(root, "Houseplant_5", Vector3(-w / 2 + 0.6, 0, d / 2 - 1.2), 0.0)
 			out.npc_spots = [origin + Vector3(-2.0, 0, -d / 2 + 1.3), origin + Vector3(3.0, 0, 0.5)]
 		"station":
 			for i in 5:  # bancos de la sala de espera
-				_put(root, "Couch_Small1", Vector3(-6.0 + i * 1.6, 0, 1.6), PI, out.seats)
+				_seat(root, "Couch_Small1", Vector3(-6.0 + i * 1.6, 0, 1.6), PI, out, "sofa")
 			_put(root, "Kitchen_Cabinet1", Vector3(5.5, 0, -d / 2 + 0.5), 0.0)  # taquilla
 			_put(root, "Table_RoundLarge", Vector3(-4.0, 0, -d / 2 + 1.4), 0.0)  # mesa del taller de Samir
 			_put(root, "Chair_3", Vector3(-4.0, 0, -d / 2 + 2.4), PI, out.seats)
 			_put(root, "Shelf_Large", Vector3(-7.4, 0, -d / 2 + 0.4), 0.0)
+			_put(root, "Bed_Single", Vector3(w / 2 - 1.0, 0, -d / 2 + 1.3), 0.0, out.beds)  # el catre de Samir
 			for i in 3:
 				var radio := AssetLibrary.instance("survival_pack", "Radio")
 				if radio:
@@ -95,6 +102,7 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3) -> D
 			_put(root, "Chair_4", Vector3(3.0, 0, -1.8), PI, out.seats)
 			_put(root, "Shelf_Small2", Vector3(-w / 2 + 0.3, 1.2, 1.5), PI / 2)
 			_put(root, "Light_Stand1", Vector3(w / 2 - 0.6, 0, -d / 2 + 0.6), 0.0)
+			_put(root, "Bed_Single", Vector3(0.6, 0, -d / 2 + 1.3), 0.0, out.beds)  # Marina vive aquí
 			_put(root, "Bookshelf", Vector3(w / 2 - 0.4, 0, 0.6), -PI / 2)
 			out.npc_spots = [origin + Vector3(3.0, 0, -1.0)]
 		"scifi":
@@ -138,20 +146,46 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3) -> D
 			_put(root, "Couch_Small1", Vector3(w / 2 - 0.8, 0, 1.6), -PI / 2, out.seats)
 			_put(root, "Houseplant_6", Vector3(w / 2 - 0.6, 0, -d / 2 + 0.6), 0.0)
 			out.npc_spots = [origin + Vector3(-2.5, 0, -2.8)]
-		_:  # casa de un vecino: muebles al azar pero siempre los mismos
-			if rng.randf() < 0.6:
-				_put(root, ["Bed_Single", "Bed_King"][rng.randi() % 2], Vector3(-w / 2 + 1.6, 0, -d / 2 + 1.3), 0.0, out.beds)
-			else:
-				_put(root, "Couch_Large1", Vector3(-w / 2 + 1.8, 0, -d / 2 + 0.8), 0.0, out.seats)
-			_put(root, ["Table_RoundLarge", "Table_RoundSmall"][rng.randi() % 2], Vector3(1.5, 0, 0), 0.0)
-			_put(root, "Chair_%d" % (1 + rng.randi() % 4), Vector3(0.6, 0, 0), PI / 2, out.seats)
-			_put(root, "Chair_%d" % (1 + rng.randi() % 4), Vector3(2.4, 0, 0), -PI / 2, out.seats)
-			_put(root, ["Bookshelf", "Shelf_Large", "Drawer_1", "Drawer_3"][rng.randi() % 4], Vector3(w / 2 - 0.5, 0, -1.0), -PI / 2)
-			_put(root, "Kitchen_Fridge", Vector3(w / 2 - 0.6, 0, 1.6), -PI / 2)
-			_put(root, "Houseplant_%d" % (1 + rng.randi() % 8), Vector3(-w / 2 + 0.6, 0, d / 2 - 1.6), 0.0)
-			_put(root, "Carpet_%s" % ["1", "2", "Round"][rng.randi() % 3], Vector3(1.5, 0, 0.2), 0.0)
-			_put(root, "Light_Floor%d" % (1 + rng.randi() % 4), Vector3(-w / 2 + 0.6, 0, 0.5), 0.0)
-			out.npc_spots = [origin + Vector3(2.6, 0, -1.2)]
+		"clothes":  # percheros, espejo, mostrador y un probador con cortina
+			for x in [-w / 2 + 0.5, w / 2 - 0.5]:
+				for z in [-2.0, 0.6]:
+					_put(root, "Shelf_Large", Vector3(x, 0, z), PI / 2 if x < 0 else -PI / 2)
+			_use(root, "Table_RoundLarge", Vector3(0, 0, 0.2), 0.0, out, "clothes_shop", "Ver la ropa y probártela")
+			for i in 3:
+				_put(root, "Kitchen_2Drawers", Vector3(1.5 + i * 0.75, 0, -d / 2 + 1.6), PI)
+			_put(root, "Bathroom_Mirror1", Vector3(-2.5, 1.2, -d / 2 + 0.15), 0.0)
+			_put(root, "Curtains_Single", Vector3(-4.0, 0, -d / 2 + 0.3), 0.0)
+			_put(root, "Houseplant_2", Vector3(w / 2 - 0.6, 0, d / 2 - 1.2), 0.0)
+			out.npc_spots = [origin + Vector3(2.2, 0, -d / 2 + 0.8)]
+		"salon":  # el sillón frente al espejo, el lavacabezas y un sofá para esperar
+			_use(root, "Chair_3", Vector3(-1.5, 0, -d / 2 + 1.4), PI, out, "haircut", "Cortarte el pelo")
+			_put(root, "Bathroom_Mirror2", Vector3(-1.5, 1.3, -d / 2 + 0.15), 0.0)
+			_put(root, "Bathroom_Sink", Vector3(1.0, 0, -d / 2 + 0.4), 0.0)
+			_put(root, "Shelf_Small1", Vector3(2.6, 1.3, -d / 2 + 0.2), 0.0)
+			_seat(root, "Couch_Small1", Vector3(w / 2 - 1.0, 0, 1.2), -PI / 2, out, "sofa")
+			_put(root, "Houseplant_6", Vector3(-w / 2 + 0.6, 0, d / 2 - 1.2), 0.0)
+			out.npc_spots = [origin + Vector3(-0.6, 0, -d / 2 + 1.9)]
+		_:  # casa de un vecino: camas para quien vive aquí, sofá, mesa y cocina (siempre los mismos)
+			var sleepers := int(opts.get("sleepers", 1 + rng.randi() % 2))
+			_put(root, "Bed_King" if sleepers >= 2 else "Bed_Single", Vector3(-w / 2 + 1.6, 0, -d / 2 + 1.3), 0.0, out.beds)
+			for k in clampi(sleepers - 2, 0, 2):  # los hijos
+				_put(root, "Bed_Single", Vector3(-1.3 + k * 1.3, 0, -d / 2 + 1.3), 0.0, out.beds)
+			_seat(root, ["Couch_Medium1", "Couch_Large1"][rng.randi() % 2], Vector3(2.8, 0, -d / 2 + 0.8), 0.0, out, "sofa")
+			_put(root, "Carpet_%s" % ["1", "2", "Round"][rng.randi() % 3], Vector3(2.8, 0, -1.0), 0.0)
+			_put(root, ["Table_RoundLarge", "Table_RoundSmall"][rng.randi() % 2], Vector3(1.6, 0, 1.0), 0.0)
+			_seat(root, "Chair_%d" % (1 + rng.randi() % 4), Vector3(0.7, 0, 1.0), PI / 2, out, "table")
+			_seat(root, "Chair_%d" % (1 + rng.randi() % 4), Vector3(2.5, 0, 1.0), -PI / 2, out, "table")
+			if sleepers >= 3:
+				_seat(root, "Chair_%d" % (1 + rng.randi() % 4), Vector3(1.6, 0, 1.9), PI, out, "table")
+			_put(root, "Kitchen_Fridge", Vector3(w / 2 - 0.6, 0, 2.6), -PI / 2)
+			_put(root, "Kitchen_Oven", Vector3(w / 2 - 0.5, 0, 1.6), -PI / 2)
+			_put(root, "Kitchen_Sink", Vector3(w / 2 - 0.5, 0, 0.7), -PI / 2)
+			out.kitchen = [{"pos": origin + Vector3(w / 2 - 1.5, 0, 1.6), "face": origin + Vector3(w / 2, 0, 1.6)},
+				{"pos": origin + Vector3(w / 2 - 1.5, 0, 0.7), "face": origin + Vector3(w / 2, 0, 0.7)}]
+			_put(root, ["Bookshelf", "Shelf_Large", "Drawer_1", "Drawer_3"][rng.randi() % 4], Vector3(-w / 2 + 0.5, 0, 0.8), PI / 2)
+			_put(root, "Houseplant_%d" % (1 + rng.randi() % 8), Vector3(-w / 2 + 0.6, 0, d / 2 - 1.2), 0.0)
+			_put(root, "Light_Floor%d" % (1 + rng.randi() % 4), Vector3(w / 2 - 0.6, 0, -d / 2 + 0.6), 0.0)
+			out.npc_spots = [origin + Vector3(2.0, 0, -0.4), origin + Vector3(-1.0, 0, 0.6), origin + Vector3(3.6, 0, 0.0)]
 	return out
 
 
@@ -198,6 +232,14 @@ static func _use(root: Node3D, model_name: String, pos: Vector3, yaw: float, out
 	if not out.uses.is_empty() and out.uses[-1].name == model_name:
 		out.uses[-1]["what"] = what
 		out.uses[-1]["prompt"] = prompt
+
+
+## Un asiento con función ("sofa", "table"): se puede usar con E y la gente lo usa según la hora.
+static func _seat(root: Node3D, model_name: String, pos: Vector3, yaw: float, out: Dictionary, group: String) -> void:
+	var before: int = out.seats.size()
+	_put(root, model_name, pos, yaw, out.seats)
+	if out.seats.size() > before:
+		out[group].append(out.seats[-1])
 
 
 ## Coloca un mueble del pack de interiores a su tamaño real. Si se pasa `list`, guarda su

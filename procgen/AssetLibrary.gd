@@ -22,6 +22,18 @@ const OUTFITS := {
 }
 ## Superficies que no son ropa: no se tiñen con los colores del PNJ.
 const NOT_CLOTH := ["skin", "eye", "eyebrows", "hair", "moustache", "beard", "teeth", "mouth"]
+## Tonos de piel (de más clara a más oscura). Sin elegir, cada persona tiene el suyo (por semilla).
+const SKINS := ["#f3d7c2", "#e8bd98", "#d29b70", "#b07a50", "#8a5a38", "#5e3b24"]
+const HAIR_COLORS := ["#1c1814", "#3e2a1c", "#6e4527", "#a8773f", "#d8bd7a", "#b9b3aa", "#8e3420"]
+## Peinados: la cabeza de otro modelo del mismo sexo (comparten esqueleto). [modelo, nombre]
+const HAIRSTYLES := {
+	"masculine": [["Casual", "Corto"], ["Casual2", "Despeinado"], ["Suit", "Peinado de lado"], ["Adventurer", "Melena y barba"],
+		["Beach", "De punta, con arete"], ["Punk", "Cresta"]],
+	"feminine": [["Casual", "Media melena"], ["Suit", "Melena corta"], ["Adventurer", "Corto"], ["Soldier", "Melena lisa"],
+		["SciFi", "Asimétrico"], ["Punk", "Punk"], ["Formal", "Ondulado"]],
+}
+## Superficies de pelo que no se llaman "Hair…" en algunas cabezas.
+const HAIR_EXTRA := {"masculine/Punk": ["Red_Dark"], "feminine/Punk": ["Pink"], "feminine/Formal": ["Red"]}
 
 const HOUSES_SMALL := ["1Story_GableRoof_Mat", "1Story_Mat", "1Story_RoundRoof_Mat", "2Story_GableRoof_Mat",
 	"2Story_Mat", "2Story_RoundRoof_Mat", "2Story_Balcony_Mat", "2Story_2_Mat", "2Story_Columns_Mat"]
@@ -70,26 +82,80 @@ static func character(appearance: Dictionary, rng_seed: int) -> Node3D:
 	var figure = appearance.get("figure")
 	var feminine: bool = figure == "feminine" if figure in ["feminine", "masculine"] else rng.randf() < 0.5
 	var options: Array = OUTFITS.get(appearance.get("outfit", "casual"), OUTFITS.casual)[1 if feminine else 0]
-	var model := instance("modular_women" if feminine else "modular_men", options[rng.randi() % options.size()])
+	var pack := "modular_women" if feminine else "modular_men"
+	var model_name: String = options[rng.randi() % options.size()]
+	var model := instance(pack, model_name)
 	if model == null:
 		return null
+	# Peinado: la cabeza de otro modelo (si la ropa no la tapa: casco, escafandra…)
+	var head_name := model_name
+	var hair := str(appearance.get("hair", ""))
+	if not hair.is_empty() and hair != model_name and not (model_name in ["Swat", "Spacesuit", "Worker", "King", "Witch", "Medieval"]):
+		if _swap_head(model, pack, hair):
+			head_name = hair
+	var fig := "feminine" if feminine else "masculine"
+	var hair_names: Array = HAIR_EXTRA.get("%s/%s" % [fig, head_name], [])
+	var tone := RandomNumberGenerator.new()
+	tone.seed = rng_seed + 101
+	var skin := Color(appearance.get("skin", SKINS[mini(int(absf(tone.randfn(1.6, 1.3))), SKINS.size() - 1)]))
+	var hair_color: Variant = Color(appearance.hair_color) if appearance.has("hair_color") else null
 	var primary := Color(appearance.get("primary_color", "#5a6f8a"))
 	var secondary := Color(appearance.get("secondary_color", "#c9b48a"))
 	for mi in _meshes(model):
-		var legs: bool = mi.name.ends_with("Legs") or mi.name.ends_with("Feet")
+		var legs: bool = mi.name.ends_with("Legs") or mi.name.ends_with("Feet") or mi.name.ends_with("Pants")
+		var head: bool = mi.name.ends_with("_Head")
 		var cloth_index := 0
 		for i in mi.mesh.get_surface_count():
 			var src := mi.mesh.surface_get_material(i) as StandardMaterial3D
-			if src == null or _is_body(src.resource_name):
+			if src == null:
+				continue
+			var mat_name := src.resource_name
+			if mat_name.begins_with("Skin"):  # el tono de piel
+				var sk := src.duplicate() as StandardMaterial3D
+				sk.albedo_color = skin.darkened(0.12) if mat_name.contains("Darker") else skin
+				sk.set_meta("part", "skin")
+				mi.set_surface_override_material(i, sk)
+				continue
+			var is_hair := mat_name.begins_with("Hair") or mat_name in hair_names
+			if is_hair or mat_name == "Eyebrows" or mat_name == "Moustache":
+				if hair_color != null:
+					var hm := src.duplicate() as StandardMaterial3D
+					hm.albedo_color = (hair_color as Color).darkened(0.15 if not is_hair else 0.0)
+					hm.set_meta("part", "hair")
+					mi.set_surface_override_material(i, hm)
+				continue
+			if _is_body(mat_name) or head:  # lo de la cabeza (gorras, cascos) conserva su color
 				continue
 			# Solo la prenda principal de cada pieza lleva el color del PNJ; el resto, matizado
 			var m := src.duplicate() as StandardMaterial3D
 			var tint := secondary if legs else primary
 			m.albedo_color = tint if cloth_index == 0 else src.albedo_color.lerp(tint, 0.35)
 			m.roughness = 0.85
+			m.set_meta("part", "cloth")
 			mi.set_surface_override_material(i, m)
 			cloth_index += 1
 	return model
+
+
+## Pone en `model` la cabeza (y su pelo) de otro modelo del mismo pack. Comparten esqueleto,
+## así que basta con cambiar la malla y su piel (los pesos de los huesos).
+static func _swap_head(model: Node3D, pack: String, other_name: String) -> bool:
+	var other := instance(pack, other_name)
+	if other == null:
+		return false
+	var src: MeshInstance3D = null
+	for mi in _meshes(other):
+		if mi.name.ends_with("_Head"):
+			src = mi
+	var done := false
+	if src:
+		for mi in _meshes(model):
+			if mi.name.ends_with("_Head"):
+				mi.mesh = src.mesh
+				mi.skin = src.skin
+				done = true
+	other.free()
+	return done
 
 
 ## Edificio para un asentamiento. `size_class`: "small" (casas), "town", "city".

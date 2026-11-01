@@ -8,7 +8,8 @@ extends Node3D
 ## Palabras con las que se nombra cada tipo de interior ("me voy a la cafetería").
 const KIND_WORDS := {
 	"cafe": ["cafe", "cafetería", "cafeteria", "bar", "barra"], "station": ["estación", "estacion", "taller", "andén"],
-	"lighthouse": ["faro"], "home": ["tu casa"], "house": ["casa", "hogar", "vivienda"], "scifi": ["módulo", "modulo", "edificio", "base"],
+	"lighthouse": ["faro"], "home": ["tu casa"], "clothes": ["tienda de ropa", "ropa"], "salon": ["peluquería", "peluqueria", "barbería", "barberia"],
+	"house": ["casa", "hogar", "vivienda"], "scifi": ["módulo", "modulo", "edificio", "base"],
 }
 const CONTACT_GESTURES := ["punch", "push", "kick", "hug", "handshake", "pat", "give"]
 
@@ -28,6 +29,7 @@ var _free_lots: Array = []
 var _added_places := 0
 var _life: TownLife
 var _passersby: Passersby
+var _households: Households
 ## Quien te está llevando a un sitio: npc_id -> {label, lost_t, said_t}
 var _guiding: Dictionary = {}
 var _yawn_t := 0.0
@@ -145,9 +147,17 @@ func _setup_common() -> void:
 	_ui.actions.suggestions = suggestions
 	_ui.scene_context = action_context
 	_interiors.message.connect(_ui.toast)
-	_interiors.entered.connect(func(_k, _id): _refresh_presence(); _add_work_spot(); _check_trespass())
-	_interiors.exited.connect(func(_k, _id): _refresh_presence())
-	WorldClock.hour_changed.connect(func(_h): _refresh_presence())
+	_households = Households.new()
+	_households.scene = self
+	add_child(_households)
+	_interiors.entering.connect(func(k, id): _households.prepare(id, k))
+	_interiors.wants.connect(_open_look_panel)
+	_interiors.entered.connect(func(k, id): _households.populate(id, k); _refresh_presence(); _add_work_spot(); _check_trespass())
+	_interiors.exited.connect(func(_k, _id): _households.clear(); _refresh_presence())
+	WorldClock.hour_changed.connect(func(_h):
+		_refresh_presence()
+		if _interiors.is_inside():
+			_households.refresh(_interiors.current_door()))
 	_refresh_presence()
 
 
@@ -183,6 +193,8 @@ func _on_interact(target: Node) -> void:
 			_npcs[id] = target
 			_start_dialogue(target)
 	elif target is TownNPC:
+		if target.is_asleep():
+			_wake(target)
 		_start_dialogue(target)
 	elif target is Interactable:
 		target.use(_player)
@@ -194,9 +206,82 @@ func _on_interact(target: Node) -> void:
 
 # --- Casa ajena ----------------------------------------------------------------------------
 
-## ¿De quién es esta casa? (cada escena lo sabe por sus rutinas; "" si de nadie en concreto)
-func owner_of_door(_door: String) -> String:
+## ¿De quién es esta casa? Quien vive en ella y está dentro ahora ("" si nadie). Cada escena
+## añade los suyos (los vecinos con rutina).
+func owner_of_door(door: String) -> String:
+	if _households and door == _interiors.current_door() and _interiors.current_kind() == "house":
+		return _households.owner_here()
 	return ""
+
+
+## Puerta de la casa de alguien ("" si no tiene o no se sabe).
+func home_door_of(npc_id: String) -> String:
+	return Households.home_of(npc_id)
+
+
+# --- Tu aspecto en el mundo: armario, tienda de ropa, peluquería ---------------------------
+
+func _open_look_panel(what: String) -> void:
+	var creator := CharacterCreator.new()
+	creator.mode = {"wardrobe": "wardrobe", "clothes_shop": "shop", "haircut": "hair"}[what]
+	creator.look = PlayerLook.current()
+	match what:
+		"wardrobe":
+			creator.choices = PlayerLook.owned_clothes()
+		"clothes_shop":
+			creator.choices = PlayerLook.shop_offers(_interiors.current_door())
+	_ui.block(true)
+	add_child(creator)
+	creator.cancelled.connect(func(): _ui.block(false))
+	creator.done.connect(func(look: Dictionary, _n: String):
+		_ui.block(false)
+		_apply_look_panel(what, look))
+
+
+func _apply_look_panel(what: String, look: Dictionary) -> void:
+	var staff := _households.staff_here()
+	match what:
+		"wardrobe":
+			PlayerLook.wear(str(look._item), PlayerLook.WARDROBE)
+			_player.play_gesture("crouch", 1.2)
+			_ui.toast("Te cambias de ropa. La de antes queda en el armario.")
+		"clothes_shop":
+			var offer: Dictionary = look._offer
+			if not Wallet.pay(int(offer.price)):
+				return
+			var id := PlayerLook.make_clothing(offer.clothing)
+			Inventory.add(id)
+			PlayerLook.wear(id)
+			_ui.toast("Compras %s por %s y te la pones. Lo que llevabas va en la mochila." % [offer.name.to_lower(), Wallet.text(int(offer.price))])
+			if staff:
+				staff.say(["¡Te queda muy bien!", "Buena elección.", "Ese color te favorece."][randi() % 3], 3.5)
+				NPCMemory.add_event(staff.npc_id, "El jugador te compró %s." % offer.name.to_lower(), 1)
+		"haircut":
+			var price := int(look.get("_price", 0))
+			if price <= 0:
+				return
+			if not Wallet.pay(price):
+				return
+			var now := PlayerLook.current()
+			var dyed: bool = look.hair_color != now.get("hair_color", "")
+			now["hair"] = look.hair
+			now["hair_color"] = look.hair_color
+			PlayerLook.save(now)
+			_ui.toast("Te cortan el pelo%s. Pagas %s." % [" y te lo tiñen" if dyed else "", Wallet.text(price)])
+			if staff:
+				staff.say(["Listo. ¿Qué te parece?", "Te ha quedado genial.", "Mírate en el espejo."][randi() % 3], 3.5)
+				NPCMemory.add_event(staff.npc_id, "Le cortaste el pelo al jugador.", 1)
+	_player.rebuild_look()
+
+
+## Despiertas a alguien que dormía en su casa: se levanta de un salto y no le hace gracia.
+func _wake(npc: TownNPC) -> void:
+	npc.unsettle()
+	npc.set_emotion("angry")
+	npc.face(_player.global_position)
+	var met: bool = NPCMemory.get_mem(npc.npc_id).met
+	npc.say("¡¿Qué...?! ¿Quién anda ahí?" if not met else "¿Qué haces aquí a estas horas? ¡Me has dado un susto!", 4.0)
+	NPCMemory.add_event(npc.npc_id, "El jugador entró en tu casa mientras dormías y te despertó.", -8)
 
 
 ## Entras en una casa con su dueño dentro: de día y si os lleváis bien, te recibe; de noche o
@@ -208,10 +293,18 @@ func _check_trespass() -> void:
 	if owner.is_empty() or not _npcs.has(owner) or not _npcs[owner].is_present():
 		return
 	var npc: TownNPC = _npcs[owner]
-	var rel := int(NPCMemory.get_mem(owner).relationship)
+	if npc.is_asleep():
+		return  # duermen: si no haces ruido, ni se enteran
+	var mem := NPCMemory.get_mem(owner)
+	var rel := int(mem.relationship)
 	var h := WorldClock.hour()
 	var night := h >= 23.0 or h < 7.0
 	npc.face(_player.global_position)
+	if not night and rel >= 0 and not bool(mem.get("met", false)):  # alguien que no conoce, en su casa
+		npc.set_emotion("worried")
+		npc.say("¿Hola? ¿Quién eres? ¿Qué haces en mi casa?", 5.0)
+		NPCMemory.add_event(owner, "Un desconocido entró en tu casa sin llamar.", -3)
+		return
 	if night or rel < 0:
 		npc.set_emotion("angry")
 		npc.play_gesture("point", 2.5)
@@ -252,7 +345,7 @@ func _work() -> void:
 	if j.is_empty() or not Jobs.can_work_now():
 		return
 	_ui.block(true)
-	_player.play_gesture("wipe" if "caf" in str(j.place_label) else "hammer", 999.0)
+	_player.play_gesture("wipe" if "caf" in str(j.place_label) else "hammer", 999.0, true)  # las herramientas del trabajo
 	await _interiors._fade_to(1.0)
 	var r := Jobs.work_shift()
 	var summary := await StoryDirector.shift_summary(j, r, perception(true))
@@ -364,6 +457,24 @@ func perception(for_player: bool) -> PackedStringArray:
 	return lines
 
 
+## Lo que se ve del jugador: su ropa y si va mojado o sucio (los demás lo notan y lo comentan).
+func _player_looks() -> String:
+	var worn := PlayerLook.wearing()
+	var clothes: String = WorldDB.get_entity("item", worn).get("name", "ropa normal").to_lower() if not worn.is_empty() else "ropa normal"
+	var parts := PackedStringArray(["lleva %s" % clothes])
+	if Body.wet > 0.6:
+		parts.append("está empapado/a")
+	elif Body.wet > 0.25:
+		parts.append("va algo mojado/a")
+	if Body.dirt > 0.5:
+		parts.append("lleva la ropa manchada de tierra")
+	elif Body.dirt > 0.2:
+		parts.append("va algo sucio/a")
+	if Body.get_need("hygiene") < 15.0:
+		parts.append("huele mal")
+	return ", ".join(parts) + "."
+
+
 func dialogue_context(npc_id: String) -> String:
 	if _dialogue.call_mode:
 		return Phone.remote_context(npc_id, true)
@@ -380,7 +491,10 @@ func dialogue_context(npc_id: String) -> String:
 	if NPCMemory.is_following(npc_id):
 		state += " Le estás acompañando."
 	state += " No te has ido a ningún sitio: si quieres irte o meterte en algún edificio, usa la acción leave o go_inside y entonces ocurrirá."
+	if _interiors.is_inside() and home_door_of(npc_id) == _interiors.current_door():
+		state += " Estás en TU casa%s." % ((" (estabas %s)" % npc.activity) if npc and not npc.activity.is_empty() else "")
 	lines.append(state)
+	lines.append("CÓMO VES AL JUGADOR: " + _player_looks())
 	var people := PackedStringArray()
 	for id in _npcs:
 		if id != npc_id and _npcs[id].is_present() and _npcs[id].global_position.distance_to(_player.global_position) < 12.0:
@@ -429,7 +543,7 @@ func _on_npc_action(npc_id: String, a: Dictionary) -> void:
 				NPCMemory.come_out(npc_id)
 				npc.set_present(true)
 				if door != Vector3.INF:
-					npc.global_position = door + Vector3(0, 0.3, 0)
+					npc.global_position = InteriorManager.free_spot_near(self, door, Vector3.ZERO, [npc]) + Vector3(0, 0.3, 0)
 			npc_go(npc_id, _near_player(npc, 1.4) if InteriorManager.is_interior_pos(npc.global_position) == _interiors.is_inside() else _player.global_position)
 		"guide_player":
 			guide(npc_id, str(a.get("target", a.get("item_name", ""))))
@@ -544,7 +658,7 @@ func _npc_go_inside(npc_id: String, target: String, locked: bool, minutes: int) 
 	var npc: TownNPC = _npcs[npc_id]
 	NPCMemory.set_fields(npc_id, {"following": false})
 	_errands[npc_id] = true
-	var stay := float(minutes) * 6.0 if minutes > 0 else (45.0 if locked else 60.0)
+	var stay := float(minutes) * 6.0 if minutes > 0 else (90.0 if locked else 150.0)
 	if _interiors.current_door() == door:  # ya estás dentro de ese sitio: entra contigo
 		_enter_building(npc_id, door, locked, stay)
 		return
@@ -579,7 +693,8 @@ func npc_go(npc_id: String, dest: Vector3, on_arrive: Callable = Callable(), run
 				return
 			var outside := _interiors.door_position(door)
 			var yaw: float = _interiors.doors().get(door, {}).get("yaw", 0.0)
-			npc.global_position = (outside if outside != Vector3.INF else dest) + Vector3(sin(yaw), 0, cos(yaw)) * 1.5 + Vector3(0, 0.3, 0)
+			var out_dir := Vector3(sin(yaw), 0, cos(yaw))
+			npc.global_position = InteriorManager.free_spot_near(self, (outside if outside != Vector3.INF else dest) + out_dir * 1.5, out_dir, [npc, _player]) + Vector3(0, 0.3, 0)
 			Sfx.at(self, "door", npc.global_position)
 			_walk(npc, dest, on_arrive, run, pace)
 		npc.walk_to(_interiors.exit_position(), run, pace)
@@ -694,8 +809,14 @@ func _door_for(npc_id: String, target: String) -> String:
 	var doors := _interiors.doors()
 	if not t.is_empty():
 		for id in doors:
-			if t.contains(str(id).to_lower()) or t.contains(str(doors[id].label).to_lower().trim_prefix("la ").trim_prefix("el ").trim_prefix("una ").trim_prefix("un ")):
+			var label: String = str(doors[id].label).to_lower()
+			if label.begins_with("una ") or label.begins_with("un "):
+				continue  # "una casa" no nombra ninguna en concreto
+			if t.contains(str(id).to_lower()) or t.contains(label.trim_prefix("la ").trim_prefix("el ")):
 				return id
+		var own := home_door_of(npc_id)
+		if not own.is_empty() and KIND_WORDS.house.any(func(w): return t.contains(w)) and not t.contains("tu "):
+			return own  # "me voy a casa", "a mi casa": la suya
 		for kind in KIND_WORDS:
 			if KIND_WORDS[kind].any(func(w): return t.contains(w)):
 				var best := ""
@@ -721,13 +842,19 @@ func _refresh_presence() -> void:
 		var door := NPCMemory.inside(id)
 		if door.is_empty():
 			if not w.is_empty():  # se le pasó el rato: sale
-				_interiors.set_locked(str(w.get("door", "")), "")
+				var was: String = str(w.get("door", ""))
+				_interiors.set_locked(was, "")
 				NPCMemory.come_out(id)
-				if not npc.is_present():
+				if npc.is_present() and _interiors.current_door() == was and InteriorManager.is_interior_pos(npc.global_position):
+					# Estás dentro con él: no desaparece, se despide y sale por la puerta
+					npc.say(["Bueno, me voy.", "Me tengo que ir.", "Hasta luego."][randi() % 3], 3.0)
+					_errands[id] = true
+					npc_go(id, _interiors.door_position(was) + Vector3(randf_range(-4, 4), 0, randf_range(5, 9)), func(): _errands.erase(id))
+				elif not npc.is_present():
 					var p := _interiors.door_position(str(w.get("door", "")))
 					npc.set_present(true)
 					if p != Vector3.INF and not _interiors.is_inside():
-						npc.global_position = p + Vector3(0, 0.3, 0)
+						npc.global_position = InteriorManager.free_spot_near(self, p, Vector3.ZERO, [npc]) + Vector3(0, 0.3, 0)
 		else:
 			if NPCMemory.is_locked_in(id):
 				_interiors.set_locked(door, "%s no abre. Se oye a alguien dentro." % WorldDB.get_entity("npc", id).get("name", "Alguien").split(" ")[0])
