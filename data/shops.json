@@ -1,0 +1,71 @@
+{
+	"_comment": "Locales: qué venden (precio en dólares, efecto y potencia como los objetos), horario, quién atiende y cómo se llaman según la época. Lo usa scripts/world/Shops.gd.",
+	"kinds": {
+		"grocery": {
+			"label": "los abarrotes", "sign": "Abarrotes", "open": 7, "close": 22, "staff": ["tendera", "tendero"], "verb": "Comprar",
+			"items": [
+				{"name": "Pan de caja", "effect": "nourish", "power": 25, "price": 3, "lore": "Una bolsa de pan blanco, del día."},
+				{"name": "Plátanos", "effect": "nourish", "power": 15, "price": 2, "lore": "Un racimo pequeño, maduros."},
+				{"name": "Lata de atún", "effect": "nourish", "power": 30, "price": 4, "lore": "Atún en agua, con abrefácil."},
+				{"name": "Botella de agua", "effect": "hydrate", "power": 25, "price": 1, "lore": "Agua natural, un litro."},
+				{"name": "Refresco", "effect": "hydrate", "power": 18, "price": 2, "lore": "Bien frío, de cola."},
+				{"name": "Café molido", "effect": "hydrate", "power": 12, "price": 6, "lore": "Para preparar en casa; despierta."},
+				{"name": "Jabón", "effect": "tool", "power": 10, "price": 2, "lore": "Una pastilla de jabón de tocador."}
+			]
+		},
+		"restaurant": {
+			"label": "la fonda", "sign": "Fonda", "open": 8, "close": 22, "staff": ["mesera", "mesero"], "verb": "Pedir de comer", "menu": true,
+			"items": [
+				{"name": "Comida corrida", "effect": "nourish", "power": 45, "price": 12, "lore": "Sopa, guisado del día, arroz, frijoles y agua fresca."},
+				{"name": "Orden de tacos", "effect": "nourish", "power": 35, "price": 8, "lore": "Cuatro tacos con cebolla, cilantro y salsa."},
+				{"name": "Sopa de fideo", "effect": "nourish", "power": 20, "price": 5, "lore": "Caliente, como la de casa."},
+				{"name": "Agua fresca", "effect": "hydrate", "power": 25, "price": 2, "lore": "De jamaica, en vaso grande."},
+				{"name": "Café de olla", "effect": "hydrate", "power": 15, "price": 3, "lore": "Con canela y piloncillo."}
+			]
+		},
+		"pharmacy": {
+			"label": "la farmacia", "sign": "Farmacia", "open": 8, "close": 21, "staff": ["farmacéutica", "farmacéutico"], "verb": "Comprar",
+			"items": [
+				{"name": "Vendas", "effect": "heal", "power": 15, "price": 4, "lore": "Un rollo de venda elástica y gasas."},
+				{"name": "Analgésico", "effect": "heal", "power": 10, "price": 5, "lore": "Para el dolor de cabeza o un golpe."},
+				{"name": "Botiquín", "effect": "heal", "power": 35, "price": 18, "lore": "Vendas, antiséptico, tiritas y unas tijeras."},
+				{"name": "Suero oral", "effect": "hydrate", "power": 35, "price": 3, "lore": "Para cuando el cuerpo no da más."}
+			]
+		},
+		"hardware": {
+			"label": "la ferretería", "sign": "Ferretería", "open": 8, "close": 19, "staff": ["ferretera", "ferretero"], "verb": "Comprar",
+			"items": [
+				{"name": "Hacha", "effect": "tool", "power": 20, "price": 35, "lore": "Hacha de leñador con mango de nogal."},
+				{"name": "Pala", "effect": "tool", "power": 20, "price": 25, "lore": "Pala recta de acero."},
+				{"name": "Martillo", "effect": "tool", "power": 15, "price": 12, "lore": "Martillo de carpintero."},
+				{"name": "Linterna", "effect": "light", "power": 20, "price": 15, "lore": "Linterna de mano, con pilas nuevas."},
+				{"name": "Cuerda", "effect": "tool", "power": 10, "price": 8, "lore": "Diez metros de cuerda trenzada."}
+			]
+		},
+		"cafe": {
+			"label": "la cafetería", "sign": "Cafetería", "open": 7, "close": 22, "staff": [], "verb": "Pedir en la barra", "menu": true,
+			"items": [
+				{"name": "Café", "effect": "hydrate", "power": 15, "price": 3, "lore": "Un café americano recién hecho."},
+				{"name": "Pan dulce", "effect": "nourish", "power": 15, "price": 2, "lore": "Una concha de vainilla."},
+				{"name": "Sándwich", "effect": "nourish", "power": 30, "price": 6, "lore": "De jamón y queso, tostado."},
+				{"name": "Jugo de naranja", "effect": "hydrate", "power": 25, "price": 3, "lore": "Recién exprimido."}
+			]
+		}
+	},
+	"eras": {
+		"prehistory": [],
+		"ancient": ["grocery", "restaurant"],
+		"medieval": ["grocery", "restaurant", "hardware"],
+		"industrial": ["grocery", "pharmacy", "restaurant"],
+		"present": ["grocery", "restaurant", "pharmacy"],
+		"near_future": ["grocery", "pharmacy", "restaurant"],
+		"far_future": ["pharmacy", "restaurant"],
+		"deep_future": ["pharmacy"]
+	},
+	"era_labels": {
+		"grocery": {"ancient": "el mercado", "medieval": "el mercado", "industrial": "el colmado", "near_future": "el autoservicio", "far_future": "el dispensario de víveres", "deep_future": "el dispensario de víveres"},
+		"restaurant": {"ancient": "la taberna", "medieval": "la posada", "industrial": "la casa de comidas", "near_future": "el comedor", "far_future": "la cantina", "deep_future": "la cantina"},
+		"pharmacy": {"ancient": "el herbolario", "medieval": "el boticario", "industrial": "la botica", "near_future": "la clínica", "far_future": "el dispensario médico", "deep_future": "el dispensario médico"},
+		"hardware": {"ancient": "el herrero", "medieval": "la herrería", "industrial": "la ferretería", "far_future": "el taller de piezas", "deep_future": "el taller de piezas"}
+	}
+}

@@ -162,6 +162,7 @@ func _beacon(pos: Vector3, label: String, color: Color, poi_index: int) -> void:
 	l.outline_size = 10
 	l.pixel_size = 0.01
 	l.position = pos + Vector3(0, 7.6, 0)
+	Decor.fade_label(l, 90.0)
 	add_child(l)
 	var area := Area3D.new()
 	Layers.zone(area)
@@ -296,6 +297,10 @@ func _add_doors() -> void:
 	var era: String = _def.get("era", "present")
 	var futuristic := era in ["near_future", "far_future", "deep_future"]
 	var i := 0
+	var count: int = _extras.buildings.filter(func(b): return is_instance_valid(b)).size()
+	# Los negocios propios de su época (una taberna y un mercado en la Antigüedad…), si el
+	# asentamiento es lo bastante grande: el resto son casas.
+	var businesses: Array = Shops.for_era(era).slice(0, clampi(count - 2, 0, 3))
 	for b in _extras.buildings:
 		if not is_instance_valid(b):
 			continue
@@ -304,6 +309,20 @@ func _add_doors() -> void:
 		var pos: Vector3 = b.position + front * (size.z / 2.0 + 0.6)
 		pos.y = _height_at.call(pos.x, pos.z)
 		i += 1
+		if not businesses.is_empty():
+			var kind: String = businesses.pop_front()
+			var label := Shops.label(kind, era)
+			_interiors.add_door("edificio_%d" % i, pos, b.rotation.y, kind, int(_def.get("seed", 1)) * 100 + i, label)
+			var sign := Label3D.new()
+			sign.text = label.split(" ", false, 1)[-1].capitalize()
+			sign.font_size = 56
+			sign.outline_size = 10
+			sign.pixel_size = 0.008
+			sign.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			sign.position = pos + Vector3(0, minf(size.y * 0.6, 4.0), 0)
+			Decor.fade_label(sign)
+			add_child(sign)
+			continue
 		_interiors.add_door("edificio_%d" % i, pos, b.rotation.y, "scifi" if futuristic else "house", int(_def.get("seed", 1)) * 100 + i,
 			"un edificio" if futuristic else "una casa")
 

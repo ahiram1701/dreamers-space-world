@@ -75,6 +75,8 @@ Si la IA no está disponible, el juego usa contenido de respaldo y **nunca se qu
 | ✅ | **Crea tu personaje** (nombre, sexo, piel, peinado, pelo, altura, complexión, ropa); los ajustes se aplican al momento |
 | ✅ | **Familias en sus casas** que duermen, cocinan y comen según la hora; quien ves entrar, está dentro |
 | ✅ | **Ropa, tienda y peluquería**: tu ropa es tuya, te mojas con la lluvia, te ensucias trabajando y te duchas |
+| ✅ | **Abarrotes, fonda, farmacia y ferretería** con horario y precios; en la fonda te sirven en la mesa |
+| ✅ | **Casas por cuartos y de dos plantas**, fachadas con detalle y ventanas que se encienden si hay alguien despierto |
 | ✅ | **Vida real**: hambre, sed, descanso e higiene, dinero (dólares), tiempo atmosférico y días de la semana |
 | ✅ | **Celular**: mensajes y llamadas con la gente (la IA contesta), banco y mapa con destino |
 | ✅ | **Trabajo** con horario y sueldo, retrasos, faltas y despido |
@@ -185,6 +187,9 @@ godot --headless --path . -s tests/test_settings_live.gd  # ajustes y aspecto ap
 godot --headless --path . -s tests/test_unstuck.gd     # nunca atrapado al salir de un edificio
 godot --headless --path . -s tests/test_homes.gd       # familias en sus casas, visitas y vecinos que duermen en casa
 godot --headless --path . -s tests/test_wardrobe.gd    # ropa, tienda, peluquería, lluvia, suciedad y cuerpo
+godot --headless --path . -s tests/test_fixes065.gd    # faro, rumores, dormir con F, linterna, vías, objetivo
+godot --headless --path . -s tests/test_shops.gd       # abarrotes, fonda, farmacia y ferretería
+godot --headless --path . -s tests/test_buildings.gd   # cuartos, escalera, segundo piso y ventanas
 bash tests/smoke.sh                                    # arranca las escenas y busca errores de script
 ```
 

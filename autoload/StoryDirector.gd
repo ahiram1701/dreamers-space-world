@@ -100,7 +100,7 @@ static func truthful_facts(facts: Array) -> Array:
 ## Pasos que tienen sentido en una acción del jugador (tecla F).
 const WORLD_STEPS := ["go_to", "play", "use", "npc_react", "give_to_npc", "give_item", "change_stat", "journal",
 	"reveal_place", "update_item", "remove_item", "place_object", "affect_nearby", "change_need", "pay", "earn",
-	"spawn_npc", "create_place"]
+	"spawn_npc", "create_place", "sleep", "wait"]
 const MAX_FINDS_PER_PLACE := 6  # rebuscar sin parar no llena el inventario (fabricar no cuenta)
 const MAX_ACTION_MINUTES := 240
 ## Si la narración cuenta esto, tiene que haber un paso de este tipo (si no, se pide otra vez).
@@ -143,7 +143,10 @@ Reglas:
 - earn: al jugador le pagan (un trabajo hecho, algo vendido). "price" en dólares, razonable.
 - spawn_npc: aparece una persona nueva que tiene sentido aquí (llamaste a un fontanero, pasa una vendedora…). "name" (nombre y apellido), "occupation", "text" (cómo es y su carácter, 1-2 frases), "line" (lo primero que dice). Se queda a vivir en el lugar.
 - create_place: aparece o se abre un sitio nuevo que encaja con el lugar y la época (una panadería, un taller…). "item_name": su nombre (el del letrero); "target": shop, bakery, bar, workshop, house, office, clinic o market; "text": cómo es.
+- sleep: dormir. "until_hour": hora a la que se despierta (0–24; 3.5 = 3:30, 15 = 3 de la tarde) o "hours": cuántas horas. Si hay una cama cerca, antes go_to a ella. Hace pasar el tiempo él solo ("minutes": 0).
+- wait: esperar sin dormir (hasta una hora o unas horas), mismos campos. Hace pasar el tiempo él solo ("minutes": 0).
 "minutes": cuánto tarda de verdad (talar ~30, construir una balsa ~180, buscar ~10, un golpe ~1, comer ~20, ducharse ~15).
+Ejemplo, "duermo hasta las 3:30 am": "steps": [{"type": "sleep", "until_hour": 3.5, "narration": "Te acomodas y cierras los ojos."}], "minutes": 0
 
 CREAR E INVENTAR: se puede crear casi cualquier cosa, pero como en la vida real: hacen falta conocimientos, materiales (que se gastan con remove_item), herramientas y tiempo acordes a la época y al lugar. Si falta algo, sale peor o no sale, y se cuenta qué faltó. La ciencia ficción está permitida si se apoya en algo que existe en este mundo (el Ancla, tecnología de otro mundo o época, materiales anómalos), siempre con física creíble y nunca magia.
 
@@ -174,8 +177,10 @@ func act(what: String, scene_context: String) -> Dictionary:
 		var again := await ContentGenerator.request_valid("world_action", messages)
 		if again.ok:
 			data = again.data
-	return {"ok": true, "narration": data.narration, "steps": plan_steps(data), "error": "",
-		"minutes": clampi(int(data.get("minutes", 5)), 0, MAX_ACTION_MINUTES)}
+	var steps := plan_steps(data)
+	var passes_time := steps.any(func(s): return s.get("type", "") in ["sleep", "wait"])  # el paso ya mueve el reloj
+	return {"ok": true, "narration": data.narration, "steps": steps, "error": "",
+		"minutes": 0 if passes_time else clampi(int(data.get("minutes", 5)), 0, MAX_ACTION_MINUTES)}
 
 
 ## Cómo fue un turno de trabajo (1–2 frases), con algún pequeño suceso que puede quedar en el diario.
@@ -428,7 +433,9 @@ CÓMO RESPONDER (JSON):
 - "line": lo que dices ahora, natural y breve (1 a 4 frases). Reacciona a lo último que dijo el jugador.
 - "emotion": cómo te sientes al decirlo.
 - "choices": 2 a 4 respuestas posibles PARA EL JUGADOR, variadas en tono; al menos una que permita despedirse.
-- "new_facts": 0 a 2 cosas importantes que acabas de aprender del jugador o que acaban de pasar (en tercera persona).
+- "new_facts": 0 a 2 cosas importantes que acabas de aprender del jugador o que acaban de pasar (en tercera persona). Incluye lo que el jugador afirma de sí mismo (p. ej. «El jugador dice que no notó nada raro»).
+- LO QUE EL JUGADOR VIO, OYÓ O SINTIÓ: solo lo que conste en tu memoria o lo que él/ella te diga. Si te dice que no notó nada, que está bien o que no sabe, créetelo y responde en consecuencia: no hables como si lo hubiera vivido («si te vuelve a pasar…»). Tus preguntas no son hechos.
+- RUMORES: lo que otros te contaron no lo viviste tú; en esas frases, «tú/te» es quien te lo contó.
 - "relationship_delta": cuánto mejora o empeora tu opinión del jugador por lo que acaba de decir.
 - "trait_signals": qué rasgos ha mostrado el jugador con su ÚLTIMO mensaje (vacío si no aplica).
 - "end_conversation": true solo si la conversación termina de forma natural.

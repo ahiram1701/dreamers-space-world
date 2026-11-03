@@ -3,6 +3,36 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.6.5] - 2026-11-03
+
+### Añadido
+- **Locales de verdad:** abarrotes, fonda, farmacia y ferretería en el centro del pueblo, con quien atiende en su horario y una lista de precios.
+  - Lo que compras es un objeto real: el pan se come, el agua se bebe, las vendas curan, y el hacha o la pala hacen que las veas en tu mano al usarlas.
+  - **En la fonda y en la cafetería pides de la carta**, te sientas, te traen el plato a la mesa, comes y se te quita el hambre.
+  - En los mundos generados hay negocios propios de su época: taberna y mercado en la Antigüedad, botica en el siglo XIX, cantina en el futuro… Los sitios que crea la IA también tienen quien atienda y algo que comprar.
+- **Edificios más realistas:**
+  - **Interiores por cuartos:** recámara, baño, sala-comedor y cocina separados por tabiques.
+  - **Casas de dos plantas** con escalera (se sube andando) y las recámaras arriba.
+  - **Fachadas con detalle:** escalón, macetas con flores, buzones, y en los negocios toldo de rayas y letrero colgante.
+  - **Ventanas con vida:** de noche se encienden solo si hay alguien despierto dentro o el negocio está abierto, y se apagan cuando se acuestan.
+  - La puerta queda donde el edificio tiene la suya.
+- **Dormir o esperar hasta una hora con F:** «duermo hasta las 3:30», «espero hasta las 7 de la tarde», «echo una siesta de 2 horas». En una cama descansas del todo; en el suelo, la mitad, y te levantas entumecido/a. Funciona aunque la IA no responda.
+- **La linterna se ve en tu mano**, y la luz sale de ella y alumbra hacia donde apuntas.
+- **Paso a nivel** donde la calle cruza las vías, con cruces de San Andrés y señales.
+
+### Cambiado
+- **El faro está apagado**, como dice la historia: solo a las 3:33 un pulso lo enciende unos segundos (más fuerte cuando se acerca el Despertar).
+- **El objetivo dice a quién buscar:** «Habla con Marina, Teo y Samir (1/3) · falta: Samir».
+- **Lo que les cuentan otros es un rumor:** los PNJ ya no confunden algo que le pasó a otro con algo que vivieron ellos.
+- **Si le dices a alguien que no notaste nada**, te cree y no habla como si lo hubieras vivido.
+- Cuando dos personas charlan contigo delante (o en la misma habitación), te hablan a ti o cambian de tema, en vez de hablar de ti como si no estuvieras.
+- Al cansarte, el personaje se estira y bosteza con la cabeza hacia atrás, en vez de quedarse cabizbajo. Agacharse con F ya no te deja agachado, y al colgar el celular el otro también deja de hablar por teléfono.
+
+### Corregido
+- **Las vías del tren pasaban por debajo de casas:** ya no se construye nada encima. El resto del pueblo y el número de cada casa no cambian.
+- **Luces blancas que aparecían y desaparecían de noche:** eran bocadillos de texto de gente lejana. Ahora no se ven a más de 22 m, y los letreros se desvanecen a lo lejos sin brillar.
+- Al dormir, el descanso ya no se gastaba mientras dormías.
+
 ## [0.6.4] - 2026-10-31
 
 ### Añadido

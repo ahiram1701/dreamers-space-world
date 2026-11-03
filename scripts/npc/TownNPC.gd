@@ -14,6 +14,7 @@ const WALK_SPEED := 1.6
 const FOLLOW_SPEED := 4.6
 const FOLLOW_DISTANCE := 2.6
 const RUN_SPEED := 4.2
+const BUBBLE_RANGE := 22.0
 
 ## Llegó a donde iba con walk_to (para entrar en un edificio al llegar a la puerta, etc.).
 signal arrived
@@ -123,6 +124,11 @@ func face(target: Vector3) -> void:
 func play_gesture(gesture: String, duration: float = -1.0) -> void:
 	if _rig:
 		_rig.play(gesture, duration)
+
+
+func stop_gesture() -> void:
+	if _rig:
+		_rig.stop_gesture()
 
 
 func set_emotion(emotion: String) -> void:
@@ -290,8 +296,10 @@ func is_walking() -> bool:
 func _process(delta: float) -> void:
 	if _bubble_t > 0.0:
 		_bubble_t -= delta
-		if _bubble_t <= 0.0:
-			_bubble.visible = false
+		# Lo que dice alguien lejos no se ve: a más de 22 m, el texto (de tamaño fijo en pantalla)
+		# quedaba como un punto que de noche brillaba como una luz
+		var cam := get_viewport().get_camera_3d()
+		_bubble.visible = _bubble_t > 0.0 and (cam == null or cam.global_position.distance_to(global_position) < BUBBLE_RANGE)
 
 
 func _physics_process(delta: float) -> void:

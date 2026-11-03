@@ -159,22 +159,53 @@ static func _swap_head(model: Node3D, pack: String, other_name: String) -> bool:
 
 
 ## Edificio para un asentamiento. `size_class`: "small" (casas), "town", "city".
-static func building(size_class: String, rng: RandomNumberGenerator, wall_tint: Color = Color(0, 0, 0, 0)) -> Node3D:
+static func building(size_class: String, rng: RandomNumberGenerator, wall_tint: Color = Color(0, 0, 0, 0), own_windows: bool = false) -> Node3D:
 	var list: Array = {"small": HOUSES_SMALL, "town": HOUSES_TOWN, "city": HOUSES_CITY}.get(size_class, HOUSES_SMALL)
-	var model := instance("buildings_pack_3", list[rng.randi() % list.size()])
+	var model_name: String = list[rng.randi() % list.size()]
+	var model := instance("buildings_pack_3", model_name)
 	if model:
-		_dress_building(model, wall_tint)
+		model.set_meta("model_name", model_name)
+		_dress_building(model, wall_tint, own_windows)
 	return model
 
 
-static func _dress_building(model: Node3D, wall_tint: Color) -> void:
+## Dónde está la puerta del modelo en su fachada: el centro de la madera oscura a ras de suelo en
+## la cara delantera. Devuelve el desplazamiento lateral (m, hacia `right`) o NAN si no la ve.
+static func find_door(root: Node3D, front: Vector3, right: Vector3) -> float:
+	var pts := []
+	var max_v := -INF
+	for mi in _meshes(root):
+		for i in mi.mesh.get_surface_count():
+			var src := mi.mesh.surface_get_material(i) as StandardMaterial3D
+			if src == null or not (src.resource_name in ["DarkWood", "Wood", "DarkBrown"]):
+				continue
+			var arrays := mi.mesh.surface_get_arrays(i)
+			for v in arrays[Mesh.ARRAY_VERTEX]:
+				var p: Vector3 = mi.global_transform * v - root.global_position
+				max_v = maxf(max_v, p.dot(front))
+				pts.append(p)
+	var front_pts := pts.filter(func(p): return p.y < 2.8 and p.y > 0.05 and p.dot(front) > max_v - 0.8)
+	if front_pts.size() < 6:
+		return NAN
+	var sum := 0.0
+	for p in front_pts:
+		sum += p.dot(right)
+	return sum / front_pts.size()
+
+
+static func _dress_building(model: Node3D, wall_tint: Color, own_windows: bool = false) -> void:
+	var glass := _windows()
+	if own_windows:  # ventanas propias: se encienden si hay alguien despierto dentro
+		glass = _windows().duplicate()
+		model.set_meta("windows", glass)
+		Decor.register_windows(glass)
 	for mi in _meshes(model):
 		for i in mi.mesh.get_surface_count():
 			var src := mi.mesh.surface_get_material(i) as StandardMaterial3D
 			if src == null:
 				continue
 			if src.resource_name == "Glass":
-				mi.set_surface_override_material(i, _windows())
+				mi.set_surface_override_material(i, glass)
 			elif wall_tint.a > 0.0 and src.resource_name in ["Main", "Bricks"]:
 				var m := src.duplicate() as StandardMaterial3D
 				m.albedo_color = src.albedo_color.lerp(wall_tint, 0.6 if src.resource_name == "Main" else 0.3)

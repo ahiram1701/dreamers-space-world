@@ -8,6 +8,15 @@ const GRASS_SHADER := preload("res://shaders/grass.gdshader")
 const GROUND_SHADER := preload("res://shaders/ground.gdshader")
 
 ## Material de suelo con colores por vértice (bioma, arena, caminos) + variación procedural.
+## Un letrero o texto flotante que se desvanece a lo lejos (de noche, un texto blanco diminuto a
+## 100 m se veía como una luz). `far`: hasta dónde se lee.
+static func fade_label(l: Label3D, far: float = 70.0) -> void:
+	l.visibility_range_end = far
+	l.visibility_range_end_margin = far * 0.15
+	l.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+	l.modulate = l.modulate * Color(0.9, 0.9, 0.9, 1.0)
+
+
 static func ground_material() -> ShaderMaterial:
 	var m := ShaderMaterial.new()
 	m.shader = GROUND_SHADER
@@ -133,9 +142,78 @@ static func bind_windows(fx: EnvironmentFX) -> void:
 	_light_windows.call_deferred(fx.night_amount())  # cuando ya existan los edificios
 
 
+static var _own_windows := {}   # material de ventanas de un edificio -> ¿hay alguien despierto dentro?
+static var _night := 0.0
+
+
 static func _light_windows(n: float) -> void:
+	_night = n
 	var m := AssetLibrary._windows()
 	m.emission_energy_multiplier = smoothstep(0.2, 0.7, n) * 2.5
+	for w in _own_windows.keys():
+		if not is_instance_valid(w):
+			_own_windows.erase(w)
+			continue
+		(w as StandardMaterial3D).emission_energy_multiplier = smoothstep(0.2, 0.7, n) * (2.5 if _own_windows[w] else 0.0)
+
+
+## Ventanas propias de un edificio (empiezan encendidas hasta que alguien diga lo contrario).
+static func register_windows(m: StandardMaterial3D) -> void:
+	_own_windows[m] = true
+
+
+## Enciende o apaga las ventanas de un edificio (hay alguien despierto dentro, el negocio abierto).
+static func set_windows_lit(m: StandardMaterial3D, lit: bool) -> void:
+	if m == null:
+		return
+	_own_windows[m] = lit
+	m.emission_energy_multiplier = smoothstep(0.2, 0.7, _night) * (2.5 if lit else 0.0)
+
+
+## Detalles de una fachada: escalón ante la puerta, macetas con flores, buzón (casas), toldo de
+## rayas y letrero colgante (negocios). Nada delante de la salida (se deja libre el paso).
+static func facade(parent: Node3D, door: Vector3, yaw: float, business: String, rng: RandomNumberGenerator) -> void:
+	var out := Vector3(sin(yaw), 0, cos(yaw))
+	var side := out.cross(Vector3.UP).normalized()
+	var step := PropsBuilder._box(parent, door - out * 0.25 + Vector3(0, 0.06, 0), Vector3(2.2, 0.12, 0.9), Color("#9a9288"), false)
+	step.rotation.y = yaw
+	for s in [-1, 1]:  # macetas a los lados de la puerta
+		var pot_at: Vector3 = door - out * 0.35 + side * s * 1.5
+		var pot := PropsBuilder._box(parent, pot_at + Vector3(0, 0.2, 0), Vector3(0.6, 0.4, 0.4), Color("#8a4b2f"), true)
+		pot.rotation.y = yaw
+		var flowers := AssetLibrary.instance("nature_pack", ["Flowers", "Bush_1", "Plant_2"][rng.randi() % 3])
+		if flowers:
+			AssetLibrary.place(parent, flowers, pot_at + Vector3(0, 0.38, 0), 0.5, rng.randf() * TAU, false)
+	if business.is_empty():  # buzón junto a la acera
+		var post_at := door + out * 2.6 + side * 2.4
+		PropsBuilder._box(parent, post_at + Vector3(0, 0.55, 0), Vector3(0.08, 1.1, 0.08), Color("#3b3b3b"), true)
+		var box := PropsBuilder._box(parent, post_at + Vector3(0, 1.2, 0), Vector3(0.28, 0.25, 0.45), Color(["#2e5e8c", "#8c2e2e", "#3b6e3b", "#444444"][rng.randi() % 4]), false)
+		box.rotation.y = yaw
+		return
+	# Negocio: toldo de rayas sobre la puerta y letrero colgante
+	var colors := [[Color("#c0392b"), Color("#f4efe6")], [Color("#2e7d5b"), Color("#f4efe6")], [Color("#2c5d8f"), Color("#f4efe6")], [Color("#d4a017"), Color("#5a3a1a")]]
+	var pair: Array = colors[rng.randi() % colors.size()]
+	for k in 6:
+		var stripe := PropsBuilder._box(parent, door - out * 0.1 + side * (-1.25 + k * 0.5) + Vector3(0, 2.9, 0), Vector3(0.5, 0.06, 1.3), pair[k % 2], false)
+		stripe.rotation = Vector3(-0.35, yaw, 0)
+	var board_at := door + out * 0.25 + side * 1.9 + Vector3(0, 2.4, 0)
+	PropsBuilder._box(parent, board_at + Vector3(0, 0.45, 0), Vector3(0.05, 0.05, 0.6), Color("#3b3b3b"), false).rotation.y = yaw
+	var board := PropsBuilder._box(parent, board_at, Vector3(0.08, 0.6, 0.9), pair[0], false)
+	board.rotation.y = yaw
+	var l := Label3D.new()
+	l.text = business
+	l.font_size = 40
+	l.pixel_size = 0.004
+	l.outline_size = 6
+	l.double_sided = false  # una cara del letrero por lado (si no, por detrás se lee al revés)
+	l.rotation.y = yaw + PI / 2
+	l.position = board_at + side * 0.05
+	fade_label(l, 40.0)
+	parent.add_child(l)
+	var l2 := l.duplicate() as Label3D
+	l2.rotation.y = yaw - PI / 2
+	l2.position = board_at - side * 0.05
+	parent.add_child(l2)
 
 
 # --- Olas (las mismas que water.gdshader, para que las barcas floten con el agua) ---------

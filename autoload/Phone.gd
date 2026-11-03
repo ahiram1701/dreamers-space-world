@@ -210,7 +210,8 @@ func _maybe_text_first() -> void:
 			continue
 		if is_near.call(id) or now - float(NPCMemory.get_mem(id).get("last_talk", -1e9)) < RECENT_TALK:
 			continue  # está contigo o acabáis de hablar
-		var recent: Array = NPCMemory.get_mem(id).recent.filter(func(e): return not str(e.text).begins_with("Acabas de hablar") and not str(e.text).begins_with("Hablaste por teléfono"))
+		var recent: Array = NPCMemory.get_mem(id).recent.filter(func(e): return not bool(e.get("rumor", false)) \
+			and not str(e.text).begins_with("Acabas de hablar") and not str(e.text).begins_with("Hablaste por teléfono"))
 		var news: String = recent[-1].text if not recent.is_empty() and now - float(recent[-1].at) < 600.0 else ""
 		var friendly := int(NPCMemory.get_mem(id).relationship) >= 15
 		if news.is_empty() and not (friendly and randf() < 0.3):

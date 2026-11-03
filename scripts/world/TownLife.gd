@@ -73,7 +73,7 @@ func gossip() -> int:
 			var news := _news_for(a, b)
 			if not news.is_empty():
 				var teller: String = WorldDB.get_entity("npc", a).get("name", "Alguien").split(" ")[0]
-				NPCMemory.add_event(b, "%s te contó: «%s»" % [teller, news])
+				NPCMemory.add_event(b, "%s te contó algo que le pasó a %s con el jugador: «%s» (ahí «tú/te» es %s, no tú)." % [teller, teller, news, teller], 0, true)
 				passed += 1
 	return passed
 
@@ -84,12 +84,26 @@ func _news_for(a: String, b: String) -> String:
 	var recent: Array = NPCMemory.get_mem(a).recent
 	for i in range(recent.size() - 1, -1, -1):
 		var text: String = recent[i].text
-		if " te contó: " in text or known.contains(text.left(40)):
+		if bool(recent[i].get("rumor", false)) or " te contó" in text or known.contains(text.left(40)):
 			continue
 		if WorldClock.absolute_minutes() - float(recent[i].at) > 60.0 * 24.0:
 			break
 		return text
 	return ""
+
+
+## Dónde está el jugador respecto a quienes charlan: si está ahí mismo, no hablan de él como si
+## no estuviera (le hablan a él o cambian de tema).
+func _player_presence(a: String, b: String) -> String:
+	var player := scene._player
+	var na: TownNPC = scene._npcs[a]
+	var d := na.global_position.distance_to(player.global_position)
+	var same_room: bool = scene._interiors.is_inside() and InteriorManager.is_interior_pos(na.global_position)
+	var where := ("dentro de %s" % scene._interiors.current_label()) if same_room else ("fuera, cerca de %s" % scene.place_near(na.global_position))
+	var doing := "A %s; B %s." % [na.doing(), scene._npcs[b].doing()]
+	if same_room or d < 5.0:
+		return "Estáis %s. %s EL JUGADOR ESTÁ AHÍ MISMO con vosotros (a %.0f m) y lo oye todo: NO habléis de él/ella en tercera persona como si no estuviera. Si sale algo del jugador, decídselo a él/ella directamente (de tú) o hablad de otra cosa." % [where, doing, d]
+	return "Estáis %s. %s El jugador anda a %.0f m y quizá os oiga: si habláis de él/ella, que sea algo que sepáis de verdad." % [where, doing, d]
 
 
 ## Dos vecinos juntos y el jugador cerca: charlan (dos a cuatro frases, en bocadillos).
@@ -114,7 +128,7 @@ func _chat(a: String, b: String) -> void:
 	var ea := WorldDB.get_entity("npc", a)
 	var eb := WorldDB.get_entity("npc", b)
 	var messages := [
-		{"role": "system", "content": ContentGenerator.world_rules_prompt() + "\n\nEscribes una charla breve y natural entre dos vecinos que se encuentran. El jugador está cerca y puede oírles. Hablan de su día, de lo que les preocupa o de lo que ha pasado (si saben algo del jugador, puede salir). Frases cortas, coloquiales, en español."},
+		{"role": "system", "content": ContentGenerator.world_rules_prompt() + "\n\nEscribes una charla breve y natural entre dos personas que están juntas. Hablan de su día, de lo que están haciendo, de lo que les preocupa o de lo que ha pasado. Frases cortas, coloquiales, en español.\n" + _player_presence(a, b)},
 		{"role": "user", "content": "%s\n\nA: %s (%s), %s. Lo que sabe del jugador:\n%s\n\nB: %s (%s), %s. Lo que sabe del jugador:\n%s\n\nEscribe de 2 a 4 líneas alternando; \"who\" es \"a\" o \"b\"." % [
 			"\n".join(scene.perception(false)), ea.name, ea.occupation, ", ".join(PackedStringArray(ea.personality)), NPCMemory.describe(a),
 			eb.name, eb.occupation, ", ".join(PackedStringArray(eb.personality)), NPCMemory.describe(b)]},

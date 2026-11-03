@@ -286,7 +286,7 @@ func use_fixture(what: String, node: Node3D) -> void:
 			Body.change("thirst", 60.0)
 			WorldClock.advance(2)
 			message.emit("Bebes agua fresca del grifo.")
-		"wardrobe", "clothes_shop", "haircut":
+		"wardrobe", "clothes_shop", "haircut", "shop_buy", "order":
 			_busy = false
 			wants.emit(what)
 			return
@@ -300,34 +300,49 @@ func use_fixture(what: String, node: Node3D) -> void:
 	_busy = false
 
 
-## Dormir hasta la mañana: pasa el tiempo y se recupera salud.
+## Dormir en una cama hasta la mañana (o una siesta de 3 h si ya es casi de día).
 func sleep(bed: Node3D) -> void:
-	if _busy:
+	await rest(maxf(fposmod(8.0 - WorldClock.hour(), 24.0) * 60.0, 180.0), bed, true)
+
+
+## Dormir o esperar `minutes`: en una cama se descansa del todo (8 h = descanso lleno); en el
+## suelo o en un banco, la mitad y te levantas entumecido; esperando no se descansa.
+func rest(minutes: float, bed: Node3D = null, sleeping: bool = true) -> void:
+	if _busy or minutes <= 0.0:
 		return
 	_busy = true
-	_ignore_collision(bed)
-	player.global_position = bed.global_position + Vector3(0, 0.45, 0)
-	player.hold_position = true
-	player.play_gesture("sleep")
-	await get_tree().create_timer(1.2).timeout
+	if bed:
+		_ignore_collision(bed)
+		player.global_position = bed.global_position + Vector3(0, 0.45, 0)
+	if sleeping:
+		player.hold_position = true
+		player.play_gesture("sleep")
+	await get_tree().create_timer(1.2 if sleeping else 0.4).timeout
 	await _fade_to(1.0)
-	var h := WorldClock.hour()
-	var minutes := fposmod(8.0 - h, 24.0) * 60.0
-	if minutes < 180.0:  # una siesta si ya es casi de día
-		minutes = 180.0
 	WorldClock.advance(minutes)
-	Body.set_need("rest", 100.0)
-	if GameState.is_awakened():
-		GameState.change_stat("health", 35)
-		GameState.change_stat("instability", -10)
+	var hours := minutes / 60.0
+	if sleeping:
+		Body.slept(minutes)
+		Body.change("rest", hours * (12.5 if bed else 6.0))
+		if bed and GameState.is_awakened():
+			GameState.change_stat("health", 35)
+			GameState.change_stat("instability", -10)
 	await get_tree().create_timer(0.8).timeout
-	player.stop_gesture()
-	player.hold_position = false
+	if sleeping:
+		player.stop_gesture()
+		player.hold_position = false
 	for e in player.get_collision_exceptions():
 		player.remove_collision_exception_with(e)
-	player.global_position = bed.global_position + bed.global_basis.x * 1.4 + Vector3(0, 0.3, 0)
+	if bed:
+		player.global_position = free_spot_near(self, bed.global_position + bed.global_basis.x * 1.4, Vector3.ZERO, [player]) + Vector3(0, 0.3, 0)
 	await _fade_to(0.0)
-	message.emit("Duermes %d horas. Son las %s." % [roundi(minutes / 60.0), WorldClock.text()])
+	var h_text := ("%d horas" % roundi(hours)) if hours >= 1.5 else ("%d minutos" % roundi(minutes)) if hours < 1.0 else "una hora"
+	if not sleeping:
+		message.emit("Esperas %s. Son las %s." % [h_text, WorldClock.text()])
+	elif bed:
+		message.emit("Duermes %s. Son las %s." % [h_text, WorldClock.text()])
+	else:
+		message.emit("Duermes %s sin cama. Son las %s; te levantas entumecido/a." % [h_text, WorldClock.text()])
 	_busy = false
 
 

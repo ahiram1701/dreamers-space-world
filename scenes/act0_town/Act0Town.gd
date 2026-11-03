@@ -7,6 +7,7 @@ const NPCS_PATH := "res://data/act0/npcs.json"
 const TOWN_SEED := 3330333
 const SPAWN := Vector3(-6, 0.5, -4)
 const LIGHTHOUSE_POS := Vector3(44, 0, -30)
+const TRACKS_Z := 37.0
 const WATER_Y := -0.45
 ## Sitios con nombre: a dónde pueden ir los vecinos (rutinas, "acompáñame al muelle") y qué
 ## tiene cerca el jugador cuando hace algo (F).
@@ -22,6 +23,7 @@ El jugador es un/a vecino/a corriente del pueblo con una vida normal. Aún no sa
 Últimamente pasan cosas pequeñas y raras con explicación física aún desconocida: un pulso electromagnético a las 3:33 que enciende el faro desconectado y para relojes, vecinos con flashes de recuerdos que no son suyos, una transmisión de radio estructurada."""
 
 var _beacon: OmniLight3D
+var _beacon_glass: StandardMaterial3D
 var _sun: DirectionalLight3D
 var _env: Environment
 var _sky_mat: ProceduralSkyMaterial
@@ -35,7 +37,9 @@ var _homes: Dictionary = {}       # npc_id -> id de la puerta de su casa
 var _removed: Array = []         # los que ya talaste (no vuelven)
 var _house_count := 0
 var _going_home := {}
-var _shops_to_open := [["clothes", "la tienda de ropa", "Ropa"], ["salon", "la peluquería", "Peluquería"]]  # en casas de la calle   # npc_id -> true mientras camina a su casa para dormir
+var _windows := {}   # id de puerta -> material de sus ventanas
+var _shops_to_open := [["clothes", "la tienda de ropa", "Ropa"], ["salon", "la peluquería", "Peluquería"]]  # en casas de la calle
+var _locals_to_open := ["grocery", "restaurant", "pharmacy", "hardware"]  # abarrotes, fonda, farmacia, ferretería   # npc_id -> true mientras camina a su casa para dormir
 
 
 func _ready() -> void:
@@ -80,9 +84,12 @@ func _ready() -> void:
 	_ui.nearby_npcs = func(): return _npcs.keys()
 	add_child(_ui)
 	_setup_common()
-	WorldClock.hour_changed.connect(func(_h): _follow_schedules(false); _shop_hours())
+	WorldClock.hour_changed.connect(func(_h): _follow_schedules(false); _shop_hours(); _update_windows())
+	_interiors.entered.connect(func(_k, _id): _update_windows())
+	_interiors.exited.connect(func(_k, _id): _update_windows())
 	_follow_schedules(true)
 	_shop_hours()
+	_update_windows.call_deferred()
 	var waves := AmbientAudio.new()
 	waves.kind = AmbientAudio.Kind.WAVES
 	add_child(waves)
@@ -95,13 +102,22 @@ func _process(_delta: float) -> void:
 		_player.velocity = Vector3.ZERO
 	_process_common()
 	if _awakening != null:
+		_beacon_glass.emission_energy_multiplier = _beacon.light_energy * 0.4
 		return  # la secuencia controla el faro
 	# El faro "respira"; cuando el Despertar está cerca, parpadea nervioso.
-	var t := Time.get_ticks_msec() / 1000.0
-	if _progress().get("awakening_ready", false):
-		_beacon.light_energy = 6.0 + 5.0 * sin(t * 9.0) * sin(t * 2.3)
-	else:
-		_beacon.light_energy = 3.0 + 1.5 * sin(t * 1.2)
+	_beacon.light_energy = beacon_energy(WorldClock.hour(), Time.get_ticks_msec() / 1000.0, _progress().get("awakening_ready", false))
+	_beacon_glass.emission_energy_multiplier = _beacon.light_energy * 0.4
+
+
+## El faro está desconectado: apagado. Solo a las 3:33 un pulso lo enciende unos segundos, y
+## cuando el Despertar está cerca el pulso empieza antes y es más fuerte.
+static func beacon_energy(hour: float, t: float, ready: bool) -> float:
+	var start := 3.0 + 33.0 / 60.0
+	var lead := 3.0 / 60.0 if ready else 0.0
+	if hour < start - lead or hour > start + 2.0 / 60.0:
+		return 0.0
+	var flick := absf(sin(t * 9.0) * sin(t * 2.3))
+	return (6.0 + 6.0 * flick) if ready else (4.0 * flick if flick > 0.3 else 0.0)
 
 
 # --- Contenido base -------------------------------------------------------------------
@@ -143,10 +159,12 @@ func _shop_hours() -> void:
 	var shop_open := h >= 9.0 and h < 20.0
 	for id in _interiors.doors():
 		var kind: String = _interiors.doors()[id].kind
-		if kind in ["clothes", "salon"]:
+		if kind in ["clothes", "salon"] or Shops.KINDS.has(kind):
 			var label := _interiors.door_label(id)
 			label = label.left(1).to_upper() + label.substr(1)
-			_interiors.set_locked(id, "" if shop_open else "%s está cerrada. Abre de 9:00 a 20:00." % label)
+			var is_open := Shops.is_open(kind, h) if Shops.is_shop(kind) else shop_open
+			var hours := Shops.hours_text(kind) if Shops.is_shop(kind) else "de 9:00 a 20:00"
+			_interiors.set_locked(id, "" if is_open else "%s: cerrado. Abre %s." % [label, hours])
 
 
 ## De quién es cada casa (para reaccionar si entras sin permiso).
@@ -201,7 +219,11 @@ func _update_objective() -> void:
 	elif p.awakening_ready:
 		_set_objective("Son casi las 3:33. Ve al faro.")
 	else:
-		_set_objective("Habla con tus vecinos (%d/%d)" % [_base_talked(p), _schedules.size()])
+		var left := PackedStringArray()
+		for id in _schedules:
+			if not (id in p.talked):
+				left.append(str(WorldDB.get_entity("npc", id).get("name", "?")).split(" ")[0])
+		_set_objective("Habla con Marina, Teo y Samir (%d/%d) · falta: %s" % [_base_talked(p), _schedules.size(), ", ".join(left)])
 
 
 ## Cuántos de tus vecinos de siempre (los del Acto 0) te conocen ya.
@@ -424,9 +446,15 @@ func _build_town() -> void:
 			if row == 0 and side == -1:  # ese hueco es tu casa
 				continue
 			if empty:  # solar vacío: ahí puede abrirse un sitio nuevo (lo crea la IA)
-				_free_lots.append({"pos": Vector3(-5 + side * 11.0, 0, row * 12), "yaw": PI / 2 if side < 0 else -PI / 2})
+				if absf(row * 12 - TRACKS_Z) >= 9.0:
+					_free_lots.append({"pos": Vector3(-5 + side * 11.0, 0, row * 12), "yaw": PI / 2 if side < 0 else -PI / 2})
 				continue
 			var pos := Vector3(-5 + side * rng.randf_range(10, 12), 0, row * 12 + rng.randf_range(-2, 2))
+			if absf(pos.z - TRACKS_Z) < 9.0:  # encima de las vías no: se deja libre (gastando los mismos números
+				rng.randi()                   # del RNG, para que el resto del pueblo salga igual que antes)
+				rng.randi()
+				_house_count += 1            # y sin mover los números de las demás casas (casa_N)
+				continue
 			_house(pos, side, "town" if absi(row) <= 1 else "small", wall_colors[rng.randi() % wall_colors.size()], rng)
 	# Tu casa, junto al punto de inicio
 	_house(Vector3(-16, 0, -4), -1, "small", Color("#9fc4e0"), rng)
@@ -502,7 +530,9 @@ func _build_landmarks() -> void:
 	var glass := _cylinder(lp + Vector3(0, 20.6, 0), 1.25, 1.25, 2.2, Color("#fff3b0"))
 	glass.material_override.emission_enabled = true
 	glass.material_override.emission = Color("#ffe9a0")
-	glass.material_override.emission_energy_multiplier = 1.5
+	glass.material_override.emission_energy_multiplier = 0.0
+	glass.material_override.albedo_color = Color("#9a9478")  # cristal apagado
+	_beacon_glass = glass.material_override
 	var dome := MeshInstance3D.new()
 	dome.mesh = SphereMesh.new()
 	dome.mesh.radius = 1.45
@@ -573,11 +603,29 @@ func _build_landmarks() -> void:
 		_box(Vector3(-36, 0.12, 37 + z), Vector3(130, 0.12, 0.12), Color("#7a7a80"), false).material_override.metallic = 0.8
 	for i in 64:
 		_box(Vector3(-100 + i * 2.0, 0.04, 37), Vector3(0.35, 0.08, 2.3), Color("#4a3a2c"), false)
+	_level_crossing(Vector3(-5, 0, TRACKS_Z))
+
+
+## Paso a nivel donde la calle cruza las vías: tablones entre los rieles, cruces de San Andrés y
+## una señal de peligro a cada lado.
+func _level_crossing(at: Vector3) -> void:
+	_box(at + Vector3(0, 0.13, 0), Vector3(8.0, 0.06, 2.6), Color("#5b4a3a"), false)
+	for side in [-1, 1]:
+		var post := at + Vector3(side * 4.6, 0, side * 2.6)
+		_box(post + Vector3(0, 1.4, 0), Vector3(0.12, 2.8, 0.12), Color("#e8e2d4"))
+		for a in [PI / 5, -PI / 5]:  # la cruz (blanca y roja)
+			var arm := _box(post + Vector3(0, 2.5, 0.08 * side), Vector3(1.3, 0.2, 0.04), Color("#e8e2d4"), false)
+			arm.rotation.z = a
+			var stripe := _box(post + Vector3(0, 2.5, 0.1 * side), Vector3(0.3, 0.21, 0.02), Color("#b23a3a"), false)
+			stripe.rotation.z = a
+		var sign := AssetLibrary.instance("street_pack", "Sign_Triangle")
+		if sign:
+			AssetLibrary.place(self, sign, at + Vector3(side * 5.6, 0, side * 6.0), 2.4, 0.0 if side < 0 else PI, true)
 
 
 ## Casa de la calle principal mirando a la calle (side: -1 a la izquierda, 1 a la derecha).
 func _house(base: Vector3, side: int, size_class: String, wall: Color, rng: RandomNumberGenerator) -> void:
-	var model := AssetLibrary.building(size_class, rng, wall)
+	var model := AssetLibrary.building(size_class, rng, wall, true)
 	if model == null:
 		_box(base + Vector3(0, 2, 0), Vector3(6, 4, 6), wall)
 		return
@@ -590,6 +638,15 @@ func _house(base: Vector3, side: int, size_class: String, wall: Color, rng: Rand
 		_add_door(root, shop[0], "casa_%d" % _house_count, shop[1])
 		var door := _interiors.door_position("casa_%d" % _house_count)
 		_label3d(door + Vector3(0, 3.6, 0), shop[2])
+		return
+	# Los locales, en el centro (sin tocar casas donde ya vive una familia en esta partida)
+	var central := absf(base.z) <= 26.0 and (side < 0 or absf(base.z) > 14.0)
+	var id := "casa_%d" % _house_count
+	var someones_home := _load_npc_entries().any(func(e): return e.get("home", "") == id)  # (la casa de Teo no)
+	if not home and central and not someones_home and not _locals_to_open.is_empty() and Households.members(id).is_empty():
+		var kind: String = _locals_to_open.pop_front()
+		_add_door(root, kind, id, Shops.label(kind))
+		_label3d(_interiors.door_position(id) + Vector3(0, 3.6, 0), str(Shops.info(kind).sign))
 		return
 	_add_door(root, "home" if home else "house", "casa_%d" % _house_count, "tu casa" if home else "una casa")
 
@@ -609,8 +666,45 @@ func _add_door(root: Node3D, kind: String, id: String, label: String) -> void:
 	var size: Vector3 = root.get_meta("size", Vector3(6, 4, 6))
 	var front := root.global_transform.basis.z.normalized()
 	var pos := root.position + front * (size.z / 2.0 + 0.6)
+	var model: Node3D = root.get_child(0) if root.get_child_count() > 0 else null
+	if model and model.has_meta("model_name"):  # la puerta, donde el modelo tiene la suya
+		var right := front.cross(Vector3.UP).normalized()
+		var off := AssetLibrary.find_door(root, front, right)
+		if not is_nan(off) and absf(off) < size.x / 2.0 - 0.5:
+			pos += right * off
 	pos.y = _ground_height(pos.x, pos.z)
 	_interiors.add_door(id, pos, root.rotation.y, kind, hash(id), label)
+	if model == null or not model.has_meta("model_name"):
+		return
+	# Casas y negocios de la calle: plantas, fachada y ventanas que se encienden con vida dentro
+	_interiors.set_door_option(id, "floors", 2 if size.y > 7.5 else 1)
+	var sign: String = {"clothes": "Ropa", "salon": "Peluquería"}.get(kind, str(Shops.info(kind).get("sign", "")) if Shops.is_shop(kind) else "")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(id)
+	Decor.facade(self, pos, root.rotation.y, sign, rng)
+	if model.has_meta("windows"):
+		_windows[id] = model.get_meta("windows")
+
+
+## Ventanas encendidas de noche solo si hay alguien despierto dentro (o el negocio está abierto).
+func _update_windows() -> void:
+	var h := WorldClock.hour()
+	for id in _windows:
+		var kind: String = _interiors.doors().get(id, {}).get("kind", "")
+		var lit := false
+		if kind == "home":
+			lit = _interiors.current_door() == id
+		elif kind == "house":
+			for m in _households.ensure(id, owner_of_door(id)):
+				var p := Households.plan(WorldDB.get_entity("npc", m), h)
+				if p.home and p.get("gesture", "") != "sleep":
+					lit = true
+					break
+		elif Shops.is_shop(kind):
+			lit = Shops.is_open(kind, h)
+		else:
+			lit = h >= 9.0 and h < 20.0
+		Decor.set_windows_lit(_windows[id], lit)
 
 
 # --- Lo que el jugador cambia en el mundo ------------------------------------------------
@@ -672,6 +766,7 @@ func _label3d(pos: Vector3, text: String) -> void:
 	l.outline_size = 10
 	l.pixel_size = 0.01
 	l.position = pos
+	Decor.fade_label(l)
 	add_child(l)
 
 

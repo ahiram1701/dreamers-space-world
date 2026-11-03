@@ -9,6 +9,8 @@ extends Node3D
 const KIND_WORDS := {
 	"cafe": ["cafe", "cafetería", "cafeteria", "bar", "barra"], "station": ["estación", "estacion", "taller", "andén"],
 	"lighthouse": ["faro"], "home": ["tu casa"], "clothes": ["tienda de ropa", "ropa"], "salon": ["peluquería", "peluqueria", "barbería", "barberia"],
+	"grocery": ["abarrotes", "tienda", "súper", "super", "mercado", "colmado"], "restaurant": ["fonda", "restaurante", "comida", "taberna", "posada", "comedor"],
+	"pharmacy": ["farmacia", "botica", "medicina"], "hardware": ["ferretería", "ferreteria", "herrería", "herramientas"],
 	"house": ["casa", "hogar", "vivienda"], "scifi": ["módulo", "modulo", "edificio", "base"],
 }
 const CONTACT_GESTURES := ["punch", "push", "kick", "hug", "handshake", "pat", "give"]
@@ -166,10 +168,10 @@ func _process_common() -> void:
 	_process_guides(get_process_delta_time())
 	# Te caes de sueño: de vez en cuando, un bostezo
 	_yawn_t += get_process_delta_time()
-	if _yawn_t > 35.0:
-		_yawn_t = 0.0
+	if _yawn_t > 75.0:  # (se estira y bosteza: la cabeza hacia atrás, nunca agachada)
+		_yawn_t = randf_range(0.0, 30.0)
 		if Body.get_need("rest") < 15.0 and _player.controls_enabled and _player.current_gesture().is_empty():
-			_player.play_gesture("think", 1.8)
+			_player.play_gesture("yawn", 1.6)
 	var head := _player.global_position + Vector3(0, 1.6, 0)
 	for id in _npcs:  # te miran al pasar cerca
 		var npc: TownNPC = _npcs[id]
@@ -219,9 +221,88 @@ func home_door_of(npc_id: String) -> String:
 	return Households.home_of(npc_id)
 
 
+# --- Locales: comprar y pedir de comer -------------------------------------------------------
+
+## Comprar en el local donde estás (o pedir de la carta en la fonda y la cafetería).
+func _open_shop() -> void:
+	var kind := _interiors.current_kind()
+	var info := Shops.info(kind)
+	if info.is_empty():
+		return
+	var staff := _households.staff_here()
+	if Households.has_staff(kind) and staff == null:
+		_ui.toast("No hay nadie atendiendo.")
+		return
+	var panel := ShopPanel.new()
+	var label := _interiors.current_label()
+	panel.title = label.left(1).to_upper() + label.substr(1)
+	panel.items = info.items
+	panel.verb = "Pedir" if info.get("menu", false) else "Comprar"
+	_ui.block(true)
+	add_child(panel)
+	panel.closed.connect(func(): _ui.block(false))
+	panel.bought.connect(func(entry: Dictionary):
+		if info.get("menu", false):  # se pide y se come aquí: te lo sirven en la mesa
+			if Wallet.pay(int(entry.price)):
+				panel.close()
+				_serve(entry, staff)
+			return
+		var id := Shops.buy(entry)
+		if id.is_empty():
+			return
+		_ui.toast("Compras %s por %s." % [str(entry.name).to_lower(), Wallet.text(int(entry.price))])
+		Sfx.chime(self)
+		if staff:
+			staff.say(["Aquí tiene.", "¿Algo más?", "Que le vaya bien.", "Gracias, vuelva pronto."][randi() % 4], 3.0)
+			NPCMemory.add_event(staff.npc_id, "El jugador te compró %s." % str(entry.name).to_lower(), 1))
+
+
+## Te sirven lo que pediste: si te sientas a una mesa, te lo traen ahí; si no, a la barra. Comes,
+## se nota en el cuerpo y pasa el rato que se tarda en comer.
+func _serve(entry: Dictionary, staff: TownNPC) -> void:
+	if staff:
+		staff.say("Enseguida se lo traigo. Siéntese donde guste.", 3.5)
+	_ui.toast("Pediste %s (%s). Siéntate a una mesa mientras te lo traen." % [str(entry.name).to_lower(), Wallet.text(int(entry.price))])
+	var door := _interiors.current_door()
+	var waited := 0.0
+	while waited < 20.0 and not (_player.hold_position and _player.current_gesture() == "sit"):
+		await get_tree().create_timer(0.5).timeout
+		waited += 0.5
+		if _interiors.current_door() != door:
+			return  # se fue sin esperar (ya pagó: allá él)
+	await get_tree().create_timer(2.5).timeout
+	if _interiors.current_door() != door:
+		return
+	var seated: bool = _player.hold_position and _player.current_gesture() == "sit"
+	var plate := AssetLibrary.instance("house_interior_pack", "Plate_%d" % (1 + randi() % 3))
+	var front := _player.view_forward() if not seated else _player.facing_dir()
+	var plate_at := _player.global_position + front * (0.55 if seated else 0.45) + Vector3(0, 0.8 if seated else 1.0, 0)
+	var placed: Node3D = AssetLibrary.place(self, plate, plate_at, 0.04, 0.0, false) if plate else null
+	if staff:
+		staff.say("Aquí tiene. ¡Buen provecho!", 3.0)
+	_player.play_gesture("sit_eat" if seated else "eat", 7.0)
+	await get_tree().create_timer(7.0).timeout
+	var power := int(entry.get("power", 20))
+	if entry.effect == "nourish":
+		Body.change("hunger", clampf(power * 1.5, 20.0, 70.0))
+	else:
+		Body.change("thirst", clampf(power * 2.0, 25.0, 70.0))
+	WorldClock.advance(20 if entry.effect == "nourish" else 8)
+	if is_instance_valid(placed):
+		placed.queue_free()
+	if seated and _player.hold_position:
+		_player.play_gesture("sit")
+	_ui.toast("Te terminas %s. %s" % [str(entry.name).to_lower(), ["Estaba buenísimo.", "Te sienta de maravilla.", "Justo lo que necesitabas."][randi() % 3]])
+	if staff:
+		NPCMemory.add_event(staff.npc_id, "Le serviste %s al jugador." % str(entry.name).to_lower(), 1)
+
+
 # --- Tu aspecto en el mundo: armario, tienda de ropa, peluquería ---------------------------
 
 func _open_look_panel(what: String) -> void:
+	if what in ["shop_buy", "order"]:
+		_open_shop()
+		return
 	var creator := CharacterCreator.new()
 	creator.mode = {"wardrobe": "wardrobe", "clothes_shop": "shop", "haircut": "hair"}[what]
 	creator.look = PlayerLook.current()
@@ -401,6 +482,8 @@ func _on_dialogue_closed(npc_id: String) -> void:
 			(" (en %s)" % where) if not where.is_empty() else "", (". Lo último que te dijo: «%s»" % said) if not said.is_empty() else ""])
 	if _dialogue.call_mode:
 		_player.stop_gesture()
+		if _npcs.has(npc_id):
+			_npcs[npc_id].stop_gesture()  # cuelga él también
 	_player.clear_look()
 	_player.end_focus()
 	if _npcs.has(npc_id):
@@ -1089,6 +1172,7 @@ func _build_place(e: Dictionary) -> void:
 	sign.modulate = Color("#fff3d6")
 	sign.position = root.position + front * (size.z / 2.0 + 0.15) + Vector3(0, minf(size.y * 0.55, 3.6), 0)
 	sign.rotation.y = yaw
+	Decor.fade_label(sign)
 	add_child(sign)
 	_places[str(e.name)] = door
 

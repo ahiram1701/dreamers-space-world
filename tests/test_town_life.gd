@@ -41,7 +41,7 @@ func _run() -> void:
 	for i in 2:
 		await physics_frame
 	var passed: int = life.gossip()
-	_expect(passed >= 1 and memory.describe_recent("npc_samir").contains("Marina te contó"), "Samir lo sabe por Marina (%d rumores)" % passed)
+	_expect(passed >= 1 and memory.describe_recent("npc_samir", true).contains("Marina te contó"), "Samir lo sabe por Marina, como rumor (%d)" % passed)
 	var again: int = life.gossip()
 	var count := 0
 	for e in memory.get_mem("npc_samir").recent:

@@ -48,6 +48,9 @@ const ACTION := {"t": "object", "fields": {
 		"pos": {"t": "array", "min": 3, "max": 3, "items": {"t": "float", "min": -4.0, "max": 6.0}},
 		"color": {"t": "color", "default": "#8b6b4a"},
 	}}},
+	# Dormir o esperar (sleep, wait): hasta qué hora (3.5 = 3:30) o cuántas horas
+	"until_hour": {"t": "float", "min": 0.0, "max": 24.0, "opt": true},
+	"hours": {"t": "float", "min": 0.1, "max": 16.0, "opt": true},
 	# Frase de narración de este paso (world_action.steps)
 	"narration": {"t": "string", "min": 2, "max": 300, "opt": true},
 }}

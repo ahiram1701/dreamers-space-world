@@ -87,6 +87,12 @@ var _second := -1.0   # y la izquierda (< 0: no la usa)
 var _tool_len := 0.0
 var _fingers := {}    # hueso del dedo -> [índice, rotación base]
 var _grip_w := 0.0    # cuánto se cierra el puño
+## Algo que lleva en la mano todo el rato (la linterna), aparte de las herramientas de los gestos.
+var _held: Node3D
+var _held_shape := {}
+var _held_len := 0.0
+var _held_grip := 0.0
+var _held_w := 0.0    # cuánto pesa la pose de sujetarlo (0 mientras un gesto usa la mano)
 
 
 func setup(model: Node3D) -> bool:
@@ -166,6 +172,12 @@ func _process(delta: float) -> void:
 		_acc = 0.0
 	_t += delta
 	var target := _locomotion(delta)
+	var hand_busy := _tool != null and _gesture_w > 0.05
+	_held_w = move_toward(_held_w, 1.0 if (_held and not hand_busy) else 0.0, delta * 5.0)
+	if _held_w > 0.0:  # el brazo derecho adelante, alumbrando (el braceo de andar se nota menos)
+		target["UpperArm.R"] = target["UpperArm.R"].lerp(Vector3(38, 0, 6), 0.8 * _held_w)
+		target["LowerArm.R"] = target["LowerArm.R"].lerp(Vector3(62, 0, 0), 0.8 * _held_w)
+		target["Hand.R"] = target["Hand.R"].lerp(Vector3(-8, 0, 0), _held_w)
 	for k in _bend:  # el peso de los gestos en el codo se desvanece si ya no lo usan
 		_bend[k] = move_toward(_bend[k], 0.0, delta * 4.0)
 	# Capa de gesto
@@ -197,10 +209,14 @@ func _process(delta: float) -> void:
 	for key in target:
 		_pose[key] = lerp(_pose.get(key, target[key] * 0.0), target[key], k)
 	_apply()
-	_grip_w = move_toward(_grip_w, _gesture_w if _tool else 0.0, delta * 5.0)
+	_grip_w = move_toward(_grip_w, maxf(_gesture_w if _tool else 0.0, _held_w), delta * 5.0)
 	_hand_to_face()
 	if _tool:
 		_place_tool()
+	if _held:
+		_held.visible = _held_w > 0.3
+		if _held.visible:
+			_place_item(_held, _held_shape, _held_len, _held_grip, -6.0)
 	_curl_fingers()
 
 
@@ -415,6 +431,11 @@ func _gesture_pose(g: String, t: float) -> Dictionary:
 			p["LowerArm.L"] = Vector3(70 * up, 0, 0)
 			p["LowerArm.R"] = Vector3(70 * up, 0, 0)
 			p["Head"] = Vector3(0, 0, 10 * up)
+		"yawn":  # se estira: brazos arriba y la cabeza hacia atrás
+			var s := sin(clampf(t / 1.6, 0.0, 1.0) * PI)
+			_both_arms(p, Vector3(20 + 130 * s, 0, 15 * s), Vector3(30 * s, 0, 0))
+			p["Head"] = Vector3(-18 * s, 0, 0)
+			p["Chest"] = Vector3(-6 * s, 0, 0)
 		"nod":
 			p["Head"] = Vector3(sin(t * 7.0) * 14 * (1.0 - clampf(t / 2.0, 0.0, 1.0)), 0, 0)
 		"shake_head":
@@ -619,12 +640,24 @@ func _set_tool(g: String) -> void:
 ## Pone la herramienta en la palma derecha, en la dirección del antebrazo girada "_tool" grados,
 ## con la cabeza (filo, pala) hacia donde va el golpe. Si es de dos manos, la izquierda va al mango.
 func _place_tool() -> void:
-	var sh := _tool_shape
+	var palm_w := _place_item(_tool, _tool_shape, _tool_len, _grip, float(_pose.get("_tool", 0.0)))
+	if _second >= 0.0 and _gesture_w > 0.01:
+		var d_w: Vector3 = _last_aim
+		var hold_w := palm_w + d_w * (_second - _grip) * _tool_len
+		_reach("UpperArm.L", "LowerArm.L", "Hand.L", _sk.global_transform.affine_inverse() * hold_w, _gesture_w)
+
+
+var _last_aim := Vector3.FORWARD   # dirección de lo último que se colocó en la mano (mundo)
+
+
+## Coloca un objeto en la palma derecha: su mango en la mano, apuntando en la dirección del
+## antebrazo girada `angle` grados. Devuelve dónde está la palma (mundo).
+func _place_item(item: Node3D, sh: Dictionary, length: float, grip: float, angle: float) -> Vector3:
 	var to_world := _sk.global_transform
 	var elbow := _sk.get_bone_global_pose(_idx["LowerArm.R"]).origin
 	var wrist := _sk.get_bone_global_pose(_idx["Hand.R"]).origin
 	var fore := (wrist - elbow).normalized()
-	var aim := Quaternion(_pitch_axis, deg_to_rad(float(_pose.get("_tool", 0.0)))) * fore
+	var aim := Quaternion(_pitch_axis, deg_to_rad(angle)) * fore
 	var lead := Quaternion(_pitch_axis, -PI / 2) * aim   # hacia donde avanza el golpe
 	var d_w := (to_world.basis * aim).normalized()
 	var h_w := (to_world.basis * lead).normalized()
@@ -633,12 +666,46 @@ func _place_tool() -> void:
 	var local_b := Basis(sh.long, sh.head, sh.long.cross(sh.head))
 	var world_b := Basis(d_w, h_w, d_w.cross(h_w))
 	var rot := world_b * local_b.inverse()
-	var s: float = _tool_len / sh.length
-	var grip_local: Vector3 = sh.start + sh.long * sh.length * _grip
-	_tool.global_transform = Transform3D(rot * Basis.from_scale(Vector3.ONE * s), palm_w - rot * (grip_local * s))
-	if _second >= 0.0 and _gesture_w > 0.01:
-		var hold_w := palm_w + d_w * (_second - _grip) * _tool_len
-		_reach("UpperArm.L", "LowerArm.L", "Hand.L", to_world.affine_inverse() * hold_w, _gesture_w)
+	var s: float = length / sh.length
+	var grip_local: Vector3 = sh.start + sh.long * sh.length * grip
+	item.global_transform = Transform3D(rot * Basis.from_scale(Vector3.ONE * s), palm_w - rot * (grip_local * s))
+	_last_aim = d_w
+	return palm_w
+
+
+## Llevar algo en la mano todo el rato ("" para soltarlo). model: "pack/Modelo".
+func set_held(model: String, length: float = 0.24, grip: float = 0.3) -> void:
+	if _held:
+		_held.queue_free()
+		_held = null
+	if model.is_empty() or _model == null or _sk == null:
+		return
+	var parts := model.split("/")
+	var node := AssetLibrary.instance(parts[0], parts[1])
+	if node == null:
+		return
+	_held_shape = _shape_of(model, node)
+	_held_len = length
+	_held_grip = grip
+	_held = node
+	_held.top_level = true
+	_model.add_child(_held)
+
+
+## Punta de lo que lleva en la mano (para la luz de la linterna): origen y hacia dónde apunta.
+func held_tip() -> Transform3D:
+	if _held == null or not _held.visible:
+		return Transform3D(Basis(), Vector3.INF)
+	var wrist := _sk.global_transform * _sk.get_bone_global_pose(_idx["Hand.R"]).origin
+	var tip := wrist + _last_held_aim() * (_held_len * (1.0 - _held_grip) + PALM)
+	return Transform3D(Basis.looking_at(_last_held_aim(), Vector3.UP), tip)
+
+
+func _last_held_aim() -> Vector3:
+	var elbow := _sk.get_bone_global_pose(_idx["LowerArm.R"]).origin
+	var wrist := _sk.get_bone_global_pose(_idx["Hand.R"]).origin
+	var fore := Quaternion(_pitch_axis, deg_to_rad(-6.0)) * (wrist - elbow).normalized()
+	return (_sk.global_transform.basis * fore).normalized()
 
 
 ## Beber y hablar por teléfono: la mano derecha va de verdad a la boca o a la oreja.

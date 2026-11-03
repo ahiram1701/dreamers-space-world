@@ -14,7 +14,7 @@ const DURATION := {"chop": 4.0, "hammer": 4.0, "dig": 4.0, "search": 3.5, "fish"
 	"kick": 1.2, "hug": 3.0, "handshake": 2.0, "pat": 1.6, "give": 2.2, "wave": 2.0, "throw": 1.5, "eat": 3.5,
 	"drink": 3.0, "write": 3.5, "read": 4.0, "listen": 4.0, "call": 4.0, "kneel": 3.0, "think": 3.0, "dance": 5.0}
 ## Gestos que se quedan hasta que el jugador se mueve.
-const HOLD := ["sit", "sleep", "crouch"]
+const HOLD := ["sit", "sleep"]   # (agacharse dura lo que dura: no te deja agachado)
 ## Sonido al golpear con cada gesto (y cada cuánto se repite).
 const IMPACT := {"chop": ["chop", 0.9], "hammer": ["knock", 0.7], "dig": ["step_sand", 0.8], "punch": ["hit", 0.0],
 	"push": ["hit", 0.0], "kick": ["hit", 0.0]}
@@ -94,6 +94,13 @@ func _do_step(s: Dictionary, rest: Array) -> Array:
 				await get_tree().create_timer(1.2).timeout
 				return []
 			await _gesture_and_wait(g)
+			return []
+		"sleep", "wait":
+			var minutes := rest_minutes(s, type == "sleep")
+			var bed: Node3D = null
+			if type == "sleep" and not _focus.is_empty() and _focus.kind == "bed" and _focus.node is Node3D:
+				bed = (_focus.node as Node3D).get_parent() as Node3D
+			await scene._interiors.rest(minutes, bed, type == "sleep")
 			return []
 		"use":
 			var e := scene.resolve_target(str(s.get("target", "")))
@@ -204,9 +211,50 @@ func _gesture(text: Variant) -> String:
 
 ## Plan sin IA: con lo que se entiende del texto, el personaje al menos lo intenta
 ## (va hasta lo que nombra y hace el gesto), sin cambiar el mundo.
+## Cuántos minutos duerme o espera un paso: hasta una hora ("until_hour"), unas horas ("hours")
+## o, si no dice, dormir hasta las 8 (mínimo 3 h) / esperar una hora.
+static func rest_minutes(s: Dictionary, sleeping: bool) -> float:
+	if s.has("until_hour") and s.until_hour != null:
+		var m := fposmod(float(s.until_hour) - WorldClock.hour(), 24.0) * 60.0
+		return m if m >= 5.0 else m + 24.0 * 60.0
+	if s.has("hours") and s.hours != null:
+		return float(s.hours) * 60.0
+	if sleeping:
+		return maxf(fposmod(8.0 - WorldClock.hour(), 24.0) * 60.0, 180.0)
+	return 60.0
+
+
+## "hasta las 3:30 am", "hasta las 7 de la tarde", "unas 2 horas" → {until_hour} / {hours} (o {}).
+static func parse_rest(text: String) -> Dictionary:
+	var low := text.to_lower()
+	var re := RegEx.create_from_string("hasta (?:las |la )?(\\d{1,2})(?:[:.](\\d{2}))?\\s*(am|a\\.m\\.|pm|p\\.m\\.|de la mañana|de la madrugada|de la tarde|de la noche)?")
+	var m := re.search(low)
+	if m:
+		var h := float(m.get_string(1))
+		var mins := float(m.get_string(2)) if not m.get_string(2).is_empty() else 0.0
+		var suffix := m.get_string(3)
+		if (suffix.begins_with("p") or suffix.contains("tarde") or suffix.contains("noche")) and h < 12.0:
+			h += 12.0
+		elif (suffix.begins_with("a") or suffix.contains("mañana") or suffix.contains("madrugada")) and h == 12.0:
+			h = 0.0
+		return {"until_hour": fmod(h + mins / 60.0, 24.0)}
+	var hm := RegEx.create_from_string("(\\d{1,2}(?:[.,]\\d)?) ?(?:horas|hora|h\\b)").search(low)
+	if hm:
+		return {"hours": clampf(float(hm.get_string(1).replace(",", ".")), 0.1, 16.0)}
+	return {}
+
+
 static func local_plan(what: String, scene_ref: LocationScene, guess: String) -> Array:
 	var steps := []
 	var low := what.to_lower()
+	# Dormir o esperar (aunque no haya IA): "duermo hasta las 3:30 am", "espero 2 horas"
+	var rest := parse_rest(low)
+	var sleeping := ["duermo", "dormir", "me duermo", "me acuesto", "siesta", "descanso"].any(func(w): return low.contains(w))
+	var waiting := ["espero", "esperar", "aguardo"].any(func(w): return low.contains(w))
+	if sleeping or (waiting and not rest.is_empty()):
+		var step := {"type": "sleep" if sleeping else "wait"}
+		step.merge(rest)
+		return [step]
 	var targets := scene_ref.nearby_targets()
 	var pick := ""
 	for id in targets:

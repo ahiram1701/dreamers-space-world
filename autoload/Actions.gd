@@ -31,8 +31,9 @@ var arrival_spot: Callable = func(): return {"from": Vector3(20, 0, 0), "to": Ve
 
 const MAX_RESIDENTS := 15
 const MAX_NEW_PLACES := 8
-const INTERIOR_OF := {"shop": "shop", "bakery": "shop", "market": "shop", "bar": "cafe", "workshop": "workshop",
-	"office": "office", "clinic": "office", "house": "house"}
+const INTERIOR_OF := {"shop": "grocery", "bakery": "grocery", "market": "grocery", "bar": "restaurant", "workshop": "workshop",
+	"office": "office", "clinic": "pharmacy", "house": "house", "grocery": "grocery", "restaurant": "restaurant",
+	"pharmacy": "pharmacy", "hardware": "hardware"}
 
 const MAX_GIFT_POWER := 40          # un vecino no te da un objeto legendario por pedirlo
 const MAX_GIFTS_PER_TURN := 2       # "te pongo el café y te presto el boli", pero no una tienda entera

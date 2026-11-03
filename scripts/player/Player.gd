@@ -211,13 +211,29 @@ func set_light(on: bool) -> void:
 		_lamp.light_color = Color("#fff1d6")
 		_lamp.light_energy = 3.5
 		_lamp.spot_range = 22.0
-		_lamp.spot_angle = 32.0
+		_lamp.spot_angle = 30.0
 		_lamp.shadow_enabled = Settings.graphics_quality >= 1
 		_lamp.position = Vector3(0.25, 1.3, 0.2)
 		_body.add_child(_lamp)
 		_lamp.rotation.y = PI  # hacia delante del cuerpo (+Z)
 	if _lamp:
 		_lamp.visible = on
+	if _rig:  # la linterna se ve en la mano, y la luz sale de ella
+		_rig.set_held("survival_pack/Torch" if on else "")
+
+
+## La luz de la linterna sigue a la mano (donde apunta el brazo).
+func _follow_lamp() -> void:
+	if _lamp == null or not _lamp.visible or _rig == null:
+		return
+	var tip: Transform3D = _rig.held_tip()
+	if tip.origin == Vector3.INF:  # la mano está ocupada: alumbra desde el pecho
+		_lamp.top_level = false
+		_lamp.position = Vector3(0.25, 1.3, 0.2)
+		_lamp.rotation = Vector3(0, PI, 0)
+		return
+	_lamp.top_level = true
+	_lamp.global_transform = tip
 
 
 ## provided: la herramienta te la dan (en el trabajo); si no, solo sale si la tienes.
@@ -258,6 +274,11 @@ func facing_yaw() -> float:
 	return _body.rotation.y
 
 
+## Hacia delante del cuerpo (horizontal).
+func facing_dir() -> Vector3:
+	return Vector3(sin(_body.rotation.y), 0, cos(_body.rotation.y))
+
+
 func face_towards(point: Vector3) -> void:
 	var d := point - global_position
 	if Vector2(d.x, d.z).length() > 0.1:
@@ -277,6 +298,8 @@ func focus_on(point: Vector3) -> void:
 	var d := point - global_position
 	if Vector2(d.x, d.z).length() > 0.1:
 		_yaw.rotation.y = atan2(-d.x, -d.z) + 0.32
+	if _zoom_override < 0.0:
+		_pitch_before_focus = _spring.rotation.x
 	_spring.rotation.x = -0.05
 	_zoom_override = 2.1
 	_frame_v = -0.38
@@ -290,6 +313,12 @@ func frame_action(on: bool) -> void:
 func end_focus() -> void:
 	_zoom_override = -1.0
 	_frame_v = 0.0
+	if _pitch_before_focus != INF:  # la cámara vuelve a la inclinación que tenías
+		create_tween().tween_property(_spring, "rotation:x", _pitch_before_focus, 0.5)
+		_pitch_before_focus = INF
+
+
+var _pitch_before_focus := INF
 
 
 func is_swimming() -> bool:
@@ -381,6 +410,7 @@ func _auto_direction(delta: float) -> Vector3:
 
 
 func _process(delta: float) -> void:
+	_follow_lamp()
 	_condition_t += delta
 	if _condition_t > 0.5:
 		_condition_t = 0.0

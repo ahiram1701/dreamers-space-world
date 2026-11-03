@@ -89,7 +89,7 @@ func _run() -> void:
 	r = validator.validate("world_action", {"narration": "Abres una panadería.", "steps": [{"type": "abrir_negocio", "item_name": "Panadería La Espiga", "target": "panadería"}]})
 	notes = actions.execute("", r.data.steps)
 	var places: Array = actions.places_added_here(game.current_location())
-	_expect(places.size() == 1 and places[0].kind == "bakery" and places[0].interior == "shop", "aparece la panadería %s" % [places])
+	_expect(places.size() == 1 and places[0].kind == "bakery" and places[0].interior == "grocery", "aparece la panadería (con su tienda dentro) %s" % [places])
 	actions.lot_finder = func(): return {}
 	notes = actions.execute("", [{"type": "create_place", "item_name": "Bar Sin Sitio", "target": "bar"}])
 	_expect(actions.places_added_here(game.current_location()).size() == 1 and "No hay sitio" in str(notes), "sin solar libre no se construye")

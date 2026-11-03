@@ -80,6 +80,15 @@ func _decay(minutes: float) -> void:
 	shape = clampf(shape + (fed * 0.6 - active * 1.2 - 0.05) * minutes / (60.0 * 24.0 * 14.0), -1.0, 1.0)
 
 
+## Acabas de dormir `minutes` (el reloj ya avanzó): mientras duermes no te cansas, pero el hambre,
+## la sed y la higiene siguen su curso.
+func slept(minutes: float) -> void:
+	var rest_before := get_need("rest")
+	_decay(minutes)
+	_store("rest", rest_before)
+	_last_minutes = WorldClock.absolute_minutes()
+
+
 ## Lluvia y agua: sin techo te mojas; bajo techo o al sol te secas poco a poco.
 func _weather(delta: float) -> void:
 	var player := get_tree().get_first_node_in_group("player") as Node3D

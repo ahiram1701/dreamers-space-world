@@ -193,9 +193,9 @@ func populate(door: String, kind: String) -> void:
 			scene._npcs[id] = npc
 			_spawned[id] = npc
 			place(npc, p, used)
-	if kind in STAFF:  # la tienda o la peluquería: quien atiende, en su horario
+	if has_staff(kind):  # la tienda, la peluquería, la fonda…: quien atiende, en su horario
 		var h := WorldClock.hour()
-		if h >= 9.0 and h < 20.0:
+		if (Shops.is_open(kind, h) if Shops.is_shop(kind) else (h >= 9.0 and h < 20.0)):
 			var id := ensure_staff(door, kind)
 			var entity := WorldDB.get_entity("npc", id)
 			if not entity.is_empty() and not scene._npcs.has(id):
@@ -272,6 +272,11 @@ func clear() -> void:
 const STAFF := {"clothes": ["dependienta de la tienda de ropa", "dependiente de la tienda de ropa"], "salon": ["peluquera", "peluquero"]}
 
 
+## ¿Ese tipo de sitio tiene a alguien atendiendo? (la cafetería ya tiene a su vecino de siempre)
+static func has_staff(kind: String) -> bool:
+	return STAFF.has(kind) or (Shops.is_shop(kind) and not Shops.info(kind).get("staff", []).is_empty())
+
+
 ## Quien trabaja en la tienda o la peluquería (se crea una vez y se queda).
 func ensure_staff(door: String, kind: String) -> String:
 	var all: Dictionary = WorldDB.get_state("shop_staff", {})
@@ -283,7 +288,8 @@ func ensure_staff(door: String, kind: String) -> String:
 	rng.seed = hash(place + "/staff/" + door)
 	var fem := rng.randf() < 0.6
 	var name: String = "%s %s" % [(NAMES_F if fem else NAMES_M)[rng.randi() % 12], Passersby.SURNAMES[rng.randi() % Passersby.SURNAMES.size()]]
-	var job: String = STAFF[kind][0 if fem else 1]
+	var jobs: Array = STAFF.get(kind, Shops.info(kind).get("staff", ["dependienta", "dependiente"]))
+	var job: String = "%s de %s" % [jobs[0 if fem else 1], Shops.label(kind)] if not STAFF.has(kind) else jobs[0 if fem else 1]
 	var id := Actions.build_npc(name, job, "Trabaja aquí de 9:00 a 20:00 y conoce a medio pueblo.", "¡Hola! Pasa, pasa. ¿Qué buscas?",
 		_look(rng, fem, ["slim", "average"][rng.randi() % 2]).merged({"outfit": "formal" if kind == "clothes" else "casual"}, true))
 	here[door] = id

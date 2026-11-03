@@ -57,10 +57,14 @@ func come_out(npc_id: String) -> void:
 
 ## Algo que acaba de pasar de verdad entre el PNJ y el jugador. Lo escribe el motor cuando
 ## ocurre (no la IA), así que el PNJ nunca "recuerda" algo que no pasó.
-func add_event(npc_id: String, text: String, relationship_delta: int = 0) -> void:
+## rumor: te lo contó otro (no lo viviste); se separa en el prompt.
+func add_event(npc_id: String, text: String, relationship_delta: int = 0, rumor: bool = false) -> void:
 	var m := get_mem(npc_id)
 	var recent: Array = m.recent
-	recent.append({"at": WorldClock.absolute_minutes(), "text": text})
+	var e := {"at": WorldClock.absolute_minutes(), "text": text}
+	if rumor:
+		e["rumor"] = true
+	recent.append(e)
 	while recent.size() > MAX_RECENT:
 		recent.pop_front()
 	set_fields(npc_id, {"recent": recent, "met": true,
@@ -68,10 +72,12 @@ func add_event(npc_id: String, text: String, relationship_delta: int = 0) -> voi
 
 
 ## "hace 5 min: te dio un puñetazo" (para el prompt).
-func describe_recent(npc_id: String) -> String:
+func describe_recent(npc_id: String, rumors: bool = false) -> String:
 	var out := PackedStringArray()
 	var now := WorldClock.absolute_minutes()
 	for e in get_mem(npc_id).recent:
+		if bool(e.get("rumor", false)) != rumors:
+			continue
 		var ago := int(now - float(e.at))
 		if ago > 60 * 24 * 3:
 			continue  # de hace días: si fue importante, ya es un recuerdo (facts)
@@ -150,6 +156,9 @@ func describe(npc_id: String) -> String:
 	var recent := describe_recent(npc_id)
 	if not recent.is_empty():
 		out += "\nLo que ha pasado hace poco entre tú y el jugador (real, lo viviste):\n" + recent
+	var heard := describe_recent(npc_id, true)
+	if not heard.is_empty():
+		out += "\nLo que te han contado otros (rumores: tú NO lo viviste ni lo viste):\n" + heard
 	return out
 
 
