@@ -104,6 +104,10 @@ func _setup_common() -> void:
 	_interiors.player = _player
 	for entry in Actions.placed_here(GameState.current_location()):
 		Decor.build_placed(self, entry, ground_at, _water_level, _on_placed_use)
+	Creations.vehicle_builder = Vehicle.build
+	for entry in Creations.all_here():  # lo creado con el agente creador
+		Creations.build(self, entry)
+	_park_arrival_ship.call_deferred()
 	Actions.player_pose = _player_pose
 	Actions.feature_finder = _find_feature
 	Actions.object_placed.connect(func(e): Decor.build_placed(self, e, ground_at, _water_level, _on_placed_use))
@@ -215,6 +219,8 @@ func _on_interact(target: Node) -> void:
 	elif target is Interactable:
 		target.use(_player)
 	elif target is Boat:
+		target._on_use(_player)
+	elif target.has_method("_on_use"):  # vehículos, naves
 		target._on_use(_player)
 	elif target is Pickup:
 		_pick_up(target)
@@ -528,8 +534,105 @@ func _on_dialogue_closed(npc_id: String) -> void:
 
 ## El PNJ gesticula según cómo se siente en cada respuesta.
 func _on_turn(npc_id: String, turn: Dictionary) -> void:
-	if _npcs.has(npc_id):
-		_npcs[npc_id].set_emotion(turn.get("emotion", "neutral"))
+	if not _npcs.has(npc_id):
+		return
+	_npcs[npc_id].set_emotion(turn.get("emotion", "neutral"))
+	# Lo que narra que hace, lo hace; lo que no se puede hacer, no se muestra
+	var action := str(turn.get("action", ""))
+	if action.is_empty():
+		return
+	var mapped := ActionMapper.map(action, known_names())
+	if str(mapped.shown).is_empty():
+		turn.erase("action")
+		return
+	turn["action"] = mapped.shown
+	var already: Array = turn.get("actions", []).filter(func(a): return a.get("type", "") == "play").map(func(a): return _gesture(a.get("target", "")))
+	perform_steps(npc_id, mapped.steps.filter(func(s): return s.type != "gesture" or not (s.gesture in already)))
+
+
+## Nombres de lo que hay aquí (sitios, puertas, cosas a la vista, gente): a qué puede mirar o
+## hacia dónde puede caminar alguien.
+func known_names() -> Array:
+	var out := []
+	for p in _places:
+		out.append(str(p))
+	for id in _interiors.doors():
+		out.append(str(_interiors.doors()[id].label))
+	for m in get_tree().get_nodes_in_group("landmark"):
+		var l := str(m.get_meta("label", ""))
+		out.append(l.get_slice(" ", 0) if l.split(" ").size() > 3 else l)
+	for id in _npcs:
+		out.append(str(WorldDB.get_entity("npc", id).get("name", "")).get_slice(" ", 0))
+	out.append_array(["ventana", "puerta", "barra", "mar", "cielo", "faro", "calle"])
+	return out
+
+
+## Dónde está algo por su nombre (sitio, puerta, cosa, persona): Vector3.INF si no se sabe.
+func position_of_name(name: String, near: Vector3) -> Vector3:
+	var low := name.to_lower()
+	var p := place_position(name)
+	if p != Vector3.INF:
+		return p
+	for id in _interiors.doors():
+		if str(_interiors.doors()[id].label).to_lower().contains(low):
+			return _interiors.door_position(id)
+	var best := Vector3.INF
+	for m in get_tree().get_nodes_in_group("landmark"):
+		if str(m.get_meta("label", "")).to_lower().contains(low):
+			var q: Vector3 = (m as Node3D).global_position
+			if best == Vector3.INF or q.distance_to(near) < best.distance_to(near):
+				best = q
+	if best != Vector3.INF:
+		return best
+	for id in _npcs:
+		if str(WorldDB.get_entity("npc", id).get("name", "")).to_lower().begins_with(low):
+			return _npcs[id].global_position
+	return Vector3.INF
+
+
+## Un PNJ hace, uno tras otro, los pasos de su acotación (ActionMapper).
+func perform_steps(npc_id: String, steps: Array) -> void:
+	for s in steps:
+		var npc: TownNPC = _npcs.get(npc_id)
+		if npc == null or not is_instance_valid(npc) or not npc.is_present():
+			return
+		match str(s.type):
+			"gesture":
+				npc.play_gesture(str(s.gesture), 2.6)
+				await get_tree().create_timer(2.2).timeout
+			"face":
+				var t := str(s.target)
+				var at := _player.global_position if t == "player" else position_of_name(t, npc.global_position)
+				if t == "away":
+					at = npc.global_position + (npc.global_position - _player.global_position).normalized() * 5.0
+				if at != Vector3.INF:
+					npc.face(at)
+					await get_tree().create_timer(1.4).timeout
+					if is_instance_valid(npc):
+						npc.face(_player.global_position)
+			"walk":
+				var at := position_of_name(str(s.target), npc.global_position)
+				if at != Vector3.INF:
+					# Solo unos pasos: no se va de la conversación
+					var to := npc.global_position + (at - npc.global_position).limit_length(4.0)
+					npc.walk_to(_on_ground(to))
+					await get_tree().create_timer(2.5).timeout
+					if is_instance_valid(npc):
+						npc.face(_player.global_position)
+			"emotion":
+				npc.set_emotion(str(s.emotion))
+			"wear", "remove":
+				var layers: Array = npc.layers.duplicate()
+				var id := str(s.garment)
+				if s.type == "remove":
+					layers = layers.filter(func(l): return str(l.id) != id)
+				elif not Wardrobe.wears(layers, id):
+					var rng := RandomNumberGenerator.new()
+					rng.seed = hash(npc_id + id)
+					layers.append(Wardrobe._layer(id, rng))
+				npc.play_gesture("pat", 1.5)
+				npc.set_layers(layers)
+				await get_tree().create_timer(1.2).timeout
 
 
 ## Contexto de cada turno de conversación: el lugar, la hora y la situación física real del PNJ.
@@ -575,8 +678,7 @@ func perception(for_player: bool) -> PackedStringArray:
 
 
 ## Qué prendas son cada estilo de ropa (para que nadie te pida que dejes un abrigo que no llevas).
-const OUTFIT_WORDS := {"casual": "camiseta y pantalón", "street": "sudadera y pantalón de calle",
-	"formal": "camisa, saco y pantalón de vestir", "work_uniform": "ropa de trabajo"}
+const OUTFIT_WORDS := Wardrobe.BASE_WORDS
 
 
 ## Lo que se ve del jugador: su ropa y si va mojado o sucio (los demás lo notan y lo comentan).
@@ -585,13 +687,7 @@ func _player_looks() -> String:
 	var look := PlayerLook.current()
 	if not worn.is_empty() and WorldDB.get_entity("item", worn).has("clothing"):
 		look = WorldDB.get_entity("item", worn).clothing
-	var outfit := str(look.get("outfit", "casual"))
-	var c1: String = PlayerLook.COLOR_NAMES.get(str(look.get("primary_color", "")), "")
-	var c2: String = PlayerLook.COLOR_NAMES.get(str(look.get("secondary_color", "")), "")
-	var colors := c1 if c2.is_empty() or c2 == c1 else "%s y %s" % [c1, c2]
-	var clothes: String = OUTFIT_WORDS.get(outfit, "ropa normal") + ((" (%s)" % colors) if not colors.is_empty() else "")
-	var parts := PackedStringArray(["lleva %s%s; NADA más: ni abrigo, ni chamarra, ni sombrero, ni mochila" % [
-		clothes, "" if outfit == "formal" else ", sin saco"]])
+	var parts := PackedStringArray(["lleva " + Wardrobe.describe(look, PlayerLook.layers())])
 	if _player and _player.get("_lamp") and _player.get("_lamp").visible:
 		parts.append("lleva una linterna encendida en la mano")
 	if Body.wet > 0.6:
@@ -650,6 +746,12 @@ func dialogue_context(npc_id: String) -> String:
 			people.append(WorldDB.get_entity("npc", id).get("name", "?"))
 	if not people.is_empty():
 		lines.append("También hay cerca: %s." % ", ".join(people))
+	var around := surroundings_described(npc.global_position if npc else _player.global_position)
+	if not around.is_empty():
+		lines.append(around)
+	var folk := Townsfolk.context_for(self, npc_id, _dialogue.last_player_text if _dialogue else "")
+	if not folk.is_empty():
+		lines.append(folk)
 	var look := player_appearance()
 	if not look.is_empty():
 		lines.append(look)
@@ -1302,6 +1404,114 @@ func nearby_targets() -> Dictionary:
 		out["water"] = {"kind": "water", "label": "el agua (orilla)", "pos": water, "node": null}
 	for id in out:
 		out[id]["id"] = id
+	return out
+
+
+## Te llevas un vehículo que no es tuyo: si alguien lo ve, es un robo (y el dueño se entera).
+func on_vehicle_taken(v: Node3D) -> void:
+	var owner_id := str(v.get("owner_id"))
+	var what: String = v.call("the_name") if v.has_method("the_name") else str(v.get("display_name"))
+	var saw: Array = _life.witness("el jugador se llevó %s, que no es suyo" % what, v.global_position, [owner_id]) if _life else []
+	if owner_id.begins_with("npc_") or WorldDB.get_entity("npc", owner_id).size() > 0:
+		var seen_by_owner: bool = _npcs.has(owner_id) and _npcs[owner_id].is_present() and _npcs[owner_id].global_position.distance_to(v.global_position) < 25.0
+		if seen_by_owner or not saw.is_empty():
+			NPCMemory.add_event(owner_id, ("Viste cómo el jugador se llevaba %s (es tuyo/a) sin permiso." if seen_by_owner else "Te contaron que el jugador se llevó %s (tuyo/a) sin permiso.") % what, -20, not seen_by_owner)
+	if not saw.is_empty() and _ui and _ui.has_method("toast"):
+		_ui.toast("Alguien te ha visto llevarte %s." % what)
+
+
+## Llegas en tu nave (desde el espacio): queda aparcada a tu lado.
+func _park_arrival_ship() -> void:
+	var arrival: Dictionary = WorldDB.get_state("arrival_ship", {})
+	if arrival.is_empty() or str(arrival.get("to", "")) != GameState.current_location() or arrival.get("ship", {}).is_empty():
+		return
+	WorldDB.set_state("arrival_ship", {})
+	var e: Dictionary = arrival.ship.duplicate(true)
+	e.erase("id")
+	var side := _player.view_forward().cross(Vector3.UP).normalized()
+	var at := _player.global_position + side * 9.0
+	at.y = ground_at(at.x, at.z) + 0.1 if not _interiors.is_inside() else _player.global_position.y
+	e["pos"] = [at.x, at.y, at.z]
+	var saved := Creations.add(e)
+	if not saved.is_empty():
+		Creations.build(self, saved)
+
+
+## La nave sale de la atmósfera: al espacio (SpaceScene), contigo dentro.
+func launch_ship(ship: Node3D) -> void:
+	var e := Creations.get_entry(str(ship.get("entry_id")))
+	if e.is_empty():
+		e = ship.get("entry")
+	e = e.duplicate(true)
+	e["fuel"] = ship.get("fuel")
+	if _player.riding == ship:
+		_player.riding = null
+	Travel.launch(e)
+	WorldDB.flush()
+	get_tree().change_scene_to_file(Travel.SPACE_SCENE)
+
+
+## Lo que hay a la vista alrededor de `pos` (para la IA: solo puede mencionar lo que está aquí).
+## Cosas marcadas con Decor.landmark, puertas, asientos, árboles y el agua; y lo que NO hay
+## donde se podría suponer (un negocio sin toldo).
+func surroundings_described(pos: Vector3, radius: float = 25.0) -> String:
+	if _interiors.is_inside():
+		return ""
+	var items := []
+	var seen := {}
+	for m in get_tree().get_nodes_in_group("landmark"):
+		if not is_instance_valid(m) or not m.is_inside_tree():
+			continue
+		var d: float = (m as Node3D).global_position.distance_to(pos)
+		var label := str(m.get_meta("label", ""))
+		if d > radius or label.is_empty():
+			continue
+		if seen.has(label):
+			seen[label].n += 1
+			seen[label].d = minf(seen[label].d, d)
+			continue
+		seen[label] = {"label": label, "d": d, "n": 1}
+		items.append(seen[label])
+	for id in _interiors.doors():
+		var door: Dictionary = _interiors.doors()[id]
+		var d: float = door.pos.distance_to(pos)
+		if d <= radius:
+			items.append({"label": "la puerta de " + str(door.label), "d": d, "n": 1})
+	for it in get_tree().get_nodes_in_group("interactables"):
+		if it is Interactable and it.prompt.begins_with("Sentarse") and it.global_position.distance_to(pos) <= radius:
+			var k := "un asiento (banca o silla)"
+			if not seen.has(k):
+				seen[k] = {"label": k, "d": it.global_position.distance_to(pos), "n": 1}
+				items.append(seen[k])
+	for place in _places:
+		var d: float = (_places[place] as Vector3).distance_to(pos)
+		if d <= radius and not seen.has(place):
+			seen[place] = true
+			items.append({"label": str(place), "d": d, "n": 1})
+	var trees := _features.filter(func(f): return is_instance_valid(f.node) and f.kind == "tree" and f.pos.distance_to(pos) <= radius).size()
+	if trees > 0:
+		items.append({"label": "árboles" if trees > 1 else "un árbol", "d": radius, "n": 1})
+	if _water_spot() != Vector3.INF and _water_spot().distance_to(pos) <= radius:
+		items.append({"label": "el mar (la orilla)", "d": _water_spot().distance_to(pos), "n": 1})
+	items.sort_custom(func(a, b): return a.d < b.d)
+	var parts := PackedStringArray()
+	for it in items.slice(0, 14):
+		parts.append("%s%s a %d m" % [it.label, (" (%d)" % it.n) if it.n > 1 else "", int(it.d)])
+	# Lo que no hay: negocios cercanos sin toldo (la cafetería no tiene)
+	var without := PackedStringArray()
+	for id in _interiors.doors():
+		var door: Dictionary = _interiors.doors()[id]
+		if door.kind in ["house", "home"] or door.pos.distance_to(pos) > radius:
+			continue
+		var has_awning := false
+		for m in get_tree().get_nodes_in_group("landmark"):
+			if is_instance_valid(m) and str(m.get_meta("kind", "")) == "awning" and (m as Node3D).global_position.distance_to(door.pos + Vector3(0, 2.9, 0)) < 2.5:
+				has_awning = true
+		if not has_awning:
+			without.append(str(door.label))
+	var out := "A TU ALREDEDOR (lo único que hay a la vista; no menciones toldos, bancas, fuentes, puestos ni nada que no esté aquí): " + (", ".join(parts) if not parts.is_empty() else "nada en especial") + "."
+	if not without.is_empty():
+		out += " Sin toldo: %s." % ", ".join(without)
 	return out
 
 

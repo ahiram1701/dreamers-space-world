@@ -88,6 +88,10 @@ Si la IA no está disponible, el juego usa contenido de respaldo y **nunca se qu
 | ✅ | Animación procedural natural (locomoción, 20+ gestos, emociones, herramientas en la mano) |
 | ✅ | Modelos 3D CC0 animados, mar con olas, hierba con viento e iluminación con SSAO, glow y niebla |
 | ✅ | Menú de pausa, ajustes (IA, ratón, volumen, calidad gráfica, personaje) y gestión de partidas |
+| ✅ | **Agente creador**: con <kbd>F</kbd> («construyo un carrito», «pongo un farol que se encienda si llueve») la IA trabaja con herramientas —mira, busca entre 299 modelos, crea piezas, les da comportamientos y reglas, revisa y corrige— y lo creado se queda en tu mundo |
+| ✅ | **Vehículos**: coches, camioneta, furgoneta, moto, bici y lancha con física real, gasolina y dueño; tráfico por la calle; y lo que inventa la IA con ruedas y motor también se conduce |
+| ✅ | **Naves y espacio**: despega desde la plataforma, vuela por tu sistema solar (planetas, estación, asteroides) y aterriza en otros planetas |
+| ✅ | **Coherencia**: nombres y oficios que casan, el pueblo se conoce, ropa por prendas que cambia con el clima y que la IA conoce, y lo que un PNJ narra que hace, lo hace |
 
 ## 🚀 Jugar
 
@@ -121,7 +125,8 @@ Desde la **v0.2.0**, el juego comprueba al arrancar si hay una versión estable 
 | Moverse / correr | <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / <kbd>Shift</kbd> |
 | Saltar | <kbd>Espacio</kbd> |
 | Cámara / acercar y alejar | Ratón / rueda (al mínimo, primera persona) |
-| Hablar / recoger / entrar / sentarse / subir a una barca | <kbd>E</kbd> (lo que tienes delante, indicado abajo en pantalla) |
+| Hablar / recoger / entrar / sentarse / subir a una barca, un coche o una nave | <kbd>E</kbd> (lo que tienes delante, indicado abajo en pantalla) |
+| Conducir / pilotar | <kbd>W</kbd><kbd>S</kbd> avanzar y frenar, <kbd>A</kbd><kbd>D</kbd> girar; en una nave <kbd>Espacio</kbd> sube y <kbd>Ctrl</kbd>/<kbd>Q</kbd> baja, y en el espacio <kbd>Shift</kbd> es crucero |
 | Elegir respuesta en un diálogo | <kbd>1</kbd>–<kbd>4</kbd> |
 | Hacer algo (acción libre) | <kbd>F</kbd> |
 | Ancla (saltar) | <kbd>T</kbd> |
@@ -196,6 +201,9 @@ godot --headless --path . -s tests/test_shops.gd       # abarrotes, fonda, farma
 godot --headless --path . -s tests/test_buildings.gd   # cuartos, escalera, segundo piso y ventanas
 godot --headless --path . -s tests/test_doors.gd       # tocar, invitar a pasar, negocios cerrados, forzar
 godot --headless --path . -s tests/test_fixes066.gd    # compras completas, acotaciones, techo, malla de navegación
+godot --headless --path . -s tests/test_coherence.gd   # nombres y oficios, el pueblo se conoce, ropa real, entorno, acciones que se hacen
+godot --headless --path . -s tests/test_agent.gd       # el agente creador: herramientas, errores que corrige, guardado
+godot --headless --path . -s tests/test_vehicles.gd    # coches, bici, tráfico, robo, nave, espacio y reglas
 bash tests/smoke.sh                                    # arranca las escenas y busca errores de script
 ```
 

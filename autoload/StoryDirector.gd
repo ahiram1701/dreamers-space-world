@@ -30,6 +30,12 @@ func talk(npc_id: String, player_input: String, scene_context: String) -> Dictio
 	turn["source"] = "ai" if res.ok else "fallback"
 	if res.ok:
 		split_action(turn)
+		var app: Dictionary = npc.get("appearance", {})
+		var pl := PlayerLook.current() if WorldDB.is_loaded() else {}
+		var dropped := strip_clothes(turn, app.get("layers", []), str(app.get("outfit", "casual")),
+			PlayerLook.layers() if WorldDB.is_loaded() else [], str(pl.get("outfit", "casual")))
+		if not dropped.is_empty():
+			print_debug("[ropa] quitado de %s: %s" % [npc_id, dropped])
 		make_consistent(turn)
 	# Lo que el PNJ hace (dar, acompañar, curar, irse…) ocurre de verdad, no solo se dice
 	turn["notes"] = Actions.execute(npc_id, turn.get("actions", [])) if res.ok else []
@@ -104,6 +110,58 @@ static func split_action(turn: Dictionary) -> void:
 		var t := _third_person(f).strip_edges()
 		parts.append(t.substr(0, 1).to_upper() + t.substr(1))
 	turn["action"] = ". ".join(parts) + "."
+
+
+## Quita lo que contradice la ropa real: en la acotación, prendas que el PNJ no lleva («se ajusta
+## el cuello del impermeable»); en lo que dice, prendas del jugador que no lleva («deja tu
+## abrigo»). Devuelve las frases quitadas.
+static func strip_clothes(turn: Dictionary, npc_layers: Array, npc_outfit: String, player_layers: Array, player_outfit: String) -> Array:
+	var dropped := []
+	var action := str(turn.get("action", ""))
+	if not action.is_empty():
+		var keep := PackedStringArray()
+		for s in _sentences(action):
+			var putting_on := ActionMapper.WEAR.any(func(w): return s.to_lower().contains(w))
+			if putting_on or Wardrobe.mentions_missing(s, npc_layers, npc_outfit).is_empty():
+				keep.append(s)
+			else:
+				dropped.append(s)
+		if keep.is_empty():
+			turn.erase("action")
+		else:
+			turn["action"] = " ".join(keep)
+	var line := str(turn.get("line", ""))
+	var keep_line := PackedStringArray()
+	for s in _sentences(line):
+		var low := " " + s.to_lower()
+		var bad := false
+		for id in Wardrobe.mentions_missing(s, player_layers, player_outfit):
+			for n in Wardrobe.garment(id).names:
+				if low.contains("tu " + str(n)) or low.contains("tus " + str(n)) or low.contains("ese " + str(n)) or low.contains("esa " + str(n)):
+					bad = true
+		if bad:
+			dropped.append(s)
+		else:
+			keep_line.append(s)
+	if not keep_line.is_empty() and keep_line.size() < _sentences(line).size():
+		turn["line"] = " ".join(keep_line)
+	return dropped
+
+
+## Frases de un texto (cortando tras . ! ? …), con su puntuación.
+static func _sentences(text: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	var cur := ""
+	for i in text.length():
+		var ch := text[i]
+		cur += ch
+		if ch in [".", "!", "?", "…"] and (i + 1 >= text.length() or text[i + 1] == " "):
+			if not cur.strip_edges().is_empty():
+				out.append(cur.strip_edges())
+			cur = ""
+	if not cur.strip_edges().is_empty():
+		out.append(cur.strip_edges())
+	return out
 
 
 ## Frases en las que el PNJ dice que se va o se mete en algún sitio ("me voy a casa", "me encierro").
@@ -480,7 +538,8 @@ func _system_prompt(npc: Dictionary, scene_context: String) -> String:
 	return """%s
 
 INTERPRETAS A ESTE PERSONAJE (habla siempre en primera persona, como en una conversación real):
-Nombre: %s, %d años, %s.%s
+Nombre: %s. Eres %s, %d años, %s.%s
+TU ROPA AHORA MISMO (es lo que llevas de verdad; no menciones, toques ni te ajustes ninguna otra prenda): %s.
 Personalidad: %s.
 Objetivos: %s.
 Secreto (no lo reveles a la ligera; solo si hay mucha confianza o motivo): %s
@@ -501,8 +560,8 @@ ESCENA (es la verdad física de este momento: no digas que estás en otro sitio 
 
 CÓMO RESPONDER (JSON):
 - "line": SOLO lo que dices en voz alta, natural y breve (1 a 4 frases), sin acotaciones (nada de *…*, —…— ni paréntesis). Reacciona a lo último que dijo el jugador. Lo que el jugador pone entre paréntesis como «el jugador hace: …» es lo que HACE, no lo que dice.
-- "action" (opcional): lo que haces mientras hablas, en TERCERA persona y breve, como una acotación de teatro («Da un sorbo al café y mira hacia la escalera»). Nunca en primera persona ni dirigido al jugador.
-- NO INVENTES: ni prendas u objetos que el jugador no lleva (mira cómo le ves), ni puertas, pasadizos, cuartos o partes de un sitio que no estén en su descripción. Si no lo sabes, no lo afirmes.
+- "action" (opcional): lo que haces mientras hablas, en TERCERA persona y breve, como una acotación de teatro («Da un sorbo al café y mira hacia el faro»). Nunca en primera persona ni dirigido al jugador. Tu cuerpo LO HACE DE VERDAD en el juego, así que solo cosas que se puedan ver: un gesto (asiente, niega con la cabeza, se encoge de hombros, cruza los brazos, bebe, come, señala, saluda, bosteza, se rasca la barbilla, limpia, cocina, escribe, lee, mira el celular, abraza, da la mano, da una palmada, se agacha, se sienta si hay asiento), una cara (sonríe, se ríe, frunce el ceño, suspira), mirar hacia algo o alguien que exista aquí, dar unos pasos hacia algo de A TU ALREDEDOR, o ponerte o quitarte una prenda. Lo demás no se mostrará.
+- NO INVENTES: ni prendas u objetos que el jugador no lleva (mira cómo le ves), ni prendas tuyas que no estén en TU ROPA, ni cosas del entorno (toldos, bancas, fuentes, puestos, coches…) que no estén en A TU ALREDEDOR, ni puertas, pasadizos, cuartos o partes de un sitio que no estén en su descripción, ni gente que no esté en GENTE DEL LUGAR o en tu memoria. Si no lo sabes, no lo afirmes.
 - "emotion": cómo te sientes al decirlo.
 - "choices": 2 a 4 respuestas posibles PARA EL JUGADOR, variadas en tono; al menos una que permita despedirse.
 - "new_facts": 0 a 2 cosas importantes que acabas de aprender del jugador o que acaban de pasar (en tercera persona). Incluye lo que el jugador afirma de sí mismo (p. ej. «El jugador dice que no notó nada raro»).
@@ -514,8 +573,9 @@ CÓMO RESPONDER (JSON):
 - "actions": lo que HACES de verdad en el mundo en este turno. Eres una persona real: puedes aceptar o negarte según tu personalidad, tu relación con el jugador y lo que tengas. PERO si en "line" dices que haces algo (dar, ir, irte, encerrarte…), DEBES incluir la acción; si no la incluyes, NO ocurre en el juego. Si te vas o te metes en un edificio, usa leave o go_inside: la conversación termina y te verán marcharte. Lista vacía si solo hablas.
 %s""" % [
 		ContentGenerator.world_rules_prompt(),
-		npc.name, int(npc.age), npc.occupation,
+		npc.name, "mujer" if npc.get("appearance", {}).get("figure", "") == "feminine" else "hombre", int(npc.age), npc.occupation,
 		("\nCómo eres: " + str(npc.description)) if not str(npc.get("description", "")).is_empty() else "",
+		Wardrobe.describe(npc.get("appearance", {})),
 		", ".join(PackedStringArray(npc.personality)),
 		"; ".join(PackedStringArray(npc.goals)),
 		npc.secret,

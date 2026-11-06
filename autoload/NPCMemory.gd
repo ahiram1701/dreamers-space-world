@@ -143,6 +143,18 @@ func end_conversation(npc_id: String) -> void:
 	WorldDB.set_state("memories", all)
 
 
+## Algo que `a` vivió con otro vecino `b` (una charla, un favor): así se conocen de verdad.
+func add_bond(a: String, b: String, note: String) -> void:
+	var m := get_mem(a)
+	var bonds: Dictionary = m.get("bonds", {})
+	var entry: Dictionary = bonds.get(b, {"notes": []})
+	var notes: Array = entry.get("notes", [])
+	notes.append(note.left(120))
+	entry.notes = notes.slice(-4)
+	bonds[b] = entry
+	set_fields(a, {"bonds": bonds})
+
+
 ## Texto compacto para meter en el prompt.
 func describe(npc_id: String) -> String:
 	var m := get_mem(npc_id)

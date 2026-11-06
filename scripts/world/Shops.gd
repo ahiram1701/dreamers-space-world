@@ -52,6 +52,7 @@ static func buy(entry: Dictionary) -> String:
 		return ""
 	var id := WorldDB.add_entity("item", {"name": str(entry.name), "kind": "tool" if entry.effect in ["tool", "light"] else "consumable",
 		"effect": str(entry.effect), "power": int(entry.get("power", 15)), "lore": str(entry.get("lore", "")),
-		"tags": ["comprado", str(entry.name).to_lower()]}, "shop")
+		"tags": ["comprado", str(entry.name).to_lower()]}.merged(
+			{"garment": {"id": str(entry.garment), "color": str(entry.get("color", "#555555"))}} if entry.has("garment") else {}), "shop")
 	Inventory.add(id)
 	return id

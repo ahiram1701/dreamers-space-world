@@ -14,6 +14,7 @@ SCENES=(
 	"res://scenes/act0_town/Act0Town.tscn"
 	"res://scenes/dev/AITestScene.tscn"
 	"res://scenes/generated_location/GeneratedLocation.tscn"
+	"res://scenes/space/SpaceScene.tscn"
 )
 # mesh_get_surface_count y material_get_instance_shader_parameters en servers/rendering/dummy
 IGNORE='Parameter "(m|material)" is null'

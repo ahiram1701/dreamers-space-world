@@ -55,6 +55,7 @@ func _ready() -> void:
 	Inventory.phone_requested.connect(func(): if _blocks == 0 or inventory.is_open(): inventory.close(); phone.open())
 	Inventory.action_requested.connect(func(text): if not actions.is_busy(): inventory.close(); actions.open(text))
 	Inventory.light_toggled.connect(func(on): if player: player.set_light(on))
+	Inventory.look_changed.connect(func(): if player: player.rebuild_look())
 	Jobs.fired.connect(func(_r): toast("Te han despedido del trabajo.", "warn"))
 	Jobs.hired.connect(func(j): toast("Trabajo nuevo: %s (%02d:00–%02d:00)" % [j.title, j.start_hour, j.end_hour], "quest"))
 

@@ -115,7 +115,20 @@ static func _tuft() -> ArrayMesh:
 
 
 ## Farola (modelo CC0) con luz que se enciende de noche. Devuelve la luz.
+## Marca algo del exterior que la gente puede ver y nombrar (farola, toldo, maceta, buzón,
+## banca…). La IA solo menciona lo que esté marcado cerca (LocationScene.surroundings_described).
+static func landmark(parent: Node3D, pos: Vector3, label: String, kind: String = "") -> void:
+	var m := Node3D.new()
+	m.name = "Landmark"
+	m.add_to_group("landmark")
+	m.set_meta("label", label)
+	m.set_meta("kind", kind)
+	parent.add_child(m)
+	m.position = pos
+
+
 static func streetlight(parent: Node3D, pos: Vector3, yaw: float, fx: EnvironmentFX) -> OmniLight3D:
+	landmark(parent, pos, "farola", "streetlight")
 	var model := AssetLibrary.instance("street_pack", "Streetlight_Single")
 	var light := OmniLight3D.new()
 	light.light_color = Color("#ffc47a")
@@ -206,6 +219,8 @@ static func facade(parent: Node3D, door: Vector3, yaw: float, business: String, 
 	var side := out.cross(Vector3.UP).normalized()
 	var step := PropsBuilder._box(parent, door - out * 0.25 + Vector3(0, 0.06, 0), Vector3(2.2, 0.12, 0.9), Color("#9a9288"), false)
 	step.rotation.y = yaw
+	var whose := ("de " + business) if not business.is_empty() else "de una casa"
+	landmark(parent, door - out * 0.35, "macetas con flores junto a la puerta %s" % whose, "planter")
 	for s in [-1, 1]:  # macetas a los lados de la puerta
 		var pot_at: Vector3 = door - out * 0.35 + side * s * 1.5
 		var pot := PropsBuilder._box(parent, pot_at + Vector3(0, 0.2, 0), Vector3(0.6, 0.4, 0.4), Color("#8a4b2f"), true)
@@ -218,10 +233,14 @@ static func facade(parent: Node3D, door: Vector3, yaw: float, business: String, 
 		PropsBuilder._box(parent, post_at + Vector3(0, 0.55, 0), Vector3(0.08, 1.1, 0.08), Color("#3b3b3b"), true)
 		var box := PropsBuilder._box(parent, post_at + Vector3(0, 1.2, 0), Vector3(0.28, 0.25, 0.45), Color(["#2e5e8c", "#8c2e2e", "#3b6e3b", "#444444"][rng.randi() % 4]), false)
 		box.rotation.y = yaw
+		landmark(parent, post_at, "buzón", "mailbox")
 		return
 	# Negocio: toldo de rayas sobre la puerta y letrero colgante
 	var colors := [[Color("#c0392b"), Color("#f4efe6")], [Color("#2e7d5b"), Color("#f4efe6")], [Color("#2c5d8f"), Color("#f4efe6")], [Color("#d4a017"), Color("#5a3a1a")]]
 	var pair: Array = colors[rng.randi() % colors.size()]
+	var names := ["rojas y blancas", "verdes y blancas", "azules y blancas", "amarillas y cafés"]
+	landmark(parent, door + Vector3(0, 2.9, 0), "toldo de rayas %s sobre la puerta de %s" % [names[colors.find(pair)], business], "awning")
+	landmark(parent, door + out * 0.25 + Vector3(0, 2.4, 0), "letrero colgante de %s" % business, "sign")
 	for k in 6:
 		var stripe := PropsBuilder._box(parent, door - out * 0.1 + side * (-1.25 + k * 0.5) + Vector3(0, 2.9, 0), Vector3(0.5, 0.06, 1.3), pair[k % 2], false)
 		stripe.rotation = Vector3(-0.35, yaw, 0)

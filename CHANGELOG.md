@@ -3,6 +3,43 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.7.0] - 2026-11-06
+
+### Añadido
+- **Agente creador: la IA programa el mundo mientras juegas.** Con <kbd>F</kbd> («construyo un carrito con ruedas», «hago una caseta con puerta», «pongo un farol junto a la banca») la IA ya no responde de una vez: trabaja paso a paso con herramientas, como un programador dentro del juego.
+  - Mira alrededor, busca entre 299 modelos 3D (muebles, plantas, barcos, herramientas, edificios, sci-fi…) y crea piezas a escala real (caja, cilindro, esfera, cápsula, cono, toro, rampa, rueda) con material: madera, metal, vidrio, tela, piedra, plástico, goma, pintura o luz.
+  - Les da comportamientos: asiento, cama, baúl, luz, fuego, puerta que abre, letrero, máquina (entra algo y sale otra cosa), física, flotar, sonido, ruedas, motor, pedales, propulsor y cabina.
+  - Revisa cómo quedó y corrige. Si se equivoca, la herramienta le dice qué está mal.
+  - Gasta los materiales que lleves, y si falta algo lo dice.
+  - Todo se guarda y sigue ahí cuando vuelves.
+  - No puede romper la partida ni tocar nada fuera del juego.
+- **Reglas** para lo que creas, sin código: «si llueve, enciende la luz del porche», «de noche, cierra la puerta», «cuando me acerque, suena».
+- **Vehículos con física real:** sedán, camioneta, furgoneta, moto, bici y lancha.
+  - Aceleran como un coche de verdad, giran, frenan, gastan gasolina, chocan y se quedan donde los dejas.
+  - En el pueblo hay coches aparcados de los vecinos; llevarte uno ajeno es robo y el dueño se entera.
+  - Tienes tu propia bici junto a casa, y Marina tiene una lancha en el muelle.
+  - De vez en cuando pasa un coche por la calle, por su carril, y frena si estás delante.
+  - Lo que inventa la IA con ruedas y motor (o pedales) también se conduce; con flotador y motor, es una lancha.
+- **Naves y espacio:**
+  - En la plataforma de despegue, al oeste del pueblo, hay una lanzadera vieja.
+  - Despega en vertical (<kbd>Espacio</kbd> sube, <kbd>Ctrl</kbd>/<kbd>Q</kbd> baja) y, al salir de la atmósfera, estás en el espacio.
+  - Tu sistema solar tiene sol, 5–7 planetas (templados, desiertos, hielo, selva, océano, volcanes, cristal, gigantes gaseosos con anillos), un cinturón de asteroides y una estación orbital.
+  - <kbd>Shift</kbd> activa el modo crucero.
+  - Al acercarte, <kbd>E</kbd> para aterrizar: la superficie de cada planeta se genera la primera vez, con su gravedad, y tu nave queda aparcada a tu lado.
+  - La IA también puede construir naves (propulsor + cabina).
+- **Ropa por prendas:** impermeable, abrigo, chamarra, suéter, chaleco, delantal, bufanda, gorra, sombrero, gorro, mochila y lentes, encima de la ropa de siempre y moviéndose con el cuerpo.
+  - La gente se viste según el tiempo: con lluvia, impermeable; de noche, abrigo. Dentro de casa se lo quita.
+  - Cada quien lleva la de su oficio (el barista, delantal).
+  - En los abarrotes venden prendas, que te pones y te quitas desde el inventario.
+- **El pueblo se conoce:** cada vecino sabe quién vive y trabaja en el pueblo, si es hombre o mujer, su edad y su oficio. Recuerda de qué ha charlado con los demás. Teo ya sabe quién es Samir.
+
+### Cambiado
+- **Lo que un PNJ narra que hace, lo hace:** «da un sorbo al café» bebe, «señala el faro» señala hacia el faro, «se acerca a la ventana» da unos pasos, «se pone el abrigo» se lo pone. Lo que no se puede hacer en el juego ya no se muestra.
+- **La IA solo menciona lo que existe:**
+  - Sabe qué ropa lleva cada uno (y tú). Ya no se ajusta un impermeable que no lleva ni te pide dejar un abrigo que no traes.
+  - Sabe qué hay alrededor (farolas, toldos, macetas, buzones, bancas, el mar) y qué no: la cafetería no tiene toldo.
+- **Nombres y oficios coherentes:** el oficio va en el género de la persona y la edad casa con el oficio. Nadie es «maestra jubilada» llamándose Joaquín ni jubilado con 30 años.
+
 ## [0.6.6] - 2026-11-05
 
 ### Añadido

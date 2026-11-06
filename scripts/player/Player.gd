@@ -151,7 +151,7 @@ func rebuild_look() -> void:
 		c.queue_free()
 	_lamp = null
 	_rig = null
-	var built := PlayerLook.build(_body, PlayerLook.current(), hash(WorldDB.world_id) + 7)
+	var built := PlayerLook.build(_body, PlayerLook.current().merged({"layers": PlayerLook.layers()}, true), hash(WorldDB.world_id) + 7)
 	if built.is_empty():
 		var mesh := MeshInstance3D.new()
 		mesh.mesh = CapsuleMesh.new()

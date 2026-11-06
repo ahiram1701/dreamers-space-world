@@ -7,13 +7,6 @@ extends Node
 ## sofá. Quien trabaja fuera no está en su horario; los niños, en la escuela.
 ## También recuerda a quien entró de visita (la gente de paso que se mete en un edificio).
 
-const NAMES_F := Passersby.NAMES_F
-const NAMES_M := Passersby.NAMES_M
-const KIDS_F := ["Ana", "Mía", "Emma", "Luna", "Zoe", "Alma", "Olivia", "Abril"]
-const KIDS_M := ["Leo", "Lucas", "Thiago", "Dante", "Emilio", "Gael", "Nico", "Santi"]
-const JOBS := ["electricista", "enfermera", "carpintero", "dependienta", "maestra", "taxista", "panadera", "pescador",
-	"oficinista", "mecánico", "cocinera", "albañil"]
-const HOME_JOBS := ["trabaja desde casa", "ama de casa", "cuida de la casa y de los niños"]
 
 var scene: LocationScene
 var _spawned := {}   # npc_id -> TownNPC de la casa donde estás ahora
@@ -58,27 +51,28 @@ func _create(door: String, place: String) -> Array:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(place + "/" + door)
 	var kind: String = ["single", "couple", "family", "family", "elders"][rng.randi() % 5]
-	var surname: String = Passersby.SURNAMES[rng.randi() % Passersby.SURNAMES.size()]
+	var surname := Names.surname(rng)
 	var ids := []
 	var adults := 1 if kind == "single" else 2
 	for a in adults:
 		var fem: bool = rng.randf() < 0.5 if a == 0 or ids.is_empty() else not _is_fem(ids[0])
-		var first: String = (NAMES_F if fem else NAMES_M)[rng.randi() % 12]
+		var first := Names.first(fem, rng)
 		var elder: bool = kind == "elders"
 		var at_home: bool = elder or rng.randf() < 0.3
-		var job: String = ("jubilada" if fem else "jubilado") if elder else (HOME_JOBS[rng.randi() % HOME_JOBS.size()] if at_home else JOBS[rng.randi() % JOBS.size()])
+		var j := Names.job(fem, rng, "elder" if elder else ("home" if at_home else "house"))
+		var job: String = j.job
 		var look := _look(rng, fem, "elderly" if elder else ["slim", "average", "sturdy", "tall"][rng.randi() % 4])
 		var id := Actions.build_npc("%s %s" % [first, surname], job, "Vive en esta casa con su familia." if adults > 1 else "Vive solo/a en esta casa.",
 			"¿Sí? ¿Qué se te ofrece?", look)
 		if id.is_empty():
 			continue
-		WorldDB.update_entity("npc", id, {"age": rng.randi_range(68, 82) if elder else rng.randi_range(26, 55),
+		WorldDB.update_entity("npc", id, {"age": int(j.age) if elder else clampi(int(j.age), 26, 58),
 			"home_door": door, "works_away": not at_home, "household_role": "adulto"})
 		ids.append(id)
 	if kind == "family":
 		for k in 1 + rng.randi() % 2:
 			var fem := rng.randf() < 0.5
-			var first: String = (KIDS_F if fem else KIDS_M)[rng.randi() % 8]
+			var first := Names.first(fem, rng, true)
 			var id := Actions.build_npc("%s %s" % [first, surname], "estudiante", "Un niño/a que vive aquí con sus padres.",
 				"¡Hola! ¿Eres amigo de mis papás?", _look(rng, fem, "child"))
 			if id.is_empty():
@@ -190,6 +184,7 @@ func populate(door: String, kind: String) -> void:
 			var npc := TownNPC.new()
 			scene.add_child(npc)
 			npc.setup(entity)
+			npc.redress(false)  # en casa, sin abrigo ni impermeable
 			scene._npcs[id] = npc
 			_spawned[id] = npc
 			place(npc, p, used)
@@ -202,6 +197,7 @@ func populate(door: String, kind: String) -> void:
 				var npc := TownNPC.new()
 				scene.add_child(npc)
 				npc.setup(entity)
+				npc.redress(false)
 				scene._npcs[id] = npc
 				_spawned[id] = npc
 				var spot: Vector3 = scene._interiors.npc_spot(0)
@@ -287,7 +283,7 @@ func ensure_staff(door: String, kind: String) -> String:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(place + "/staff/" + door)
 	var fem := rng.randf() < 0.6
-	var name: String = "%s %s" % [(NAMES_F if fem else NAMES_M)[rng.randi() % 12], Passersby.SURNAMES[rng.randi() % Passersby.SURNAMES.size()]]
+	var name := Names.full(fem, rng)
 	var jobs: Array = STAFF.get(kind, Shops.info(kind).get("staff", ["dependienta", "dependiente"]))
 	var job: String = "%s de %s" % [jobs[0 if fem else 1], Shops.label(kind)] if not STAFF.has(kind) else jobs[0 if fem else 1]
 	var id := Actions.build_npc(name, job, "Trabaja aquí de 9:00 a 20:00 y conoce a medio pueblo.", "¡Hola! Pasa, pasa. ¿Qué buscas?",

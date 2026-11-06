@@ -134,6 +134,7 @@ static func character(appearance: Dictionary, rng_seed: int) -> Node3D:
 			m.set_meta("part", "cloth")
 			mi.set_surface_override_material(i, m)
 			cloth_index += 1
+	Wardrobe.dress(model, appearance.get("layers", []))
 	return model
 
 

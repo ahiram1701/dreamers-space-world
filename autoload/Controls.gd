@@ -8,11 +8,12 @@ const KEYS := {
 	"run": [KEY_SHIFT], "jump": [KEY_SPACE], "interact": [KEY_E], "act": [KEY_F],
 	"inventory": [KEY_I], "anchor": [KEY_T], "pause": [KEY_ESCAPE], "phone": [KEY_C], "fullscreen": [KEY_F11],
 	"choice_1": [KEY_1], "choice_2": [KEY_2], "choice_3": [KEY_3], "choice_4": [KEY_4],
+	"descend": [KEY_CTRL, KEY_Q],   # en una nave: bajar (subir es "jump")
 }
 const BUTTONS := {
 	"jump": [JOY_BUTTON_A], "interact": [JOY_BUTTON_X], "act": [JOY_BUTTON_Y],
 	"inventory": [JOY_BUTTON_BACK], "back": [JOY_BUTTON_B], "anchor": [JOY_BUTTON_LEFT_SHOULDER], "pause": [JOY_BUTTON_START],
-	"run": [JOY_BUTTON_LEFT_STICK], "phone": [JOY_BUTTON_RIGHT_SHOULDER], "zoom_in": [JOY_BUTTON_DPAD_UP], "zoom_out": [JOY_BUTTON_DPAD_DOWN],
+	"run": [JOY_BUTTON_LEFT_STICK], "phone": [JOY_BUTTON_RIGHT_SHOULDER], "descend": [JOY_BUTTON_RIGHT_STICK], "zoom_in": [JOY_BUTTON_DPAD_UP], "zoom_out": [JOY_BUTTON_DPAD_DOWN],
 }
 const AXES := {
 	"move_forward": [JOY_AXIS_LEFT_Y, -1.0], "move_back": [JOY_AXIS_LEFT_Y, 1.0],

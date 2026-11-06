@@ -12,6 +12,8 @@ signal pregeneration_finished
 
 const TOWN_SCENE := "res://scenes/act0_town/Act0Town.tscn"
 const LOCATION_SCENE := "res://scenes/generated_location/GeneratedLocation.tscn"
+const SPACE_SCENE := "res://scenes/space/SpaceScene.tscn"
+const SPACE := "space"   # location_id del espacio (volando en tu nave)
 const NPCS_PER_LOCATION := 2
 const ITEMS_PER_LOCATION := 2
 const FINALE_HINT := "El origen de la transmisión que el jugador lleva siguiendo desde Bahía de las Horas: el punto donde convergen todas las ramas que ha visitado. Una zona de anomalía sin cielo ni suelo normales, junto a la brecha original."
@@ -20,7 +22,68 @@ var _pregenerating := false
 
 
 func scene_for(location_id: String) -> String:
+	if location_id == SPACE:
+		return SPACE_SCENE
 	return TOWN_SCENE if location_id == GameState.HOME else LOCATION_SCENE
+
+
+# --- En nave: despegar, volar por el sistema y aterrizar -------------------------------------
+# No es un salto del Ancla: es un viaje físico por este universo (no gasta energía del Ancla,
+# gasta combustible).
+
+## Despegas: la nave sale contigo al espacio (deja de estar aparcada aquí).
+func launch(ship_entry: Dictionary) -> void:
+	var e := ship_entry.duplicate(true)
+	var from := GameState.current_location()
+	if e.has("id"):
+		Creations.remove(str(e.id))
+	e.erase("pos")
+	WorldDB.set_state("space", {"ship": e, "from": from})
+	GameState.set_location(SPACE)
+
+
+## Aterrizas en un planeta o te acoplas a una estación: el lugar de su superficie (se genera la
+## primera vez, con la IA) y tu nave aparcada a tu lado. Devuelve {ok, location_id, error}.
+func land(planet_name: String) -> Dictionary:
+	var sys := StarSystem.get_or_create()
+	var planet := {}
+	for p in sys.planets:
+		if p.name == planet_name:
+			planet = p
+	if planet.is_empty():
+		return _fail("No existe %s." % planet_name)
+	if not StarSystem.can_land(planet):
+		return _fail("%s no tiene superficie donde aterrizar." % planet.name)
+	var location_id: String = planet.get("location_id", "")
+	if location_id.is_empty() or (location_id != GameState.HOME and WorldDB.get_entity("location", location_id).is_empty()):
+		travel_started.emit(planet.name)
+		var station: bool = planet.kind == "station"
+		var hint := ("Una estación espacial en órbita (%s): muelles de atraque, pasillos y gente que vive y trabaja allí. Llegas acoplando tu nave." % planet.name) if station 			else ("La superficie del planeta %s (%s, gravedad %.1f g): el lugar donde aterrizas con tu nave. Coherente con este sistema solar y con la época del mundo." % [planet.name, StarSystem.KINDS[planet.kind].label, float(planet.gravity)])
+		var loc := await ContentGenerator.generate("location", hint, "landing:" + planet.name, {"planeta": planet.name, "tipo": planet.kind})
+		if not loc.ok:
+			return _fail("No se pudo calcular el lugar de aterrizaje: %s" % ", ".join(PackedStringArray(loc.errors)))
+		location_id = loc.id
+		var fields := {"gravity": float(planet.gravity), "picked": [], "npc_ids": [], "item_ids": [], "recharged": false, "planet": planet.name}
+		if station:
+			fields["kind"] = "space_station"
+		else:
+			fields["kind"] = "planet_surface"
+			fields["biome"] = StarSystem.KINDS[planet.kind].biome
+		WorldDB.update_entity("location", location_id, fields)
+		planet["location_id"] = location_id
+		StarSystem.save(sys)
+		var where := {"lugar": loc.entity.name, "descripcion": loc.entity.description}
+		var npc := await ContentGenerator.generate("npc", "alguien que vive o trabaja en %s" % loc.entity.name, "location:" + location_id, where)
+		if npc.ok:
+			WorldDB.update_entity("location", location_id, {"npc_ids": [npc.id]})
+	var space: Dictionary = WorldDB.get_state("space", {})
+	WorldDB.set_state("arrival_ship", {"to": location_id, "ship": space.get("ship", {})})
+	WorldDB.set_state("space", {})
+	GameState.set_location(location_id)
+	if location_id != GameState.HOME and TimelineManager.visited_locations().all(func(n): return n.location_id != location_id):
+		TimelineManager.branch("Aterrizas en %s" % planet.name, location_id, WorldDB.get_entity("location", location_id).get("era", ""))
+	travel_finished.emit(location_id)
+	return {"ok": true, "location_id": location_id, "error": ""}
 
 
 ## Salto a una rama nueva: usa el destino pregenerado si existe; si no, lo genera ahora.

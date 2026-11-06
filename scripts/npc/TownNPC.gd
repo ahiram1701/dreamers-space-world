@@ -33,6 +33,8 @@ var talking := false:
 var _name_label: Label3D
 var _display_name := "alguien"
 var _body: Node3D        # gira hacia donde camina o mira
+var _model: Node3D       # el modelo con su esqueleto (para vestirle)
+var layers: Array = []   # las prendas que lleva puestas ahora (Wardrobe)
 var _rig: HumanoidRig
 var _target := Vector3.INF   # a dónde va andando
 var _follow: Node3D = null
@@ -58,8 +60,21 @@ var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 func setup(entity: Dictionary) -> void:
 	npc_id = entity.id
 	Layers.character(self)
-	var look: Dictionary = entity.get("appearance", {})
+	var look: Dictionary = entity.get("appearance", {}).duplicate()
 	var s: Vector3 = BODY_SCALE.get(look.get("body", "average"), Vector3.ONE)
+	if not look.has("layers") and entity.has("occupation"):
+		# Su ropa de siempre según su oficio (una vez: se queda en su ficha)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = hash(str(entity.id) + "/ropa")
+		look["layers"] = Wardrobe.for_job(str(entity.occupation), rng)
+		if WorldDB.get_entity("npc", str(entity.id)).size() > 0:
+			var app: Dictionary = WorldDB.get_entity("npc", str(entity.id)).get("appearance", {}).duplicate()
+			app["layers"] = look.layers
+			WorldDB.update_entity("npc", str(entity.id), {"appearance": app})
+	var full := entity.duplicate()
+	full["appearance"] = look
+	layers = Wardrobe.for_weather(full) if entity.has("occupation") else look.get("layers", [])
+	look["layers"] = layers
 
 	var shape := CollisionShape3D.new()
 	var capsule := CapsuleShape3D.new()
@@ -73,6 +88,7 @@ func setup(entity: Dictionary) -> void:
 	_body = Node3D.new()
 	add_child(_body)
 	var model := AssetLibrary.character(look, hash(npc_id))
+	_model = model
 	if model:
 		var placed := AssetLibrary.place(_body, model, Vector3.ZERO, HEIGHT * s.y, 0.0, false)
 		placed.scale = Vector3(s.x / s.y, 1.0, s.z / s.y)  # complexión (la altura ya va en place)
@@ -102,6 +118,30 @@ func setup(entity: Dictionary) -> void:
 
 
 ## Solo muestra el nombre si ya os conocéis: el mundo se "descubre".
+## Se viste (o se quita) según lo que toca ahora: lluvia, frío, dentro de casa. Guarda en su
+## ficha lo que lleva puesto, que es lo que la IA sabe de su ropa.
+func redress(outdoors: bool = true) -> void:
+	var entity := WorldDB.get_entity("npc", npc_id)
+	if entity.is_empty() or _model == null:
+		return
+	var want := Wardrobe.for_weather(entity, outdoors)
+	if str(want) == str(layers):
+		return
+	set_layers(want)
+
+
+func set_layers(want: Array) -> void:
+	layers = want
+	if _model:
+		Wardrobe.undress(_model)
+		Wardrobe.dress(_model, layers)
+	var entity := WorldDB.get_entity("npc", npc_id)
+	if not entity.is_empty():
+		var app: Dictionary = entity.get("appearance", {}).duplicate()
+		app["layers"] = layers
+		WorldDB.update_entity("npc", npc_id, {"appearance": app})
+
+
 func refresh_name(entity: Dictionary) -> void:
 	var met: bool = NPCMemory.get_mem(npc_id).met
 	_name_label.text = entity.name if met else "?"

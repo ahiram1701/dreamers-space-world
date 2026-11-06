@@ -46,7 +46,7 @@ func _run() -> void:
 
 	# La IA sabe qué llevas puesto y cómo son los sitios
 	var looks: String = town.call("_player_looks")
-	_expect(looks.contains("camiseta") and looks.contains("ni abrigo"), "te ve con tu ropa real, sin abrigo: «%s»" % looks)
+	_expect(looks.contains("camiseta") and looks.contains("sin abrigo"), "te ve con tu ropa real, sin abrigo: «%s»" % looks)
 	var places: String = town.call("places_described")
 	_expect(places.contains("UNA sola puerta") and places.contains("no hay puerta trasera"), "el faro tiene una sola puerta (no hay puerta de atrás)")
 

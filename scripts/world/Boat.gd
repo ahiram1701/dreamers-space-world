@@ -13,6 +13,8 @@ const MASK_SHADER := preload("res://shaders/water_mask.gdshader")
 var water_level := -0.45
 var ground_at: Callable = func(_x: float, _z: float) -> float: return -10.0
 var seat_height := 0.35
+var max_speed := MAX_SPEED
+var motor := false   # lancha: va con motor (no rema)
 
 var _rider: Player
 var _speed := 0.0
@@ -51,6 +53,17 @@ func setup(pack: String, model_name: String, length: float, label: String = "Sub
 	_add_hull(size)
 	_add_water_mask(size)
 	_use = Interactable.create(self, Vector3(0, 0.6, 0), maxf(length * 0.5, 2.2), label, _on_use, self)
+
+
+## Barca hecha de piezas (Creations): `holder` ya lleva las piezas; `size`, su tamaño.
+func setup_custom(holder: Node3D, size: Vector3, label: String) -> void:
+	add_child(holder)
+	_draft = clampf(size.y * 0.3, 0.12, 0.45)
+	holder.position.y = -_draft
+	seat_height = clampf(size.y * 0.45 - _draft, 0.1, 0.6)
+	_add_hull(size)
+	_add_water_mask(size)
+	_use = Interactable.create(self, Vector3(0, 0.6, 0), maxf(size.z * 0.5, 2.2), label, _on_use, self)
 
 
 ## Colisión del casco: se mueve con la barca (el jugador y los PNJs no la atraviesan).
@@ -148,7 +161,7 @@ func _process(delta: float) -> void:
 		var input := Controls.move_vector()
 		throttle = -input.y * (1.0 if input.y < 0.0 else 0.6)
 		turn = -input.x
-	_speed = move_toward(_speed, throttle * MAX_SPEED, (2.5 if throttle != 0.0 else 1.2) * delta)
+	_speed = move_toward(_speed, throttle * max_speed, ((4.0 if motor else 2.5) if throttle != 0.0 else 1.2) * delta)
 	rotation.y += turn * TURN_SPEED * delta * clampf(absf(_speed) / 2.0 + 0.3, 0.3, 1.0)
 	var fwd := global_basis.z
 	fwd.y = 0
@@ -161,4 +174,4 @@ func _process(delta: float) -> void:
 	var rowing := absf(throttle) > 0.0 or absf(turn) > 0.0
 	if rowing != _rowing:
 		_rowing = rowing
-		_rider.play_gesture("row" if rowing else "sit")
+		_rider.play_gesture("row" if rowing and not motor else "sit")

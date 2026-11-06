@@ -1,0 +1,2988 @@
+{
+	"_comment": "Generado por tools/make_catalog.py. Modelos que la IA puede usar al crear cosas.",
+	"models": [
+		{
+			"model": "buildings_pack_3/1Story_GableRoof_Mat",
+			"name": "edificio de 1 piso",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 4.7,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/1Story_Mat",
+			"name": "edificio de 1 piso",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 4.7,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/1Story_RoundRoof_Mat",
+			"name": "edificio de 1 piso",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 4.7,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/1Story_Sign_Mat",
+			"name": "edificio de 1 piso",
+			"tags": [
+				"calle",
+				"casa",
+				"construcción",
+				"edificio",
+				"letrero",
+				"negocio",
+				"tráfico"
+			],
+			"height": 4.7,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/2Story_2_Mat",
+			"name": "edificio de 2 pisos",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 7.9,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/2Story_Balcony_Mat",
+			"name": "edificio de 2 pisos",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 7.9,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/2Story_Center_Mat",
+			"name": "edificio de 2 pisos",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 7.9,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/2Story_Columns_Mat",
+			"name": "edificio de 2 pisos",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 7.9,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/2Story_Double_Mat",
+			"name": "edificio de 2 pisos",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 7.9,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/2Story_GableRoof_Mat",
+			"name": "edificio de 2 pisos",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 7.9,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/2Story_Mat",
+			"name": "edificio de 2 pisos",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 7.9,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/2Story_RoundRoof_Mat",
+			"name": "edificio de 2 pisos",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 7.9,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/2Story_Sidehouse_Mat",
+			"name": "edificio de 2 pisos",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 7.9,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/2Story_Sign_Mat",
+			"name": "edificio de 2 pisos",
+			"tags": [
+				"calle",
+				"casa",
+				"construcción",
+				"edificio",
+				"letrero",
+				"negocio",
+				"tráfico"
+			],
+			"height": 7.9,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/2Story_Slim_Mat",
+			"name": "edificio de 2 pisos",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 7.9,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/2Story_Stairs_Mat",
+			"name": "edificio de 2 pisos",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 7.9,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/2Story_Wide_2Doors_Mat",
+			"name": "edificio de 2 pisos",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 7.9,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/2Story_Wide_Mat",
+			"name": "edificio de 2 pisos",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 7.9,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/3Story_Balcony_Mat",
+			"name": "edificio de 3 pisos",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 11.1,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/3Story_Slim_Mat",
+			"name": "edificio de 3 pisos",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 11.1,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/3Story_Small_Mat",
+			"name": "edificio de 3 pisos",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 11.1,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/4Story_Center_Mat",
+			"name": "edificio de 4 pisos",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 14.3,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/4Story_Mat",
+			"name": "edificio de 4 pisos",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 14.3,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/4Story_Wide_2Doors_Mat",
+			"name": "edificio de 4 pisos",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 14.3,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/4Story_Wide_2Doors_Roof_Mat",
+			"name": "edificio de 4 pisos",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 14.3,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "buildings_pack_3/6Story_Stack_Mat",
+			"name": "edificio de 6 pisos",
+			"tags": [
+				"casa",
+				"construcción",
+				"edificio"
+			],
+			"height": 20.7,
+			"pack": "buildings_pack_3"
+		},
+		{
+			"model": "house_interior_pack/Bathroom_Bathtub",
+			"name": "bañera",
+			"tags": [
+				"baño"
+			],
+			"height": 0.6,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Bathroom_Mirror1",
+			"name": "espejo",
+			"tags": [
+				"baño"
+			],
+			"height": 0.8,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Bathroom_Mirror2",
+			"name": "espejo",
+			"tags": [
+				"baño"
+			],
+			"height": 0.8,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Bathroom_Shower1",
+			"name": "regadera",
+			"tags": [
+				"baño",
+				"ducha"
+			],
+			"height": 2.1,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Bathroom_Sink",
+			"name": "lavabo",
+			"tags": [
+				"baño",
+				"cocina"
+			],
+			"height": 0.9,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Bathroom_Toilet",
+			"name": "excusado",
+			"tags": [
+				"baño",
+				"wc"
+			],
+			"height": 0.8,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Bathroom_Toilet2",
+			"name": "excusado",
+			"tags": [
+				"baño",
+				"wc"
+			],
+			"height": 0.8,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Bathroom_ToiletPaper",
+			"name": "papel de baño",
+			"tags": [
+				"baño"
+			],
+			"height": 0.12,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Bathroom_ToiletPaperPile",
+			"name": "pila de papel de baño",
+			"tags": [
+				"baño"
+			],
+			"height": 0.3,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Bathroom_Towel",
+			"name": "toalla",
+			"tags": [
+				"baño"
+			],
+			"height": 0.6,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Bathroom_WashingMachine",
+			"name": "lavadora",
+			"tags": [
+				"baño",
+				"electrodoméstico"
+			],
+			"height": 0.9,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Bed_Bunk",
+			"name": "litera",
+			"tags": [
+				"cama",
+				"dormir"
+			],
+			"height": 1.7,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Bed_King",
+			"name": "cama matrimonial",
+			"tags": [
+				"cama",
+				"dormir"
+			],
+			"height": 0.6,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Bed_Single",
+			"name": "cama individual",
+			"tags": [
+				"cama",
+				"dormir"
+			],
+			"height": 0.6,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Bookshelf",
+			"name": "librero",
+			"tags": [
+				"estante",
+				"libros",
+				"mueble"
+			],
+			"height": 2.0,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Carpet_1",
+			"name": "alfombra",
+			"tags": [
+				"suelo",
+				"tapete"
+			],
+			"height": 0.02,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Carpet_2",
+			"name": "alfombra",
+			"tags": [
+				"suelo",
+				"tapete"
+			],
+			"height": 0.02,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Carpet_Round",
+			"name": "alfombra redonda",
+			"tags": [
+				"suelo",
+				"tapete"
+			],
+			"height": 0.02,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Chair_1",
+			"name": "silla",
+			"tags": [
+				"asiento",
+				"mueble",
+				"sentarse"
+			],
+			"height": 0.9,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Chair_2",
+			"name": "silla",
+			"tags": [
+				"asiento",
+				"mueble",
+				"sentarse"
+			],
+			"height": 0.9,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Chair_3",
+			"name": "silla",
+			"tags": [
+				"asiento",
+				"mueble",
+				"sentarse"
+			],
+			"height": 0.9,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Chair_4",
+			"name": "silla",
+			"tags": [
+				"asiento",
+				"mueble",
+				"sentarse"
+			],
+			"height": 0.9,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Column_Round1",
+			"name": "columna redonda",
+			"tags": [
+				"estructura",
+				"pilar"
+			],
+			"height": 3.0,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Column_Round2",
+			"name": "columna redonda",
+			"tags": [
+				"estructura",
+				"pilar"
+			],
+			"height": 3.0,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Column_Round3",
+			"name": "columna redonda",
+			"tags": [
+				"estructura",
+				"pilar"
+			],
+			"height": 3.0,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Column_SquareBig",
+			"name": "columna",
+			"tags": [
+				"estructura",
+				"pilar"
+			],
+			"height": 3.0,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Column_SquareSmall",
+			"name": "columna",
+			"tags": [
+				"estructura",
+				"pilar"
+			],
+			"height": 3.0,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Couch_L",
+			"name": "sofá",
+			"tags": [
+				"asiento",
+				"mueble",
+				"sentarse",
+				"sillón"
+			],
+			"height": 0.85,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Couch_Large1",
+			"name": "sofá grande",
+			"tags": [
+				"asiento",
+				"mueble",
+				"sentarse",
+				"sillón"
+			],
+			"height": 0.85,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Couch_Large2",
+			"name": "sofá grande",
+			"tags": [
+				"asiento",
+				"mueble",
+				"sentarse",
+				"sillón"
+			],
+			"height": 0.85,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Couch_Large3",
+			"name": "sofá grande",
+			"tags": [
+				"asiento",
+				"mueble",
+				"sentarse",
+				"sillón"
+			],
+			"height": 0.85,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Couch_Medium1",
+			"name": "sofá",
+			"tags": [
+				"asiento",
+				"mueble",
+				"sentarse",
+				"sillón"
+			],
+			"height": 0.85,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Couch_Medium2",
+			"name": "sofá",
+			"tags": [
+				"asiento",
+				"mueble",
+				"sentarse",
+				"sillón"
+			],
+			"height": 0.85,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Couch_Small1",
+			"name": "sofá pequeño",
+			"tags": [
+				"asiento",
+				"mueble",
+				"sentarse",
+				"sillón"
+			],
+			"height": 0.85,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Couch_Small2",
+			"name": "sofá pequeño",
+			"tags": [
+				"asiento",
+				"mueble",
+				"sentarse",
+				"sillón"
+			],
+			"height": 0.85,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Curtains_Double",
+			"name": "cortinas doble",
+			"tags": [
+				"tela",
+				"ventana"
+			],
+			"height": 2.2,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Curtains_Single",
+			"name": "cortinas cama individual",
+			"tags": [
+				"cama",
+				"dormir",
+				"tela",
+				"ventana"
+			],
+			"height": 2.2,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Door_1",
+			"name": "puerta",
+			"tags": [
+				"entrada"
+			],
+			"height": 2.1,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Door_2",
+			"name": "puerta",
+			"tags": [
+				"entrada"
+			],
+			"height": 2.1,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Door_3",
+			"name": "puerta",
+			"tags": [
+				"entrada"
+			],
+			"height": 2.1,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Door_4",
+			"name": "puerta",
+			"tags": [
+				"entrada"
+			],
+			"height": 2.1,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Door_5",
+			"name": "puerta",
+			"tags": [
+				"entrada"
+			],
+			"height": 2.1,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Door_6",
+			"name": "puerta",
+			"tags": [
+				"entrada"
+			],
+			"height": 2.1,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Door_7",
+			"name": "puerta",
+			"tags": [
+				"entrada"
+			],
+			"height": 2.1,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Door_8",
+			"name": "puerta",
+			"tags": [
+				"entrada"
+			],
+			"height": 2.1,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Door_9",
+			"name": "puerta",
+			"tags": [
+				"entrada"
+			],
+			"height": 2.1,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Door_Double",
+			"name": "puerta doble",
+			"tags": [
+				"entrada"
+			],
+			"height": 2.1,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Drawer_1",
+			"name": "cómoda",
+			"tags": [
+				"cajones",
+				"guardar",
+				"mueble"
+			],
+			"height": 1.0,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Drawer_2",
+			"name": "cómoda",
+			"tags": [
+				"cajones",
+				"guardar",
+				"mueble"
+			],
+			"height": 1.0,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Drawer_3",
+			"name": "cómoda",
+			"tags": [
+				"cajones",
+				"guardar",
+				"mueble"
+			],
+			"height": 1.0,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Drawer_4",
+			"name": "cómoda",
+			"tags": [
+				"cajones",
+				"guardar",
+				"mueble"
+			],
+			"height": 1.0,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Drawer_5",
+			"name": "cómoda",
+			"tags": [
+				"cajones",
+				"guardar",
+				"mueble"
+			],
+			"height": 1.0,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Fireplace",
+			"name": "chimenea",
+			"tags": [
+				"calor",
+				"fuego"
+			],
+			"height": 1.3,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Fork",
+			"name": "tenedor",
+			"tags": [
+				"cocina",
+				"cubiertos"
+			],
+			"height": 0.2,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Houseplant_1",
+			"name": "planta de interior",
+			"tags": [
+				"maceta",
+				"planta"
+			],
+			"height": 0.8,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Houseplant_2",
+			"name": "planta de interior",
+			"tags": [
+				"maceta",
+				"planta"
+			],
+			"height": 0.8,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Houseplant_3",
+			"name": "planta de interior",
+			"tags": [
+				"maceta",
+				"planta"
+			],
+			"height": 0.8,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Houseplant_4",
+			"name": "planta de interior",
+			"tags": [
+				"maceta",
+				"planta"
+			],
+			"height": 0.8,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Houseplant_5",
+			"name": "planta de interior",
+			"tags": [
+				"maceta",
+				"planta"
+			],
+			"height": 0.8,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Houseplant_6",
+			"name": "planta de interior",
+			"tags": [
+				"maceta",
+				"planta"
+			],
+			"height": 0.8,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Houseplant_7",
+			"name": "planta de interior",
+			"tags": [
+				"maceta",
+				"planta"
+			],
+			"height": 0.8,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Houseplant_8",
+			"name": "planta de interior",
+			"tags": [
+				"maceta",
+				"planta"
+			],
+			"height": 0.8,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Kitchen_1Drawers",
+			"name": "mueble de cocina",
+			"tags": [
+				"cocina"
+			],
+			"height": 0.9,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Kitchen_2Drawers",
+			"name": "mueble de cocina",
+			"tags": [
+				"cocina"
+			],
+			"height": 0.9,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Kitchen_3Drawers",
+			"name": "mueble de cocina",
+			"tags": [
+				"cocina"
+			],
+			"height": 0.9,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Kitchen_Cabinet1",
+			"name": "alacena",
+			"tags": [
+				"cocina",
+				"guardar"
+			],
+			"height": 0.9,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Kitchen_Cabinet2",
+			"name": "alacena",
+			"tags": [
+				"cocina",
+				"guardar"
+			],
+			"height": 0.9,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Kitchen_CabinetSmall",
+			"name": "alacena pequeña",
+			"tags": [
+				"cocina",
+				"guardar"
+			],
+			"height": 0.6,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Kitchen_Fridge",
+			"name": "refrigerador",
+			"tags": [
+				"cocina",
+				"electrodoméstico",
+				"frío"
+			],
+			"height": 1.9,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Kitchen_Oven",
+			"name": "estufa",
+			"tags": [
+				"cocina",
+				"cocinar"
+			],
+			"height": 0.9,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Kitchen_Oven_Large",
+			"name": "estufa grande",
+			"tags": [
+				"cocina",
+				"cocinar"
+			],
+			"height": 0.9,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Kitchen_Sink",
+			"name": "fregadero",
+			"tags": [
+				"cocina",
+				"lavar"
+			],
+			"height": 0.9,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Knife",
+			"name": "cuchillo",
+			"tags": [
+				"arma",
+				"cocina",
+				"herramienta"
+			],
+			"height": 0.25,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Light_Ceiling1",
+			"name": "lámpara de techo",
+			"tags": [
+				"iluminación",
+				"luz"
+			],
+			"height": 0.5,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Light_Ceiling2",
+			"name": "lámpara",
+			"tags": [
+				"iluminación",
+				"luz"
+			],
+			"height": 0.5,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Light_Ceiling3",
+			"name": "lámpara",
+			"tags": [
+				"iluminación",
+				"luz"
+			],
+			"height": 0.5,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Light_Ceiling4",
+			"name": "lámpara",
+			"tags": [
+				"iluminación",
+				"luz"
+			],
+			"height": 0.5,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Light_Ceiling5",
+			"name": "lámpara",
+			"tags": [
+				"iluminación",
+				"luz"
+			],
+			"height": 0.5,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Light_Ceiling6",
+			"name": "lámpara",
+			"tags": [
+				"iluminación",
+				"luz"
+			],
+			"height": 0.5,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Light_CeilingSingle",
+			"name": "lámpara",
+			"tags": [
+				"iluminación",
+				"luz"
+			],
+			"height": 0.5,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Light_Chandelier",
+			"name": "lámpara candelabra",
+			"tags": [
+				"iluminación",
+				"lujo",
+				"luz"
+			],
+			"height": 0.5,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Light_Cube",
+			"name": "lámpara",
+			"tags": [
+				"iluminación",
+				"luz"
+			],
+			"height": 0.5,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Light_Cube2",
+			"name": "lámpara",
+			"tags": [
+				"iluminación",
+				"luz"
+			],
+			"height": 0.5,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Light_Desk",
+			"name": "lámpara de escritorio",
+			"tags": [
+				"luz"
+			],
+			"height": 0.5,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Light_Floor1",
+			"name": "lámpara de pie",
+			"tags": [
+				"iluminación",
+				"luz"
+			],
+			"height": 0.5,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Light_Floor2",
+			"name": "lámpara",
+			"tags": [
+				"iluminación",
+				"luz"
+			],
+			"height": 0.5,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Light_Floor3",
+			"name": "lámpara",
+			"tags": [
+				"iluminación",
+				"luz"
+			],
+			"height": 0.5,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Light_Floor4",
+			"name": "lámpara",
+			"tags": [
+				"iluminación",
+				"luz"
+			],
+			"height": 0.5,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Light_Icosahedron",
+			"name": "lámpara",
+			"tags": [
+				"iluminación",
+				"luz"
+			],
+			"height": 0.5,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Light_Icosahedron2",
+			"name": "lámpara",
+			"tags": [
+				"iluminación",
+				"luz"
+			],
+			"height": 0.5,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Light_Small",
+			"name": "lámpara pequeña",
+			"tags": [
+				"iluminación",
+				"luz"
+			],
+			"height": 0.5,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Light_Stand1",
+			"name": "lámpara",
+			"tags": [
+				"iluminación",
+				"luz"
+			],
+			"height": 0.5,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Light_Stand2",
+			"name": "lámpara",
+			"tags": [
+				"iluminación",
+				"luz"
+			],
+			"height": 0.5,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/NightStand_1",
+			"name": "buró",
+			"tags": [
+				"mesita",
+				"mueble",
+				"noche"
+			],
+			"height": 0.6,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/NightStand_2",
+			"name": "buró",
+			"tags": [
+				"mesita",
+				"mueble",
+				"noche"
+			],
+			"height": 0.6,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/NightStand_3",
+			"name": "buró",
+			"tags": [
+				"mesita",
+				"mueble",
+				"noche"
+			],
+			"height": 0.6,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Plate_1",
+			"name": "plato",
+			"tags": [
+				"cocina",
+				"comida"
+			],
+			"height": 0.04,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Plate_2",
+			"name": "plato",
+			"tags": [
+				"cocina",
+				"comida"
+			],
+			"height": 0.04,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Plate_3",
+			"name": "plato",
+			"tags": [
+				"cocina",
+				"comida"
+			],
+			"height": 0.04,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Shelf_1",
+			"name": "repisa",
+			"tags": [
+				"estante",
+				"guardar"
+			],
+			"height": 1.0,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Shelf_2",
+			"name": "repisa",
+			"tags": [
+				"estante",
+				"guardar"
+			],
+			"height": 1.0,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Shelf_Large",
+			"name": "repisa grande",
+			"tags": [
+				"estante",
+				"guardar"
+			],
+			"height": 1.0,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Shelf_Small1",
+			"name": "repisa pequeña",
+			"tags": [
+				"estante",
+				"guardar"
+			],
+			"height": 1.0,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Shelf_Small2",
+			"name": "repisa pequeña",
+			"tags": [
+				"estante",
+				"guardar"
+			],
+			"height": 1.0,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Shelf_Small3",
+			"name": "repisa pequeña",
+			"tags": [
+				"estante",
+				"guardar"
+			],
+			"height": 1.0,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Spoon",
+			"name": "cuchara",
+			"tags": [
+				"cubiertos"
+			],
+			"height": 0.18,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Stool",
+			"name": "banco",
+			"tags": [
+				"asiento",
+				"sentarse",
+				"taburete"
+			],
+			"height": 0.7,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Table_RoundLarge",
+			"name": "mesa",
+			"tags": [
+				"comer",
+				"mueble"
+			],
+			"height": 0.75,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Table_RoundSmall",
+			"name": "mesa",
+			"tags": [
+				"comer",
+				"mueble"
+			],
+			"height": 0.75,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Table_RoundSmall2",
+			"name": "mesa",
+			"tags": [
+				"comer",
+				"mueble"
+			],
+			"height": 0.75,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Trashcan_Cylindric",
+			"name": "bote de basura",
+			"tags": [
+				"basura"
+			],
+			"height": 0.9,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Trashcan_Green",
+			"name": "bote de basura",
+			"tags": [
+				"basura"
+			],
+			"height": 0.9,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Trashcan_Large",
+			"name": "bote de basura grande",
+			"tags": [
+				"basura"
+			],
+			"height": 0.9,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Trashcan_Small1",
+			"name": "bote de basura pequeño",
+			"tags": [
+				"basura"
+			],
+			"height": 0.9,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Trashcan_Small2",
+			"name": "bote de basura pequeño",
+			"tags": [
+				"basura"
+			],
+			"height": 0.9,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Window_Large1",
+			"name": "ventana grande",
+			"tags": [
+				"vidrio"
+			],
+			"height": 1.2,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Window_Large2",
+			"name": "ventana grande",
+			"tags": [
+				"vidrio"
+			],
+			"height": 1.2,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Window_Round1",
+			"name": "ventana redonda",
+			"tags": [
+				"vidrio"
+			],
+			"height": 1.2,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Window_Round2",
+			"name": "ventana redonda",
+			"tags": [
+				"vidrio"
+			],
+			"height": 1.2,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Window_Round3",
+			"name": "ventana redonda",
+			"tags": [
+				"vidrio"
+			],
+			"height": 1.2,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Window_Small1",
+			"name": "ventana pequeña",
+			"tags": [
+				"vidrio"
+			],
+			"height": 1.2,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Window_Small2",
+			"name": "ventana pequeña",
+			"tags": [
+				"vidrio"
+			],
+			"height": 1.2,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "house_interior_pack/Window_Small3",
+			"name": "ventana pequeña",
+			"tags": [
+				"vidrio"
+			],
+			"height": 1.2,
+			"pack": "house_interior_pack"
+		},
+		{
+			"model": "modular_sci_fi/Column_1",
+			"name": "columna",
+			"tags": [
+				"estructura",
+				"pilar"
+			],
+			"height": 3.0,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "modular_sci_fi/Details_Pipes_Long",
+			"name": "tuberías",
+			"tags": [
+				"industrial",
+				"metal",
+				"tubo"
+			],
+			"height": 0.5,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "modular_sci_fi/Details_Pipes_Medium",
+			"name": "tuberías",
+			"tags": [
+				"industrial",
+				"metal",
+				"tubo"
+			],
+			"height": 0.5,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "modular_sci_fi/Details_Pipes_Small",
+			"name": "tuberías pequeño",
+			"tags": [
+				"industrial",
+				"metal",
+				"tubo"
+			],
+			"height": 0.5,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "modular_sci_fi/Details_Vent_1",
+			"name": "rejilla de ventilación",
+			"tags": [
+				"metal",
+				"ventilación"
+			],
+			"height": 0.5,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "modular_sci_fi/Props_Base",
+			"name": "base metálica",
+			"tags": [
+				"plataforma",
+				"sci-fi"
+			],
+			"height": 0.3,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "modular_sci_fi/Props_Capsule",
+			"name": "cápsula",
+			"tags": [
+				"criogenia",
+				"sci-fi"
+			],
+			"height": 2.0,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "modular_sci_fi/Props_Chest",
+			"name": "cofre",
+			"tags": [
+				"baúl",
+				"guardar"
+			],
+			"height": 0.7,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "modular_sci_fi/Props_Computer",
+			"name": "computadora",
+			"tags": [
+				"ordenador",
+				"sci-fi",
+				"terminal"
+			],
+			"height": 1.5,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "modular_sci_fi/Props_ComputerSmall",
+			"name": "computadora pequeña",
+			"tags": [
+				"terminal"
+			],
+			"height": 0.8,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "modular_sci_fi/Props_ContainerFull",
+			"name": "contenedor",
+			"tags": [
+				"caja",
+				"carga"
+			],
+			"height": 1.2,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "modular_sci_fi/Props_Crate",
+			"name": "caja",
+			"tags": [
+				"cajón",
+				"carga",
+				"madera"
+			],
+			"height": 0.8,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "modular_sci_fi/Props_CrateLong",
+			"name": "caja larga",
+			"tags": [
+				"cajón",
+				"carga"
+			],
+			"height": 0.8,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "modular_sci_fi/Props_Laser",
+			"name": "cañón láser",
+			"tags": [
+				"arma",
+				"sci-fi"
+			],
+			"height": 1.2,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "modular_sci_fi/Props_Pod",
+			"name": "cápsula de escape",
+			"tags": [
+				"nave",
+				"sci-fi"
+			],
+			"height": 2.2,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "modular_sci_fi/Props_Shelf",
+			"name": "repisa",
+			"tags": [
+				"estante",
+				"guardar"
+			],
+			"height": 1.0,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "modular_sci_fi/Props_Shelf_Tall",
+			"name": "repisa alta",
+			"tags": [
+				"estante",
+				"guardar"
+			],
+			"height": 1.0,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "modular_sci_fi/Props_Statue",
+			"name": "estatua",
+			"tags": [
+				"adorno"
+			],
+			"height": 2.0,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "modular_sci_fi/Props_Teleporter_1",
+			"name": "teletransportador",
+			"tags": [
+				"portal",
+				"sci-fi"
+			],
+			"height": 0.6,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "modular_sci_fi/Props_Teleporter_2",
+			"name": "teletransportador",
+			"tags": [
+				"portal",
+				"sci-fi"
+			],
+			"height": 0.6,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "modular_sci_fi/Props_Vessel",
+			"name": "depósito",
+			"tags": [
+				"contenedor",
+				"sci-fi",
+				"tanque"
+			],
+			"height": 1.4,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "modular_sci_fi/Props_Vessel_Short",
+			"name": "depósito bajo",
+			"tags": [
+				"contenedor",
+				"sci-fi",
+				"tanque"
+			],
+			"height": 1.4,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "modular_sci_fi/Props_Vessel_Tall",
+			"name": "depósito alto",
+			"tags": [
+				"contenedor",
+				"sci-fi",
+				"tanque"
+			],
+			"height": 1.4,
+			"pack": "modular_sci_fi"
+		},
+		{
+			"model": "nature_pack/BirchTree_1",
+			"name": "abedul",
+			"tags": [
+				"naturaleza",
+				"árbol"
+			],
+			"height": 7.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/BirchTree_2",
+			"name": "abedul",
+			"tags": [
+				"naturaleza",
+				"árbol"
+			],
+			"height": 7.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/BirchTree_3",
+			"name": "abedul",
+			"tags": [
+				"naturaleza",
+				"árbol"
+			],
+			"height": 7.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/BirchTree_4",
+			"name": "abedul",
+			"tags": [
+				"naturaleza",
+				"árbol"
+			],
+			"height": 7.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/BirchTree_5",
+			"name": "abedul",
+			"tags": [
+				"naturaleza",
+				"árbol"
+			],
+			"height": 7.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/BushBerries_1",
+			"name": "arbusto con bayas",
+			"tags": [
+				"fruta",
+				"planta"
+			],
+			"height": 1.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/BushBerries_2",
+			"name": "arbusto con bayas",
+			"tags": [
+				"fruta",
+				"planta"
+			],
+			"height": 1.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Bush_1",
+			"name": "arbusto",
+			"tags": [
+				"planta"
+			],
+			"height": 1.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Bush_2",
+			"name": "arbusto",
+			"tags": [
+				"planta"
+			],
+			"height": 1.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Cactus_1",
+			"name": "cactus",
+			"tags": [
+				"desierto",
+				"planta"
+			],
+			"height": 2.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Cactus_2",
+			"name": "cactus",
+			"tags": [
+				"desierto",
+				"planta"
+			],
+			"height": 2.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Cactus_3",
+			"name": "cactus",
+			"tags": [
+				"desierto",
+				"planta"
+			],
+			"height": 2.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Cactus_4",
+			"name": "cactus",
+			"tags": [
+				"desierto",
+				"planta"
+			],
+			"height": 2.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Cactus_5",
+			"name": "cactus",
+			"tags": [
+				"desierto",
+				"planta"
+			],
+			"height": 2.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/CommonTree_1",
+			"name": "árbol",
+			"tags": [
+				"naturaleza"
+			],
+			"height": 6.5,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/CommonTree_2",
+			"name": "árbol",
+			"tags": [
+				"naturaleza"
+			],
+			"height": 6.5,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/CommonTree_3",
+			"name": "árbol",
+			"tags": [
+				"naturaleza"
+			],
+			"height": 6.5,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/CommonTree_4",
+			"name": "árbol",
+			"tags": [
+				"naturaleza"
+			],
+			"height": 6.5,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/CommonTree_5",
+			"name": "árbol",
+			"tags": [
+				"naturaleza"
+			],
+			"height": 6.5,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/CommonTree_Autumn_1",
+			"name": "árbol de otoño",
+			"tags": [
+				"naturaleza"
+			],
+			"height": 6.5,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/CommonTree_Dead_1",
+			"name": "árbol seco",
+			"tags": [
+				"naturaleza"
+			],
+			"height": 6.5,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/CommonTree_Snow_1",
+			"name": "árbol nevado",
+			"tags": [
+				"naturaleza",
+				"nieve"
+			],
+			"height": 6.5,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Flowers",
+			"name": "flores",
+			"tags": [
+				"jardín",
+				"planta"
+			],
+			"height": 0.4,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Grass",
+			"name": "hierba",
+			"tags": [
+				"pasto"
+			],
+			"height": 0.4,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Grass_2",
+			"name": "hierba",
+			"tags": [
+				"pasto"
+			],
+			"height": 0.4,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/PalmTree_1",
+			"name": "palmera",
+			"tags": [
+				"playa",
+				"árbol"
+			],
+			"height": 7.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/PalmTree_2",
+			"name": "palmera",
+			"tags": [
+				"playa",
+				"árbol"
+			],
+			"height": 7.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/PalmTree_3",
+			"name": "palmera",
+			"tags": [
+				"playa",
+				"árbol"
+			],
+			"height": 7.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/PalmTree_4",
+			"name": "palmera",
+			"tags": [
+				"playa",
+				"árbol"
+			],
+			"height": 7.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/PineTree_1",
+			"name": "pino",
+			"tags": [
+				"bosque",
+				"árbol"
+			],
+			"height": 8.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/PineTree_2",
+			"name": "pino",
+			"tags": [
+				"bosque",
+				"árbol"
+			],
+			"height": 8.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/PineTree_3",
+			"name": "pino",
+			"tags": [
+				"bosque",
+				"árbol"
+			],
+			"height": 8.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/PineTree_4",
+			"name": "pino",
+			"tags": [
+				"bosque",
+				"árbol"
+			],
+			"height": 8.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/PineTree_5",
+			"name": "pino",
+			"tags": [
+				"bosque",
+				"árbol"
+			],
+			"height": 8.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/PineTree_Snow_1",
+			"name": "pino nevado",
+			"tags": [
+				"bosque",
+				"nieve",
+				"árbol"
+			],
+			"height": 8.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Plant_1",
+			"name": "planta",
+			"tags": [
+				"naturaleza"
+			],
+			"height": 0.8,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Plant_2",
+			"name": "planta",
+			"tags": [
+				"naturaleza"
+			],
+			"height": 0.8,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Plant_3",
+			"name": "planta",
+			"tags": [
+				"naturaleza"
+			],
+			"height": 0.8,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Plant_4",
+			"name": "planta",
+			"tags": [
+				"naturaleza"
+			],
+			"height": 0.8,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Plant_5",
+			"name": "planta",
+			"tags": [
+				"naturaleza"
+			],
+			"height": 0.8,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Rock_1",
+			"name": "roca",
+			"tags": [
+				"piedra"
+			],
+			"height": 1.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Rock_2",
+			"name": "roca",
+			"tags": [
+				"piedra"
+			],
+			"height": 1.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Rock_3",
+			"name": "roca",
+			"tags": [
+				"piedra"
+			],
+			"height": 1.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Rock_4",
+			"name": "roca",
+			"tags": [
+				"piedra"
+			],
+			"height": 1.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Rock_5",
+			"name": "roca",
+			"tags": [
+				"piedra"
+			],
+			"height": 1.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Rock_6",
+			"name": "roca",
+			"tags": [
+				"piedra"
+			],
+			"height": 1.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Rock_7",
+			"name": "roca",
+			"tags": [
+				"piedra"
+			],
+			"height": 1.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Rock_Moss_1",
+			"name": "roca con musga",
+			"tags": [
+				"piedra"
+			],
+			"height": 1.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Rock_Moss_2",
+			"name": "roca con musga",
+			"tags": [
+				"piedra"
+			],
+			"height": 1.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Rock_Moss_3",
+			"name": "roca con musga",
+			"tags": [
+				"piedra"
+			],
+			"height": 1.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Rock_Moss_4",
+			"name": "roca con musga",
+			"tags": [
+				"piedra"
+			],
+			"height": 1.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Rock_Moss_5",
+			"name": "roca con musga",
+			"tags": [
+				"piedra"
+			],
+			"height": 1.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Rock_Moss_6",
+			"name": "roca con musga",
+			"tags": [
+				"piedra"
+			],
+			"height": 1.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Rock_Moss_7",
+			"name": "roca con musga",
+			"tags": [
+				"piedra"
+			],
+			"height": 1.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Rock_Snow_1",
+			"name": "roca nevada",
+			"tags": [
+				"nieve",
+				"piedra"
+			],
+			"height": 1.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/TreeStump",
+			"name": "tocón",
+			"tags": [
+				"tronco"
+			],
+			"height": 0.5,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Willow_1",
+			"name": "sauce",
+			"tags": [
+				"árbol"
+			],
+			"height": 6.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Willow_2",
+			"name": "sauce",
+			"tags": [
+				"árbol"
+			],
+			"height": 6.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Willow_3",
+			"name": "sauce",
+			"tags": [
+				"árbol"
+			],
+			"height": 6.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Willow_4",
+			"name": "sauce",
+			"tags": [
+				"árbol"
+			],
+			"height": 6.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/Willow_5",
+			"name": "sauce",
+			"tags": [
+				"árbol"
+			],
+			"height": 6.0,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "nature_pack/WoodLog",
+			"name": "tronco",
+			"tags": [
+				"leña",
+				"madera"
+			],
+			"height": 0.4,
+			"pack": "nature_pack"
+		},
+		{
+			"model": "ships_pack/Boat",
+			"name": "barca",
+			"tags": [
+				"agua",
+				"barco",
+				"bote",
+				"vehículo"
+			],
+			"height": 1.2,
+			"pack": "ships_pack"
+		},
+		{
+			"model": "ships_pack/BoatWSail",
+			"name": "velero",
+			"tags": [
+				"agua",
+				"barco",
+				"vehículo",
+				"vela"
+			],
+			"height": 5.0,
+			"pack": "ships_pack"
+		},
+		{
+			"model": "ships_pack/CruiseShip",
+			"name": "crucero",
+			"tags": [
+				"barco",
+				"grande",
+				"vehículo"
+			],
+			"height": 25.0,
+			"pack": "ships_pack"
+		},
+		{
+			"model": "ships_pack/Lifeboat",
+			"name": "bote salvavidas",
+			"tags": [
+				"agua",
+				"barco",
+				"vehículo"
+			],
+			"height": 1.4,
+			"pack": "ships_pack"
+		},
+		{
+			"model": "ships_pack/Sail_ship",
+			"name": "velero grande",
+			"tags": [
+				"barco",
+				"vehículo",
+				"vela"
+			],
+			"height": 12.0,
+			"pack": "ships_pack"
+		},
+		{
+			"model": "ships_pack/Viking_boat",
+			"name": "barco vikingo",
+			"tags": [
+				"antiguo",
+				"barco",
+				"vehículo"
+			],
+			"height": 6.0,
+			"pack": "ships_pack"
+		},
+		{
+			"model": "street_pack/Sign_NoParking",
+			"name": "señal de no estacionarse",
+			"tags": [
+				"calle",
+				"letrero",
+				"tráfico"
+			],
+			"height": 2.2,
+			"pack": "street_pack"
+		},
+		{
+			"model": "street_pack/Sign_Stop",
+			"name": "señal de alto",
+			"tags": [
+				"calle",
+				"letrero",
+				"tráfico"
+			],
+			"height": 2.2,
+			"pack": "street_pack"
+		},
+		{
+			"model": "street_pack/Sign_Triangle",
+			"name": "señal triangular",
+			"tags": [
+				"calle",
+				"letrero",
+				"tráfico"
+			],
+			"height": 2.2,
+			"pack": "street_pack"
+		},
+		{
+			"model": "street_pack/Streetlight_Double",
+			"name": "farola doble",
+			"tags": [
+				"calle",
+				"luz",
+				"poste"
+			],
+			"height": 4.4,
+			"pack": "street_pack"
+		},
+		{
+			"model": "street_pack/Streetlight_Single",
+			"name": "farola cama individual",
+			"tags": [
+				"calle",
+				"cama",
+				"dormir",
+				"luz",
+				"poste"
+			],
+			"height": 4.4,
+			"pack": "street_pack"
+		},
+		{
+			"model": "street_pack/Streetlight_Triple",
+			"name": "farola triple",
+			"tags": [
+				"calle",
+				"luz",
+				"poste"
+			],
+			"height": 4.4,
+			"pack": "street_pack"
+		},
+		{
+			"model": "survival_pack/Axe",
+			"name": "hacha",
+			"tags": [
+				"herramienta",
+				"talar"
+			],
+			"height": 0.75,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Axe_Small",
+			"name": "hacha pequeño",
+			"tags": [
+				"herramienta",
+				"talar"
+			],
+			"height": 0.75,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Backpack",
+			"name": "mochila",
+			"tags": [
+				"bolsa",
+				"guardar"
+			],
+			"height": 0.6,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Bandages",
+			"name": "vendas",
+			"tags": [
+				"curar",
+				"medicina"
+			],
+			"height": 0.1,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Battery_Big",
+			"name": "batería grande",
+			"tags": [
+				"energía",
+				"pila"
+			],
+			"height": 0.3,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Battery_Small",
+			"name": "batería pequeña",
+			"tags": [
+				"energía",
+				"pila"
+			],
+			"height": 0.3,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/BearTrap_Closed",
+			"name": "trampa para osos cerrada",
+			"tags": [
+				"trampa"
+			],
+			"height": 0.15,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/BearTrap_Open",
+			"name": "trampa para osos abierta",
+			"tags": [
+				"trampa"
+			],
+			"height": 0.15,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Bonfire",
+			"name": "fogata",
+			"tags": [
+				"calor",
+				"fuego",
+				"leña"
+			],
+			"height": 0.6,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Bonfire_Fire",
+			"name": "fogata encendida",
+			"tags": [
+				"calor",
+				"fuego",
+				"leña"
+			],
+			"height": 0.6,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Can_Broken",
+			"name": "lata rota",
+			"tags": [
+				"comida"
+			],
+			"height": 0.15,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Can_Closed",
+			"name": "lata cerrada",
+			"tags": [
+				"comida"
+			],
+			"height": 0.15,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Can_Open",
+			"name": "lata abierta",
+			"tags": [
+				"comida"
+			],
+			"height": 0.15,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Can_Red",
+			"name": "lata roja",
+			"tags": [
+				"comida"
+			],
+			"height": 0.15,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Compass_Closed",
+			"name": "brújula cerrada",
+			"tags": [
+				"orientación"
+			],
+			"height": 0.08,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Compass_Open",
+			"name": "brújula abierta",
+			"tags": [
+				"orientación"
+			],
+			"height": 0.08,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/FirstAidKit",
+			"name": "botiquín",
+			"tags": [
+				"curar",
+				"medicina"
+			],
+			"height": 0.3,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/FirstAidKit_Hard",
+			"name": "botiquín rígido",
+			"tags": [
+				"curar",
+				"medicina"
+			],
+			"height": 0.3,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/FlareGun",
+			"name": "pistola de bengalas",
+			"tags": [
+				"emergencia",
+				"señal"
+			],
+			"height": 0.25,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/GasCan",
+			"name": "bidón de gasolina",
+			"tags": [
+				"combustible"
+			],
+			"height": 0.45,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Knife",
+			"name": "cuchillo",
+			"tags": [
+				"arma",
+				"cocina",
+				"herramienta"
+			],
+			"height": 0.25,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Match",
+			"name": "cerillo",
+			"tags": [
+				"fuego"
+			],
+			"height": 0.06,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Match_Burnt",
+			"name": "cerillo quemado",
+			"tags": [
+				"fuego"
+			],
+			"height": 0.06,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Match_Fire",
+			"name": "cerillo encendida",
+			"tags": [
+				"fuego"
+			],
+			"height": 0.06,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Matchbox",
+			"name": "caja de cerillos",
+			"tags": [
+				"fuego"
+			],
+			"height": 0.06,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Pan",
+			"name": "sartén",
+			"tags": [
+				"cocina"
+			],
+			"height": 0.1,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Pan_Small",
+			"name": "sartén pequeño",
+			"tags": [
+				"cocina"
+			],
+			"height": 0.1,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Phone",
+			"name": "celular",
+			"tags": [
+				"teléfono"
+			],
+			"height": 0.15,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Pistol_1",
+			"name": "pistola",
+			"tags": [
+				"arma"
+			],
+			"height": 0.2,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Pistol_2",
+			"name": "pistola",
+			"tags": [
+				"arma"
+			],
+			"height": 0.2,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Pot",
+			"name": "olla",
+			"tags": [
+				"cocina"
+			],
+			"height": 0.25,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Pot_Small",
+			"name": "olla pequeña",
+			"tags": [
+				"cocina"
+			],
+			"height": 0.25,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/PropaneTank",
+			"name": "tanque de gas",
+			"tags": [
+				"combustible"
+			],
+			"height": 0.6,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Radio",
+			"name": "radio",
+			"tags": [
+				"comunicación",
+				"señal"
+			],
+			"height": 0.3,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Raft",
+			"name": "balsa",
+			"tags": [
+				"agua",
+				"madera",
+				"vehículo"
+			],
+			"height": 0.5,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Raft_Paddle",
+			"name": "remo",
+			"tags": [
+				"agua",
+				"remar"
+			],
+			"height": 1.4,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Revolver_1",
+			"name": "revólver",
+			"tags": [
+				"arma"
+			],
+			"height": 0.2,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Revolver_2",
+			"name": "revólver",
+			"tags": [
+				"arma"
+			],
+			"height": 0.2,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Revolver_3",
+			"name": "revólver",
+			"tags": [
+				"arma"
+			],
+			"height": 0.2,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Shotgun_1",
+			"name": "escopeta",
+			"tags": [
+				"arma"
+			],
+			"height": 0.3,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Shotgun_2",
+			"name": "escopeta",
+			"tags": [
+				"arma"
+			],
+			"height": 0.3,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Shotgun_SawedOff",
+			"name": "escopeta recortada",
+			"tags": [
+				"arma"
+			],
+			"height": 0.3,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Shotgun_ShortStock",
+			"name": "escopeta de culata corta",
+			"tags": [
+				"arma"
+			],
+			"height": 0.3,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Shovel",
+			"name": "pala",
+			"tags": [
+				"cavar",
+				"herramienta"
+			],
+			"height": 1.1,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Tent",
+			"name": "tienda de campaña",
+			"tags": [
+				"dormir",
+				"refugio"
+			],
+			"height": 2.0,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Torch",
+			"name": "linterna",
+			"tags": [
+				"luz"
+			],
+			"height": 0.3,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/Trashcan",
+			"name": "bote de basura",
+			"tags": [
+				"basura"
+			],
+			"height": 0.9,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/WaterBottle_1",
+			"name": "botella de agua",
+			"tags": [
+				"beber"
+			],
+			"height": 0.25,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/WaterBottle_2",
+			"name": "botella de agua",
+			"tags": [
+				"beber"
+			],
+			"height": 0.25,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/WaterBottle_3",
+			"name": "botella de agua",
+			"tags": [
+				"beber"
+			],
+			"height": 0.25,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/WoodLog",
+			"name": "tronco",
+			"tags": [
+				"leña",
+				"madera"
+			],
+			"height": 0.4,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/WoodenTorch",
+			"name": "antorcha",
+			"tags": [
+				"fuego",
+				"luz"
+			],
+			"height": 1.0,
+			"pack": "survival_pack"
+		},
+		{
+			"model": "survival_pack/WoodenTorch_Fire",
+			"name": "antorcha encendida",
+			"tags": [
+				"fuego",
+				"luz"
+			],
+			"height": 1.0,
+			"pack": "survival_pack"
+		}
+	]
+}

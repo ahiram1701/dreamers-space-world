@@ -10,16 +10,17 @@ const EFFECT_LABELS := {
 	"reduce_paradox": "Reduce la inestabilidad", "reveal_secret": "Revela un secreto",
 	"unlock_location": "Coordenadas: próximo salto gratis", "boost_reputation": "Mejora la confianza de quien está cerca",
 	"light": "Da luz", "nourish": "Se come", "hydrate": "Se bebe", "phone": "Celular", "signal": "Capta señales",
-	"warmth": "Abriga", "tool": "Herramienta",
+	"warmth": "Abriga", "tool": "Herramienta", "wear": "Prenda: póntela o quítatela",
 }
 ## Efectos que no gastan el objeto al usarlo (una linterna se enciende y se apaga, no desaparece).
-const KEEP := ["light", "phone", "signal", "warmth", "tool"]
+const KEEP := ["light", "phone", "signal", "warmth", "tool", "wear"]
 
 ## Encender o apagar la luz que llevas (el jugador la muestra).
 signal light_toggled(on: bool)
 ## Abrir el celular / pedir una acción con F ("Enciendo la radio y escucho").
 signal phone_requested
 signal action_requested(text: String)
+signal look_changed   # te pusiste o te quitaste una prenda: cambia tu aspecto
 
 
 func items() -> Array:
@@ -139,6 +140,10 @@ func use(item_id: String, nearby_npcs: Array = []) -> String:
 			var wearing := str(WorldDB.get_state("wearing", ""))
 			WorldDB.set_state("wearing", "" if wearing == item_id else item_id)
 			msg = ("Te quitas %s." if wearing == item_id else "Te pones %s.") % item.get("name", "eso")
+		"wear":
+			var on := PlayerLook.toggle_layer(item_id)
+			msg = ("Te pones %s." if on else "Te quitas %s.") % str(item.get("name", "eso")).to_lower()
+			look_changed.emit()
 		"tool":
 			msg = "Llevas %s a mano: úsalo con F (\"corto…\", \"arreglo…\")." % item.get("name", "la herramienta")
 		_:

@@ -18,6 +18,7 @@ var scene: LocationScene
 var _t := 0.0
 var _chat_cool := 60.0
 var _chatting := false
+var _dress_t := 0.0
 
 
 func _ready() -> void:
@@ -37,6 +38,18 @@ func _process(delta: float) -> void:
 			npc.play_gesture(npc.activity_gesture, randf_range(5.0, 9.0))
 	if _chat_cool <= 0.0 and not _chatting:
 		_try_chat()
+	_dress_t -= 4.0
+	if _dress_t <= 0.0:
+		_dress_t = 20.0
+		dress_for_weather()
+
+
+## Cada quien se pone o se quita el impermeable, el abrigo… según el tiempo y si está dentro.
+func dress_for_weather() -> void:
+	for id in scene._npcs:
+		var npc: TownNPC = scene._npcs[id]
+		if is_instance_valid(npc) and npc.is_inside_tree():
+			npc.redress(not InteriorManager.is_interior_pos(npc.global_position))
 
 
 ## Quien está cerca y lo ve se entera de lo que pasó (`what`, contado desde fuera).
@@ -102,8 +115,8 @@ func _player_presence(a: String, b: String) -> String:
 	var where := ("dentro de %s" % scene._interiors.current_label()) if same_room else ("fuera, cerca de %s" % scene.place_near(na.global_position))
 	var doing := "A %s; B %s." % [na.doing(), scene._npcs[b].doing()]
 	if same_room or d < 5.0:
-		return "Estáis %s. %s EL JUGADOR ESTÁ AHÍ MISMO con vosotros (a %.0f m) y lo oye todo: NO habléis de él/ella en tercera persona como si no estuviera. Si sale algo del jugador, decídselo a él/ella directamente (de tú) o hablad de otra cosa." % [where, doing, d]
-	return "Estáis %s. %s El jugador anda a %.0f m y quizá os oiga: si habláis de él/ella, que sea algo que sepáis de verdad." % [where, doing, d]
+		return "Están %s. %s EL JUGADOR ESTÁ AHÍ MISMO con ustedes (a %.0f m) y lo oye todo: NO hablen de él/ella en tercera persona como si no estuviera. Si sale algo del jugador, díganselo a él/ella directamente (de tú) o hablen de otra cosa." % [where, doing, d]
+	return "Están %s. %s El jugador anda a %.0f m y quizá los oiga: si hablan de él/ella, que sea algo que sepan de verdad." % [where, doing, d]
 
 
 ## Dos vecinos juntos y el jugador cerca: charlan (dos a cuatro frases, en bocadillos).
@@ -134,6 +147,10 @@ func _chat(a: String, b: String) -> void:
 			eb.name, eb.occupation, ", ".join(PackedStringArray(eb.personality)), NPCMemory.describe(b)]},
 	]
 	var res := await ContentGenerator.request_valid("ambient_chat", messages)
+	if res.ok and not res.data.lines.is_empty():
+		var topic := str(res.data.lines[0].text).left(70)
+		NPCMemory.add_bond(a, b, "hace poco charlaste con %s («%s»)" % [str(eb.name).split(" ")[0], topic])
+		NPCMemory.add_bond(b, a, "hace poco charlaste con %s («%s»)" % [str(ea.name).split(" ")[0], topic])
 	if res.ok and is_instance_valid(scene):
 		for line in res.data.lines:
 			var who: String = a if str(line.who).to_lower().begins_with("a") else b

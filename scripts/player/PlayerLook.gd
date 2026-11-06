@@ -74,6 +74,29 @@ static func is_clothing(item_id: String) -> bool:
 	return WorldDB.get_entity("item", item_id).has("clothing")
 
 
+## Las prendas que llevas encima de la ropa (impermeable, gorra…): [{id, color, item}].
+## Solo cuentan las que siguen en tu inventario (si la regalas, ya no la llevas).
+static func layers() -> Array:
+	return WorldDB.get_state("player_layers", []).filter(func(l): return Inventory.has(str(l.get("item", ""))))
+
+
+## Te pones o te quitas una prenda (objeto con "garment"). Devuelve si la llevas puesta ahora.
+## Una sola por zona: ponerte el impermeable te quita la chamarra.
+static func toggle_layer(item_id: String) -> bool:
+	var g: Dictionary = WorldDB.get_entity("item", item_id).get("garment", {})
+	if g.is_empty():
+		return false
+	var now := layers()
+	if now.any(func(l): return l.item == item_id):
+		WorldDB.set_state("player_layers", now.filter(func(l): return l.item != item_id))
+		return false
+	var zone: String = Wardrobe.garment(str(g.id)).get("layer", "")
+	now = now.filter(func(l): return Wardrobe.garment(str(l.id)).get("layer", "") != zone)
+	now.append({"id": str(g.id), "color": str(g.get("color", "#555555")), "item": item_id})
+	WorldDB.set_state("player_layers", now)
+	return true
+
+
 ## Lo que llevas puesto (id del objeto) o "".
 static func wearing() -> String:
 	return WorldDB.get_state("wearing", "")

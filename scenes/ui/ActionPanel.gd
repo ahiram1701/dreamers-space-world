@@ -202,6 +202,25 @@ func _do() -> void:
 	close()  # el jugador vuelve a ver (y puede cancelar moviéndose)
 	_show("[color=#8fb3ff][i]%s[/i][/color]   [color=gray]…[/color]" % what)
 	var guess := guess_gesture(what)
+	if performer and WorldAgent.wants_to_create(what):
+		# Crear o cambiar el mundo: el agente creador lo hace con herramientas, paso a paso
+		if player:
+			player.play_gesture("hammer", 60.0)
+		var agent := WorldAgent.new(performer.scene)
+		agent.progress.connect(func(t): _show("[color=#8fb3ff][i]%s[/i][/color]   [color=gray]%s[/color]" % [what, t]))
+		var made := await agent.run(what, context.call())
+		if player:
+			player.stop_gesture()
+		if made.ok:
+			WorldClock.advance(made.get("minutes", 0))
+			_show(str(made.narration))
+			Sfx.chime(self)
+			_finish()
+			return
+		_show("[color=#f2a65a]No logras hacerlo: %s[/color]" % str(made.get("error", "")).replace("[", "(").replace("]", ")"))
+		Sfx.deny(self)
+		_finish()
+		return
 	if player and guess in ["think", "search"]:
 		player.play_gesture(guess, 30.0)  # mientras decide, ya se le ve hacer algo
 	var r := await StoryDirector.act(what, context.call())
@@ -226,6 +245,10 @@ func _do() -> void:
 			Sfx.chime(self)
 		else:
 			_show(r.narration)
+	_finish()
+
+
+func _finish() -> void:
 	_busy = false
 	await get_tree().create_timer(clampf(_subtitle_text.get_parsed_text().length() * 0.06, 4.0, 10.0)).timeout
 	if not _busy:

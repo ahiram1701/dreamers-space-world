@@ -83,7 +83,12 @@ func _ready() -> void:
 	_ui.player = _player
 	_ui.nearby_npcs = func(): return _npcs.keys()
 	add_child(_ui)
+	_launch_pad()
 	_setup_common()
+	_place_vehicles()
+	var traffic := Traffic.new()
+	traffic.scene = self
+	add_child(traffic)
 	WorldClock.hour_changed.connect(func(_h): _follow_schedules(false); _shop_hours(); _update_windows())
 	_interiors.entered.connect(func(_k, _id): _update_windows())
 	_interiors.exited.connect(func(_k, _id): _update_windows())
@@ -437,6 +442,8 @@ func _build_terrain() -> void:
 
 
 func _grass_allowed(x: float, z: float) -> bool:
+	if absf(x - PAD.x) < 9.6 and absf(z - PAD.z) < 9.6:
+		return false  # la plataforma de despegue es de cemento
 	return x < 19.0 and absf(x + 5.0) > 3.6 and not (absf(z - 4.0) < 2.8 and x > -5.0)
 
 
@@ -625,6 +632,47 @@ func _level_crossing(at: Vector3) -> void:
 		var sign := AssetLibrary.instance("street_pack", "Sign_Triangle")
 		if sign:
 			AssetLibrary.place(self, sign, at + Vector3(side * 5.6, 0, side * 6.0), 2.4, 0.0 if side < 0 else PI, true)
+
+
+## Plataforma de despegue al oeste del pueblo (donde está la lanzadera vieja).
+const PAD := Vector3(-42, 0, -40)
+
+
+func _launch_pad() -> void:
+	for f in _features:  # despejar la explanada
+		if is_instance_valid(f.node) and Vector3(f.pos.x, 0, f.pos.z).distance_to(PAD) < 16.0:
+			f.node.queue_free()
+	_features = _features.filter(func(f): return Vector3(f.pos.x, 0, f.pos.z).distance_to(PAD) >= 16.0)
+	var slab := PropsBuilder._box(self, PAD + Vector3(0, 0.08, 0), Vector3(18, 0.16, 18), Color("#7a7d80"), true)
+	slab.name = "LaunchPad"
+	for k in 4:  # franjas amarillas
+		var a := k * PI / 2.0
+		PropsBuilder._box(self, PAD + Vector3(cos(a) * 7.5, 0.17, sin(a) * 7.5), Vector3(1.2 if k % 2 else 14.0, 0.02, 14.0 if k % 2 else 1.2), Color("#d4a017"), false)
+	Decor.landmark(self, PAD, "plataforma de despegue (al oeste del pueblo)", "pad")
+	_label3d(PAD + Vector3(0, 6, -9), "Plataforma de despegue")
+
+
+## Vehículos del pueblo (una vez por mundo): los de los vecinos, tu bici, la lancha del muelle y
+## una lanzadera vieja en la plataforma. Si te llevas uno que no es tuyo, es robo.
+func _place_vehicles() -> void:
+	_places["plataforma de despegue"] = PAD
+	if WorldDB.get_state("town_vehicles", false):
+		return
+	WorldDB.set_state("town_vehicles", true)
+	# Junto a la acera, entre farolas y fuera de los carriles del tráfico (Traffic.LANES)
+	var cars := [["sedan", Vector3(-7.6, 0, -32), PI, "npc_teo"], ["pickup", Vector3(-31, 0, 18), PI / 2, "npc_samir"],
+		["van", Vector3(-2.4, 0, -14), 0.0, "vecino"], ["moto", Vector3(-2.6, 0, 18), 0.0, "vecino"],
+		["sedan", Vector3(-7.6, 0, 32), PI, "vecino"], ["bike", Vector3(-12.5, 0, -1), PI / 2, "player"]]
+	for c in cars:
+		var at: Vector3 = c[1]
+		at.y = _ground_height(at.x, at.z) + 0.1
+		Vehicle.place_factory(self, c[0], at, c[2], c[3])
+	Vehicle.place_factory(self, "speedboat", Vector3(42, WATER_Y, 12), PI / 2, "npc_marina", "#2c5d8f")
+	var ship := Ship.factory()
+	var e := Creations.add({"name": "Lanzadera vieja", "parts": ship.parts, "behaviors": ship.behaviors,
+		"pos": [PAD.x, 0.17, PAD.z], "yaw": PI / 4, "fuel": 0.6, "owner": "", "by": "world"})
+	if not e.is_empty():
+		Creations.build(self, e)
 
 
 ## Casa de la calle principal mirando a la calle (side: -1 a la izquierda, 1 a la derecha).

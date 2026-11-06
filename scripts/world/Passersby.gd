@@ -4,11 +4,6 @@ extends Node
 ## día que de noche y casi nadie de madrugada o con lluvia. No cuestan IA. Si le hablas a una,
 ## pasa a ser alguien de verdad (se crea su ficha y se queda a vivir en el lugar).
 
-const NAMES_F := ["Lucía", "Valeria", "Camila", "Sofía", "Daniela", "Renata", "Elena", "Paula", "Andrea", "Marta", "Inés", "Julia"]
-const NAMES_M := ["Mateo", "Diego", "Tomás", "Andrés", "Pablo", "Joaquín", "Bruno", "Martín", "Hugo", "Iván", "Rafael", "Gabriel"]
-const SURNAMES := ["Rojas", "Herrera", "Molina", "Ortiz", "Navarro", "Castro", "Vega", "Ramos", "Silva", "Fuentes", "Paredes", "Cruz"]
-const JOBS := ["vecina del barrio", "repartidor", "pescadora", "maestra jubilada", "estudiante", "electricista", "enfermera",
-	"carpintero", "dependienta", "jardinero", "taxista", "panadera"]
 
 var scene: LocationScene
 
@@ -120,11 +115,19 @@ func _send_home(npc: TownNPC) -> void:
 func promote(npc: TownNPC) -> String:
 	var info: Dictionary = npc.get_meta("passerby", {})
 	var fem: bool = info.get("fem", false)
-	var name: String = (NAMES_F if fem else NAMES_M)[randi() % 12] + " " + SURNAMES[randi() % SURNAMES.size()]
-	var job: String = JOBS[randi() % JOBS.size()]
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var name := Names.full(fem, rng)
+	var look: Dictionary = info.get("look", {})
+	var j := Names.job(fem, rng, "elder" if look.get("body", "") == "elderly" else "street")
+	if look.get("body", "") == "elderly" and rng.randf() < 0.5:
+		j = Names.job(fem, rng, "street")
+		j.age = rng.randi_range(maxi(int(j.age), 62), 84)
+	var job: String = j.job
 	var id := Actions.build_npc(name, job, "Alguien del lugar con quien te cruzaste por la calle.", "¿Sí? ¿Te puedo ayudar en algo?", info.get("look", {}))
 	if id.is_empty():
 		return ""
+	WorldDB.update_entity("npc", id, {"age": int(j.age)})
 	var home := npc.global_position
 	if InteriorManager.is_interior_pos(home):  # la conociste dentro de un edificio: vive por aquí fuera
 		var door: String = info.get("door", scene._interiors.current_door())

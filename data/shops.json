@@ -10,7 +10,14 @@
 				{"name": "Botella de agua", "effect": "hydrate", "power": 25, "price": 1, "lore": "Agua natural, un litro."},
 				{"name": "Refresco", "effect": "hydrate", "power": 18, "price": 2, "lore": "Bien frío, de cola."},
 				{"name": "Café molido", "effect": "hydrate", "power": 12, "price": 6, "lore": "Para preparar en casa; despierta."},
-				{"name": "Jabón", "effect": "tool", "power": 10, "price": 2, "lore": "Una pastilla de jabón de tocador."}
+				{"name": "Jabón", "effect": "tool", "power": 10, "price": 2, "lore": "Una pastilla de jabón de tocador."},
+				{"name": "Impermeable amarillo", "effect": "wear", "garment": "raincoat", "color": "#d9a521", "power": 10, "price": 22, "lore": "Impermeable con capucha. Te lo pones o te lo quitas desde el inventario."},
+				{"name": "Gorra azul", "effect": "wear", "garment": "cap", "color": "#1f3550", "power": 5, "price": 9, "lore": "Gorra de visera para el sol."},
+				{"name": "Gorro de lana", "effect": "wear", "garment": "beanie", "color": "#9a2f2f", "power": 5, "price": 10, "lore": "Gorro tejido para el frío."},
+				{"name": "Bufanda", "effect": "wear", "garment": "scarf", "color": "#2f4a6d", "power": 5, "price": 12, "lore": "Bufanda de lana."},
+				{"name": "Suéter gris", "effect": "wear", "garment": "sweater", "color": "#8a8f96", "power": 10, "price": 28, "lore": "Suéter de punto, abriga."},
+				{"name": "Chamarra", "effect": "wear", "garment": "jacket", "color": "#2b2f3a", "power": 15, "price": 45, "lore": "Chamarra gruesa para la noche."},
+				{"name": "Mochila", "effect": "wear", "garment": "backpack", "color": "#33503f", "power": 5, "price": 20, "lore": "Mochila de lona."}
 			]
 		},
 		"restaurant": {

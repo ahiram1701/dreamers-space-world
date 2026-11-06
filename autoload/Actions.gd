@@ -271,13 +271,17 @@ func build_npc(full_name: String, job: String, desc: String, line: String, look:
 	for w in TRAIT_WORDS:
 		if low.contains(w):
 			traits.append(TRAIT_WORDS[w])
-	var first := full_name.split(" ")[0].to_lower()
-	var appearance := {"figure": "feminine" if first.ends_with("a") and not first in ["luca", "nicola", "joshua"] else "masculine",
+	var appearance := {"figure": "feminine" if Names.is_female_name(full_name) else "masculine",
 		"outfit": outfit, "primary_color": Color.from_hsv(rng.randf(), 0.45, 0.55).to_html(false),
 		"secondary_color": Color.from_hsv(rng.randf(), 0.25, 0.8).to_html(false), "body": ["slim", "average", "sturdy", "tall"][rng.randi() % 4]}
 	appearance.merge(look, true)
+	job = Names.fit_job(job, appearance.figure == "feminine")  # «Joaquín, maestra jubilada» → «maestro jubilado»
+	var ages := Names.age_range(job)
+	var age := rng.randi_range(ages[0], ages[1]) if not ages.is_empty() else rng.randi_range(22, 66)
+	if appearance.get("body", "") == "elderly":
+		age = maxi(age, rng.randi_range(64, 82))
 	var data := {
-		"name": full_name.left(40), "age": rng.randi_range(22, 66), "occupation": job.left(80),
+		"name": full_name.left(40), "age": age, "occupation": job.left(80),
 		"personality": traits.slice(0, 3) if not traits.is_empty() else ["natural"],
 		"goals": ["Hacer bien su trabajo de %s" % job.to_lower()], "secret": "Nada especial, de momento.",
 		"greeting": line.left(240), "appearance": appearance, "tags": ["vecino"],

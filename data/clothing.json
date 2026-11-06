@@ -1,0 +1,16 @@
+{
+	"garments": {
+		"raincoat": {"name": "impermeable", "names": ["impermeable", "chubasquero", "gabardina de lluvia"], "layer": "outer", "shape": "shell", "legs": true, "thick": 0.018, "warmth": 1, "rain": true, "hood": true, "colors": ["#d9a521", "#2f6f9f", "#b83a2e", "#3d5a3a", "#22262b"]},
+		"coat": {"name": "abrigo", "names": ["abrigo", "gabardina", "sobretodo"], "layer": "outer", "shape": "shell", "legs": true, "thick": 0.022, "warmth": 3, "rain": false, "colors": ["#4a3b30", "#2b2f3a", "#6b5a45", "#5a2e2e", "#3a3f46"]},
+		"jacket": {"name": "chamarra", "names": ["chamarra", "chaqueta", "cazadora", "chaquetón"], "layer": "outer", "shape": "shell", "legs": false, "thick": 0.016, "warmth": 2, "rain": false, "colors": ["#2b2f3a", "#5b4636", "#33503f", "#7a2f2a", "#1f3550"]},
+		"sweater": {"name": "suéter", "names": ["suéter", "sueter", "jersey", "sudadera", "pulóver"], "layer": "mid", "shape": "shell", "legs": false, "thick": 0.009, "warmth": 2, "rain": false, "colors": ["#8a3b3b", "#3b5a8a", "#c9b48a", "#4f6b4a", "#6b4f7a", "#d8d2c4"]},
+		"vest": {"name": "chaleco", "names": ["chaleco"], "layer": "mid", "shape": "shell", "arms": false, "legs": false, "thick": 0.011, "warmth": 1, "rain": false, "colors": ["#3a3226", "#2b2f3a", "#6b5a45"]},
+		"apron": {"name": "delantal", "names": ["delantal", "mandil"], "layer": "outer", "shape": "apron", "warmth": 0, "rain": false, "colors": ["#e8e2d4", "#2b2f3a", "#7a5a3a"]},
+		"scarf": {"name": "bufanda", "names": ["bufanda"], "layer": "neck", "shape": "scarf", "warmth": 1, "rain": false, "colors": ["#9a2f2f", "#d8bd7a", "#2f4a6d", "#4f6b4a"]},
+		"cap": {"name": "gorra", "names": ["gorra", "cachucha"], "layer": "head", "shape": "cap", "warmth": 0, "rain": false, "colors": ["#1f3550", "#7a2f2a", "#2b2f3a", "#c9b48a"]},
+		"hat": {"name": "sombrero", "names": ["sombrero"], "layer": "head", "shape": "hat", "warmth": 0, "rain": true, "colors": ["#3a3226", "#c9b48a", "#2b2f3a"]},
+		"beanie": {"name": "gorro de lana", "names": ["gorro", "gorro de lana", "boina"], "layer": "head", "shape": "beanie", "warmth": 1, "rain": false, "colors": ["#9a2f2f", "#2f4a6d", "#3a3f46", "#d8bd7a"]},
+		"backpack": {"name": "mochila", "names": ["mochila"], "layer": "back", "shape": "backpack", "warmth": 0, "rain": false, "colors": ["#2b2f3a", "#33503f", "#7a2f2a", "#5b4636"]},
+		"glasses": {"name": "lentes", "names": ["lentes", "gafas", "anteojos"], "layer": "face", "shape": "glasses", "warmth": 0, "rain": false, "colors": ["#1c1814", "#6e4527"]}
+	}
+}
