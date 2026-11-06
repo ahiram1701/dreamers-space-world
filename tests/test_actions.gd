@@ -46,13 +46,15 @@ func _run() -> void:
 	_expect("Samir" in inventory.lent_label(radio), "queda como prestada por Samir")
 	_expect(radio in memory.get_mem("npc_samir").lent, "Samir recuerda que te la prestó")
 
-	# Como mucho dos regalos por turno ("te pongo el café y te presto el boli")
+	# Como mucho cuatro regalos por turno ("café y galletas" son dos; una tienda entera, no)
 	var count: int = inventory.items().size()
 	actions.execute("npc_marina", [
 		{"type": "give_item", "item_name": "Llave del faro", "item_effect": "none", "lent": false, "amount": 0},
 		{"type": "give_item", "item_name": "Prismáticos", "item_effect": "none", "lent": true, "amount": 0},
+		{"type": "give_item", "item_name": "Mapa de la bahía", "item_effect": "none", "lent": false, "amount": 0},
+		{"type": "give_item", "item_name": "Silbato de latón", "item_effect": "none", "lent": false, "amount": 0},
 		{"type": "give_item", "item_name": "Otra cosa más", "item_effect": "none", "lent": false, "amount": 0}])
-	_expect(inventory.items().size() == count + 2, "como máximo dos objetos por turno")
+	_expect(inventory.items().size() == count + 4, "como máximo cuatro objetos por turno")
 
 	# Devolverla: deja de estar prestada y vuelve a Samir
 	notes = actions.execute("npc_samir", [{"type": "take_item", "target": "radio", "amount": 0}])

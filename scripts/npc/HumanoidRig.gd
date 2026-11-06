@@ -383,6 +383,22 @@ func _gesture_pose(g: String, t: float) -> Dictionary:
 			p["UpperArm.R"] = Vector3(20, 0, 145)
 			p["LowerArm.R"] = Vector3(25, 0, sin(t * 9.0) * 25)
 			p["Head"] = Vector3(-5, 0, 6)
+		"knock":  # nudillos contra la puerta: tres golpes
+			var tap := maxf(0.0, sin(t * 14.0)) * (1.0 - smoothstep(0.9, 1.2, t))
+			p["UpperArm.R"] = Vector3(70, 0, 10)
+			p["LowerArm.R"] = Vector3(95 - 30 * tap, 0, 0)
+			p["Head"] = Vector3(4, 0, 0)
+		"climb":  # trepar: brazos arriba por turnos y las piernas buscando apoyo
+			var c := sin(t * 5.0)
+			p["UpperArm.L"] = Vector3(150 + 15 * c, 0, -8)
+			p["UpperArm.R"] = Vector3(150 - 15 * c, 0, 8)
+			p["LowerArm.L"] = Vector3(25 - 20 * c, 0, 0)
+			p["LowerArm.R"] = Vector3(25 + 20 * c, 0, 0)
+			p["UpperLeg.L"] = Vector3(maxf(0.0, c) * 45, 0, 4)
+			p["UpperLeg.R"] = Vector3(maxf(0.0, -c) * 45, 0, 4)
+			p["LowerLeg.L"] = Vector3(-maxf(0.0, c) * 70, 0, 0)
+			p["LowerLeg.R"] = Vector3(-maxf(0.0, -c) * 70, 0, 0)
+			p["Head"] = Vector3(-15, 0, 0)
 		"point":
 			p["UpperArm.R"] = Vector3(85, -10, 6)
 			p["LowerArm.R"] = Vector3(5, 0, 0)

@@ -39,7 +39,9 @@
 				{"name": "Pala", "effect": "tool", "power": 20, "price": 25, "lore": "Pala recta de acero."},
 				{"name": "Martillo", "effect": "tool", "power": 15, "price": 12, "lore": "Martillo de carpintero."},
 				{"name": "Linterna", "effect": "light", "power": 20, "price": 15, "lore": "Linterna de mano, con pilas nuevas."},
-				{"name": "Cuerda", "effect": "tool", "power": 10, "price": 8, "lore": "Diez metros de cuerda trenzada."}
+				{"name": "Cuerda", "effect": "tool", "power": 10, "price": 8, "lore": "Diez metros de cuerda trenzada."},
+				{"name": "Escalera de mano", "effect": "tool", "power": 10, "price": 45, "lore": "Escalera de aluminio extensible: llega a un tejado alto."},
+				{"name": "Barreta", "effect": "tool", "power": 15, "price": 18, "lore": "Barra de acero para hacer palanca."}
 			]
 		},
 		"cafe": {

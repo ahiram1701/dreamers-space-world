@@ -36,7 +36,7 @@ const INTERIOR_OF := {"shop": "grocery", "bakery": "grocery", "market": "grocery
 	"pharmacy": "pharmacy", "hardware": "hardware"}
 
 const MAX_GIFT_POWER := 40          # un vecino no te da un objeto legendario por pedirlo
-const MAX_GIFTS_PER_TURN := 2       # "te pongo el café y te presto el boli", pero no una tienda entera
+const MAX_GIFTS_PER_TURN := 4       # "café y galletas" son dos cosas; una tienda entera, no
 const MAX_REFUSAL_MINUTES := 30
 const STAT_LABELS := {"health": "salud", "energy": "energía del Ancla", "instability": "inestabilidad"}
 const MAX_PLACED_PER_PLACE := 40
@@ -160,6 +160,9 @@ func execute(npc_id: String, actions: Array) -> Array:
 				if Jobs.has_job() and (npc_id.is_empty() or Jobs.job().employer == npc_id):
 					Jobs.quit("El jugador dejó el trabajo." if npc_id.is_empty() else "Despediste al jugador.")
 					note = "Ya no trabajas ahí."
+			"invite_in":
+				if not npc_id.is_empty():
+					note = "%s te invita a pasar." % _name(npc_id).split(" ")[0]
 			"leave", "go_inside":
 				if not npc_id.is_empty() and NPCMemory.is_following(npc_id):
 					NPCMemory.set_fields(npc_id, {"following": false})
@@ -436,8 +439,8 @@ func _give_item(npc_id: String, a: Dictionary) -> String:
 			Inventory.add(back)
 			return "%s te devuelve: %s" % [who, WorldDB.get_entity("item", back).name]
 
-	# Ya te lo prestó o te lo dio y lo sigues teniendo: no aparece una copia
-	if not npc_id.is_empty():
+	# Ya te lo prestó o te lo dio y lo sigues teniendo: no aparece una copia (lo que compras, sí: otro café es otro café)
+	if not npc_id.is_empty() and int(a.get("price", 0)) <= 0:
 		for id in Inventory.items():
 			var it := WorldDB.get_entity("item", id)
 			if it.get("origin", "") == "npc:%s" % npc_id and _same_thing(it.get("name", ""), item_name):
@@ -644,13 +647,20 @@ func take_revealed_place() -> Dictionary:
 	return {}
 
 
-## "Radio de válvulas averiada" y "Radio de válvulas" son lo mismo; "Radio" y "Linterna", no.
+## "Radio de válvulas averiada" y "Radio de válvulas" son lo mismo; "Radio" y "Linterna", no; y
+## "Taza de café" y "Taza de galletas" tampoco: todas las palabras del nombre corto están en el largo.
 func _same_thing(a: String, b: String) -> bool:
 	var wa := Inventory._words(a)
 	var wb := Inventory._words(b)
 	if wa.is_empty() or wb.is_empty():
 		return false
-	return wa[0].left(5) == wb[0].left(5)
+	var short := wa if wa.size() <= wb.size() else wb
+	var long := wb if wa.size() <= wb.size() else wa
+	var stems := Array(long).map(func(w): return w.left(5))
+	for w in short:
+		if not w.left(5) in stems:
+			return false
+	return true
 
 
 func _find_in(ids: Array, item_name: String) -> String:

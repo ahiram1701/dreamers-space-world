@@ -30,6 +30,7 @@ var _targets: Dictionary = {}       # ids de "cosas cercanas" que se le dieron a
 var _free_lots: Array = []
 var _added_places := 0
 var _life: TownLife
+var _door_rules: Doors
 var _passersby: Passersby
 var _households: Households
 ## Quien te está llevando a un sitio: npc_id -> {label, lost_t, said_t}
@@ -152,6 +153,19 @@ func _setup_common() -> void:
 	_households = Households.new()
 	_households.scene = self
 	add_child(_households)
+	# Malla de navegación del exterior: los PNJ rodean lo que hay en medio (se hornea en un hilo)
+	var area := navigation_area()
+	if area.size != Vector3.ZERO:
+		NavBaker.bake.call_deferred(self, area, "Navegacion", true)  # (en un hilo, al cerrar la escena a medio hornear, Godot podía caerse)
+	_interiors.entered.connect(func(_k, _id):
+		var r: Node3D = _interiors.get("_interior").get("root")
+		if r == null or not r.is_inside_tree():
+			return
+		NavBaker.bake(r, AABB(InteriorManager.ORIGIN - Vector3(14, 1, 14), Vector3(28, 9, 28)), "NavegacionInterior", true))
+	_door_rules = Doors.new()
+	_door_rules.scene = self
+	_door_rules.interiors = _interiors
+	add_child(_door_rules)
 	_interiors.entering.connect(func(k, id): _households.prepare(id, k))
 	_interiors.wants.connect(_open_look_panel)
 	_interiors.entered.connect(func(k, id): _households.populate(id, k); _refresh_presence(); _add_work_spot(); _check_trespass())
@@ -207,6 +221,11 @@ func _on_interact(target: Node) -> void:
 
 
 # --- Casa ajena ----------------------------------------------------------------------------
+
+## La zona exterior por la que caminan los PNJ (cada escena da la suya; vacía: sin malla).
+func navigation_area() -> AABB:
+	return AABB()
+
 
 ## ¿De quién es esta casa? Quien vive en ella y está dentro ahora ("" si nadie). Cada escena
 ## añade los suyos (los vecinos con rutina).
@@ -374,6 +393,9 @@ func _check_trespass() -> void:
 	if owner.is_empty() or not _npcs.has(owner) or not _npcs[owner].is_present():
 		return
 	var npc: TownNPC = _npcs[owner]
+	var forced: bool = _door_rules != null and _door_rules.forced_door == door
+	if _door_rules:
+		_door_rules.forced_door = ""
 	if npc.is_asleep():
 		return  # duermen: si no haces ruido, ni se enteran
 	var mem := NPCMemory.get_mem(owner)
@@ -381,10 +403,20 @@ func _check_trespass() -> void:
 	var h := WorldClock.hour()
 	var night := h >= 23.0 or h < 7.0
 	npc.face(_player.global_position)
+	if _interiors.invited.has(door) and not forced:  # te abrió y te invitó: ya lo sabe
+		NPCMemory.add_event(owner, "El jugador tocó a tu puerta y le invitaste a pasar.", 0)
+		return
+	if forced:
+		npc.set_emotion("angry")
+		npc.play_gesture("point", 2.5)
+		npc.say("¡¿Me has roto la puerta?! ¡Fuera de mi casa ahora mismo!", 5.0)
+		_door_rules.caught_inside(owner)
+		_life.witness("el jugador forzó la puerta de casa de %s" % WorldDB.get_entity("npc", owner).get("name", "alguien"), npc.global_position, [owner])
+		return
 	if not night and rel >= 0 and not bool(mem.get("met", false)):  # alguien que no conoce, en su casa
 		npc.set_emotion("worried")
 		npc.say("¿Hola? ¿Quién eres? ¿Qué haces en mi casa?", 5.0)
-		NPCMemory.add_event(owner, "Un desconocido entró en tu casa sin llamar.", -3)
+		NPCMemory.add_event(owner, "El jugador (aún no le conocías) entró en tu casa sin llamar.", -3)
 		return
 	if night or rel < 0:
 		npc.set_emotion("angry")
@@ -484,6 +516,8 @@ func _on_dialogue_closed(npc_id: String) -> void:
 		_player.stop_gesture()
 		if _npcs.has(npc_id):
 			_npcs[npc_id].stop_gesture()  # cuelga él también
+	elif _door_rules:
+		_door_rules.on_dialogue_closed(npc_id)  # en el umbral: vuelve dentro (y si te invitó, pasas)
 	_player.clear_look()
 	_player.end_focus()
 	if _npcs.has(npc_id):
@@ -540,11 +574,26 @@ func perception(for_player: bool) -> PackedStringArray:
 	return lines
 
 
+## Qué prendas son cada estilo de ropa (para que nadie te pida que dejes un abrigo que no llevas).
+const OUTFIT_WORDS := {"casual": "camiseta y pantalón", "street": "sudadera y pantalón de calle",
+	"formal": "camisa, saco y pantalón de vestir", "work_uniform": "ropa de trabajo"}
+
+
 ## Lo que se ve del jugador: su ropa y si va mojado o sucio (los demás lo notan y lo comentan).
 func _player_looks() -> String:
 	var worn := PlayerLook.wearing()
-	var clothes: String = WorldDB.get_entity("item", worn).get("name", "ropa normal").to_lower() if not worn.is_empty() else "ropa normal"
-	var parts := PackedStringArray(["lleva %s" % clothes])
+	var look := PlayerLook.current()
+	if not worn.is_empty() and WorldDB.get_entity("item", worn).has("clothing"):
+		look = WorldDB.get_entity("item", worn).clothing
+	var outfit := str(look.get("outfit", "casual"))
+	var c1: String = PlayerLook.COLOR_NAMES.get(str(look.get("primary_color", "")), "")
+	var c2: String = PlayerLook.COLOR_NAMES.get(str(look.get("secondary_color", "")), "")
+	var colors := c1 if c2.is_empty() or c2 == c1 else "%s y %s" % [c1, c2]
+	var clothes: String = OUTFIT_WORDS.get(outfit, "ropa normal") + ((" (%s)" % colors) if not colors.is_empty() else "")
+	var parts := PackedStringArray(["lleva %s%s; NADA más: ni abrigo, ni chamarra, ni sombrero, ni mochila" % [
+		clothes, "" if outfit == "formal" else ", sin saco"]])
+	if _player and _player.get("_lamp") and _player.get("_lamp").visible:
+		parts.append("lleva una linterna encendida en la mano")
 	if Body.wet > 0.6:
 		parts.append("está empapado/a")
 	elif Body.wet > 0.25:
@@ -556,6 +605,21 @@ func _player_looks() -> String:
 	if Body.get_need("hygiene") < 15.0:
 		parts.append("huele mal")
 	return ", ".join(parts) + "."
+
+
+## Cómo es cada edificio de aquí (una línea por tipo), para que nadie invente una puerta trasera.
+func places_described() -> String:
+	var seen := {}
+	var out := PackedStringArray()
+	for id in _interiors.doors():
+		var d: Dictionary = _interiors.doors()[id]
+		var kind: String = d.kind
+		if seen.has(kind) or not InteriorBuilder.DESCRIPTIONS.has(kind):
+			continue
+		seen[kind] = true
+		var who := "las casas del pueblo" if kind == "house" else str(d.label)
+		out.append("%s: %s" % [who, InteriorBuilder.DESCRIPTIONS[kind]])
+	return "; ".join(out) + "."
 
 
 func dialogue_context(npc_id: String) -> String:
@@ -578,6 +642,8 @@ func dialogue_context(npc_id: String) -> String:
 		state += " Estás en TU casa%s." % ((" (estabas %s)" % npc.activity) if npc and not npc.activity.is_empty() else "")
 	lines.append(state)
 	lines.append("CÓMO VES AL JUGADOR: " + _player_looks())
+	if _door_rules and not _door_rules.context_for(npc_id).is_empty():
+		lines.append(_door_rules.context_for(npc_id))
 	var people := PackedStringArray()
 	for id in _npcs:
 		if id != npc_id and _npcs[id].is_present() and _npcs[id].global_position.distance_to(_player.global_position) < 12.0:
@@ -593,6 +659,7 @@ func dialogue_context(npc_id: String) -> String:
 		if not (label in spots) and not label.begins_with("una ") and not label.begins_with("un "):
 			spots.append(label)
 	lines.append("SITIOS DE ESTE LUGAR (a los que puedes ir o llevarle): " + ", ".join(spots) + ".")
+	lines.append("CÓMO SON (no inventes puertas, cuartos ni pasadizos que no estén aquí): " + places_described())
 	if Actions.owed(npc_id) > 0:
 		lines.append("El jugador te debe %s (si paga, lo verás en la conversación)." % Wallet.text(Actions.owed(npc_id)))
 	if Jobs.has_job() and Jobs.job().employer == npc_id:
@@ -630,6 +697,9 @@ func _on_npc_action(npc_id: String, a: Dictionary) -> void:
 			npc_go(npc_id, _near_player(npc, 1.4) if InteriorManager.is_interior_pos(npc.global_position) == _interiors.is_inside() else _player.global_position)
 		"guide_player":
 			guide(npc_id, str(a.get("target", a.get("item_name", ""))))
+		"invite_in":
+			if _door_rules:
+				_door_rules.invite(npc_id)
 		"give_item", "take_item":
 			npc.play_gesture("give", 2.5)
 		"update_item":

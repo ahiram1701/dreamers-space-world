@@ -183,6 +183,10 @@ func home_door_of(npc_id: String) -> String:
 	return home if _interiors.doors().has(home) else _interiors.door_of_kind(home)
 
 
+func navigation_area() -> AABB:
+	return AABB(Vector3(-100, -6, -90), Vector3(150, 40, 180))  # el pueblo, la playa y el muelle
+
+
 func ground_at(x: float, z: float) -> float:
 	return _ground_height(x, z)
 
@@ -637,7 +641,7 @@ func _house(base: Vector3, side: int, size_class: String, wall: Color, rng: Rand
 		var shop: Array = _shops_to_open.pop_front()  # en el centro del pueblo: la tienda de ropa y la peluquería
 		_add_door(root, shop[0], "casa_%d" % _house_count, shop[1])
 		var door := _interiors.door_position("casa_%d" % _house_count)
-		_label3d(door + Vector3(0, 3.6, 0), shop[2])
+		_label3d(door + _out_of(root) * 1.4 + Vector3(0, 3.6, 0), shop[2])
 		return
 	# Los locales, en el centro (sin tocar casas donde ya vive una familia en esta partida)
 	var central := absf(base.z) <= 26.0 and (side < 0 or absf(base.z) > 14.0)
@@ -646,14 +650,14 @@ func _house(base: Vector3, side: int, size_class: String, wall: Color, rng: Rand
 	if not home and central and not someones_home and not _locals_to_open.is_empty() and Households.members(id).is_empty():
 		var kind: String = _locals_to_open.pop_front()
 		_add_door(root, kind, id, Shops.label(kind))
-		_label3d(_interiors.door_position(id) + Vector3(0, 3.6, 0), str(Shops.info(kind).sign))
+		_label3d(_interiors.door_position(id) + _out_of(root) * 1.4 + Vector3(0, 3.6, 0), str(Shops.info(kind).sign))
 		return
 	_add_door(root, "home" if home else "house", "casa_%d" % _house_count, "tu casa" if home else "una casa")
 
 
 ## Edificio concreto (cafetería, estación) con su color de fachada.
 func _building(base: Vector3, model_name: String, scale: float, yaw: float, wall: Color, kind: String, label: String) -> void:
-	var model := AssetLibrary.building_named(model_name, wall)
+	var model := AssetLibrary.building_named(model_name, wall, true)  # ventanas propias: la estación cerrada, a oscuras
 	if model == null:
 		_box(base + Vector3(0, 2, 0), Vector3(8, 4, 6), wall)
 		return
@@ -674,16 +678,17 @@ func _add_door(root: Node3D, kind: String, id: String, label: String) -> void:
 			pos += right * off
 	pos.y = _ground_height(pos.x, pos.z)
 	_interiors.add_door(id, pos, root.rotation.y, kind, hash(id), label)
-	if model == null or not model.has_meta("model_name"):
-		return
+	_interiors.set_building(id, root.global_position, size, root.rotation.y)
+	if model and model.has_meta("windows"):
+		_windows[id] = model.get_meta("windows")
+	if model == null or not model.has_meta("model_name") or kind in ["cafe", "station"]:
+		return  # la cafetería y la estación ya traen su fachada
 	# Casas y negocios de la calle: plantas, fachada y ventanas que se encienden con vida dentro
 	_interiors.set_door_option(id, "floors", 2 if size.y > 7.5 else 1)
 	var sign: String = {"clothes": "Ropa", "salon": "Peluquería"}.get(kind, str(Shops.info(kind).get("sign", "")) if Shops.is_shop(kind) else "")
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(id)
 	Decor.facade(self, pos, root.rotation.y, sign, rng)
-	if model.has_meta("windows"):
-		_windows[id] = model.get_meta("windows")
 
 
 ## Ventanas encendidas de noche solo si hay alguien despierto dentro (o el negocio está abierto).
@@ -702,6 +707,8 @@ func _update_windows() -> void:
 					break
 		elif Shops.is_shop(kind):
 			lit = Shops.is_open(kind, h)
+		elif kind == "station":
+			lit = false  # cerrada desde hace años
 		else:
 			lit = h >= 9.0 and h < 20.0
 		Decor.set_windows_lit(_windows[id], lit)
@@ -756,6 +763,12 @@ func _stripe(y: float, radius: float) -> MeshInstance3D:
 	s.material_override = _mat(Color("#b23a3a"))
 	s.position.y = y
 	return s
+
+
+## Hacia la calle desde la fachada de un edificio (para que la esquina no tape su letrero).
+func _out_of(root: Node3D) -> Vector3:
+	var f := root.global_transform.basis.z
+	return Vector3(f.x, 0, f.z).normalized()
 
 
 func _label3d(pos: Vector3, text: String) -> void:

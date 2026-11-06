@@ -143,7 +143,7 @@ func _ready() -> void:
 	row.add_theme_constant_override("separation", 8)
 	box.add_child(row)
 	_input = LineEdit.new()
-	_input.placeholder_text = "Di o haz lo que quieras… (p. ej. «*le doy un abrazo*», «¿me cobras el café?»)"
+	_input.placeholder_text = "Di algo… o haz algo entre asteriscos (p. ej. «¿me cobras el café?», «*le doy un abrazo*»)"
 	_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_input.text_submitted.connect(func(_t): _on_say())
 	row.add_child(_input)
@@ -298,6 +298,10 @@ func _send(text: String) -> void:
 	_role.text = ("%s  %s" % [_npc.get("occupation", ""), EMOTION_LABEL.get(turn.emotion, "")]).strip_edges()
 	_last_line = turn.line
 	_line.text = turn.line
+	var action := str(turn.get("action", ""))
+	if not action.is_empty():  # lo que hace, como acotación aparte: no te lo está diciendo a ti
+		_line.text = "[i][color=#9aa6b8](%s)[/color][/i]
+%s" % [action, turn.line]
 	if turn.source == "fallback":
 		# Que el jugador sepa que esto no es la IA (y por qué), en vez de ver frases repetidas
 		_line.text += "\n[color=#f2a65a][font_size=13](Sin respuesta de la IA: %s. Revisa la API key y el modelo en Ajustes.)[/font_size][/color]" % turn.get("error", "")

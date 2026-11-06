@@ -95,6 +95,31 @@ func _do_step(s: Dictionary, rest: Array) -> Array:
 				return []
 			await _gesture_and_wait(g)
 			return []
+		"climb":
+			return await _climb(str(s.get("target", "")))
+		"move_to":
+			var e := scene.resolve_target(str(s.get("target", "")))
+			if e.is_empty():
+				return []
+			await _reach(e)
+			if _cancelled or not bool(s.get("on", true)) or not is_instance_valid(e.node):
+				return []
+			player.play_gesture("climb", 0.8)
+			await get_tree().create_timer(0.7).timeout
+			player.global_position = _top_of(e.node) + Vector3(0, 0.05, 0)
+			player.velocity = Vector3.ZERO
+			return []
+		"force_door":
+			var id := str(s.get("target", "")).trim_prefix("door:")
+			if not scene._interiors.doors().has(id):
+				id = _nearest_door()
+			if id.is_empty():
+				return []
+			await player.auto_walk_to(scene._interiors.door_position(id), 0.9)
+			if _cancelled:
+				return []
+			var note: String = await scene._door_rules.force(id, bool(s.get("window", false)))
+			return [note] if not note.is_empty() else []
 		"sleep", "wait":
 			var minutes := rest_minutes(s, type == "sleep")
 			var bed: Node3D = null
@@ -145,6 +170,105 @@ func _do_step(s: Dictionary, rest: Array) -> Array:
 			if type in EFFECTS:
 				return Actions.execute("", [s])
 	return []
+
+
+## La puerta más cercana al jugador ("" si no hay ninguna a 25 m).
+func _nearest_door() -> String:
+	var best := ""
+	var best_d := 25.0
+	for id in scene._interiors.doors():
+		var d: float = scene._interiors.door_position(id).distance_to(player.global_position)
+		if d < best_d:
+			best = id
+			best_d = d
+	return best
+
+
+## Lo más alto de algo (para subirse encima de una banca o una roca).
+static func _top_of(node: Node3D) -> Vector3:
+	var holder: Node3D = node.get_parent() as Node3D if node is Interactable and node.get_parent() is Node3D else node
+	var top := -INF
+	for v in holder.find_children("*", "VisualInstance3D", true, false) + [holder]:
+		if v is VisualInstance3D:
+			var box: AABB = (v as VisualInstance3D).global_transform * (v as VisualInstance3D).get_aabb()
+			top = maxf(top, box.end.y)
+	return Vector3(holder.global_position.x, top if top > -INF else holder.global_position.y + 0.5, holder.global_position.z)
+
+
+## Subir al techo de un edificio (trepando, o con una escalera si es alto) o bajar de él.
+const CLIMB_FREE := 7.0
+var _roofs := {}   # puerta -> StaticBody3D de la azotea (se crea al subir por primera vez)
+var on_roof := ""
+
+
+func _climb(target: String) -> Array:
+	var low := target.to_lower()
+	if low in ["down", "bajar", "abajo", "suelo"] or (not on_roof.is_empty() and low.is_empty()):
+		return await _climb_down()
+	var id := low.trim_prefix("roof:").trim_prefix("door:")
+	if id in ["home", "casa", "mi casa", "tu casa"]:
+		id = scene._interiors.door_of_kind("home")
+	if not scene._interiors.doors().has(id):
+		id = _nearest_door()
+	if id.is_empty() or scene._interiors.is_inside():
+		return ["Desde aquí no hay techo al que subir."]
+	var b: Dictionary = scene._interiors.doors()[id].get("building", {})
+	if b.is_empty():
+		return ["No ves por dónde subir a ese techo."]
+	var height: float = b.size.y
+	var ladder := not Inventory.find_by_name("escalera").is_empty()
+	if height > CLIMB_FREE and not ladder:
+		return ["El techo está a unos %d m y la pared es lisa: no hay por dónde trepar. Con una escalera, sí." % int(height)]
+	var door := scene._interiors.door_position(id)
+	var yaw: float = b.yaw
+	var front := Vector3(sin(yaw), 0, cos(yaw))
+	var right := front.cross(Vector3.UP).normalized()
+	# A un lado de la puerta, pegado a la fachada
+	var wall_spot: Vector3 = door + right * 1.6 - front * 0.4
+	await player.auto_walk_to(wall_spot, 0.6)
+	if _cancelled:
+		return []
+	player.face_towards(wall_spot - front)
+	player.play_gesture("climb", 2.6)
+	Sfx.at(scene, "step_sand", player.global_position + Vector3(0, 1.2, 0))
+	await get_tree().create_timer(2.4).timeout
+	if _cancelled:
+		player.stop_gesture()
+		return []
+	var top: float = b.base.y + height
+	if not _roofs.has(id):
+		var body := StaticBody3D.new()
+		var cs := CollisionShape3D.new()
+		var shape := BoxShape3D.new()
+		shape.size = Vector3(maxf(b.size.x - 0.6, 1.5), 0.3, maxf(b.size.z - 0.6, 1.5))
+		cs.shape = shape
+		body.add_child(cs)
+		scene.add_child(body)
+		body.global_position = Vector3(b.base.x, top - 0.15, b.base.z)
+		body.rotation.y = yaw
+		_roofs[id] = body
+	player.global_position = Vector3(b.base.x, top + 0.1, b.base.z) + front * maxf(b.size.z / 2.0 - 1.4, 0.0)
+	player.velocity = Vector3.ZERO
+	player.stop_gesture()
+	on_roof = id
+	return ["Estás en el techo de %s%s." % [scene._interiors.door_label(id), " (subiste con la escalera)" if height > CLIMB_FREE else ""]]
+
+
+func _climb_down() -> Array:
+	if on_roof.is_empty():
+		return []
+	var id := on_roof
+	on_roof = ""
+	var b: Dictionary = scene._interiors.doors()[id].building
+	var front := Vector3(sin(b.yaw), 0, cos(b.yaw))
+	player.play_gesture("climb", 2.2)
+	await get_tree().create_timer(2.0).timeout
+	var right := front.cross(Vector3.UP).normalized()
+	var below: Vector3 = scene._interiors.door_position(id) + right * 1.6 + front * 0.8
+	player.global_position = InteriorManager.free_spot_near(scene, below, front, [player]) + Vector3(0, 0.2, 0)
+	player.velocity = Vector3.ZERO
+	player.stop_gesture()
+	return ["Bajas del techo."]
 
 
 ## Camina hasta algo (a la distancia adecuada) y se gira hacia ello.
@@ -255,6 +379,13 @@ static func local_plan(what: String, scene_ref: LocationScene, guess: String) ->
 		var step := {"type": "sleep" if sleeping else "wait"}
 		step.merge(rest)
 		return [step]
+	# Subir al techo o bajar de él; forzar una puerta o colarse por una ventana
+	if ["techo", "azotea", "tejado"].any(func(w): return low.contains(w)):
+		if ["bajo", "bajar", "me bajo"].any(func(w): return low.contains(w)):
+			return [{"type": "climb", "target": "down"}]
+		return [{"type": "climb", "target": "roof:home" if ["mi casa", "casa mía"].any(func(w): return low.contains(w)) else ""}]
+	if ["fuerzo", "forzar", "forzo", "me cuelo", "colarme", "por la ventana", "hago palanca"].any(func(w): return low.contains(w)):
+		return [{"type": "force_door", "target": "", "window": low.contains("ventana")}]
 	var targets := scene_ref.nearby_targets()
 	var pick := ""
 	for id in targets:

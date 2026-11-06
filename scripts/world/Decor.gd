@@ -122,18 +122,47 @@ static func streetlight(parent: Node3D, pos: Vector3, yaw: float, fx: Environmen
 	light.omni_range = 11.0
 	light.light_energy = 0.0
 	light.shadow_enabled = false
+	# Desde lejos la luz ni se calcula (el halo de cien farolas en fila parecía una hilera de focos)
+	light.distance_fade_enabled = true
+	light.distance_fade_begin = 55.0
+	light.distance_fade_length = 15.0
+	var glass: StandardMaterial3D = null
 	if model:
 		AssetLibrary.place(parent, model, pos, 4.4, yaw, true)
-		light.position = pos + Vector3(0, 4.1, 0)
+		# La luz va DEBAJO del farol: dentro, a centímetros del cristal, lo quemaba a blanco puro
+		light.position = pos + Vector3(0, 3.55, 0)
+		glass = _lantern_glass(model)
 	else:
 		PropsBuilder._cylinder(parent, pos + Vector3(0, 2.2, 0), 0.08, 0.1, 4.4, Color("#2a3a2e"), true)
 		light.position = pos + Vector3(0, 4.3, 0)
 	parent.add_child(light)
 	if fx:
-		var apply := func(n: float): light.light_energy = smoothstep(0.25, 0.6, n) * 2.2
+		var apply := func(n: float):
+			light.light_energy = smoothstep(0.25, 0.6, n) * 2.2
+			if glass:
+				glass.emission_energy_multiplier = smoothstep(0.25, 0.6, n) * 0.9
 		fx.night_changed.connect(apply)
 		apply.call(fx.night_amount())
 	return light
+
+
+## El cristal del farol brilla por sí mismo (cálido y suave) en vez de recibir la luz a quemarropa.
+static func _lantern_glass(model: Node) -> StandardMaterial3D:
+	var glass := StandardMaterial3D.new()
+	glass.albedo_color = Color("#d9c9a0")
+	glass.emission_enabled = true
+	glass.emission = Color("#ffc47a")
+	glass.emission_energy_multiplier = 0.0
+	for mi in model.find_children("*", "MeshInstance3D", true, false):
+		var mesh: Mesh = (mi as MeshInstance3D).mesh
+		if mesh == null:
+			continue
+		for s in mesh.get_surface_count():
+			var m := mesh.surface_get_material(s)
+			var n := (str(m.resource_name) if m else "").to_lower()
+			if n.contains("glass") or n == "light":
+				(mi as MeshInstance3D).set_surface_override_material(s, glass)
+	return glass
 
 
 ## Enciende las ventanas de todos los edificios de noche (comparten material).

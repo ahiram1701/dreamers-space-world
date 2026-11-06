@@ -117,6 +117,7 @@ func download_and_install() -> void:
 		_fail(installed.error)
 		return
 	DirAccess.remove_absolute(zip_path)
+	_note_installed_version()
 	OS.create_process(installed.executable, [])
 	WorldDB.flush()  # nada pendiente sin guardar antes de reiniciar
 	get_tree().quit()
@@ -246,6 +247,15 @@ func _expected_sha256(sums: String, file_name: String) -> String:
 		if parts.size() == 2 and parts[1].trim_prefix("*") == file_name:
 			return parts[0].to_lower()
 	return ""
+
+
+## Instalado con el instalador: «Aplicaciones instaladas» de Windows muestra la versión nueva.
+func _note_installed_version() -> void:
+	if OS.get_name() != "Windows":
+		return
+	var key := "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\DreamersSpaceWorld"
+	if OS.execute("reg", ["query", key, "/v", "DisplayVersion"]) == 0:
+		OS.execute("reg", ["add", key, "/v", "DisplayVersion", "/t", "REG_SZ", "/d", latest_version, "/f"])
 
 
 func _is_installed_build() -> bool:

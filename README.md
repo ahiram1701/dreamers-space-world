@@ -92,7 +92,11 @@ Si la IA no está disponible, el juego usa contenido de respaldo y **nunca se qu
 ## 🚀 Jugar
 
 ### Descargar
-Descarga la última versión para **Windows** o **Linux** desde [Releases](https://github.com/ahiram1701/dreamers-space-world/releases), descomprímela y ejecútala.
+En **Windows**, descarga `DreamersSpaceWorld-Setup-vX.Y.Z.exe` desde [Releases](https://github.com/ahiram1701/dreamers-space-world/releases) y ábrelo.
+- Se instala sin pedir permisos de administrador y deja accesos en el menú Inicio y, si quieres, en el escritorio.
+- Se desinstala desde *Aplicaciones instaladas*.
+
+También hay un zip portable para Windows y otro para **Linux**: descomprímelo y ejecuta `DreamersSpaceWorld`.
 
 ### Actualizaciones automáticas
 Desde la **v0.2.0**, el juego comprueba al arrancar si hay una versión estable nueva en GitHub Releases. Si la hay, el menú muestra **Actualizar**: el juego descarga la versión nueva, verifica su SHA-256, se reemplaza y se reinicia. **Tus mundos y ajustes se conservan**, porque viven en la carpeta de usuario y no junto al ejecutable. Puedes desactivarlo en *Ajustes → Buscar actualizaciones*.
@@ -190,6 +194,8 @@ godot --headless --path . -s tests/test_wardrobe.gd    # ropa, tienda, peluquer�
 godot --headless --path . -s tests/test_fixes065.gd    # faro, rumores, dormir con F, linterna, vías, objetivo
 godot --headless --path . -s tests/test_shops.gd       # abarrotes, fonda, farmacia y ferretería
 godot --headless --path . -s tests/test_buildings.gd   # cuartos, escalera, segundo piso y ventanas
+godot --headless --path . -s tests/test_doors.gd       # tocar, invitar a pasar, negocios cerrados, forzar
+godot --headless --path . -s tests/test_fixes066.gd    # compras completas, acotaciones, techo, malla de navegación
 bash tests/smoke.sh                                    # arranca las escenas y busca errores de script
 ```
 

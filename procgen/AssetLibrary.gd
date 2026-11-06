@@ -213,10 +213,11 @@ static func _dress_building(model: Node3D, wall_tint: Color, own_windows: bool =
 
 
 ## Un edificio concreto por nombre, con ventanas que se encienden y su color de fachada.
-static func building_named(model_name: String, wall_tint: Color = Color(0, 0, 0, 0)) -> Node3D:
+static func building_named(model_name: String, wall_tint: Color = Color(0, 0, 0, 0), own_windows: bool = false) -> Node3D:
 	var model := instance("buildings_pack_3", model_name)
 	if model:
-		_dress_building(model, wall_tint)
+		_dress_building(model, wall_tint, own_windows)
+		model.set_meta("model_name", model_name)
 	return model
 
 

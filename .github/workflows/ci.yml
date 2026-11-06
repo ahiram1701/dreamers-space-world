@@ -67,6 +67,8 @@ jobs:
           godot --headless --path . -s tests/test_fixes065.gd
           godot --headless --path . -s tests/test_shops.gd
           godot --headless --path . -s tests/test_buildings.gd
+          godot --headless --path . -s tests/test_doors.gd
+          godot --headless --path . -s tests/test_fixes066.gd
 
       - name: Smoke test de escenas
         run: bash tests/smoke.sh

@@ -14,6 +14,7 @@ uniform sampler2D depth_tex : hint_depth_texture, filter_linear;
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
 
 varying float crest;
+varying vec3 world_pos;
 
 vec3 gerstner(vec2 p, vec2 dir, float steep, float len, float t) {
 	float k = 6.28318 / len;
@@ -26,6 +27,7 @@ vec3 gerstner(vec2 p, vec2 dir, float steep, float len, float t) {
 
 void vertex() {
 	vec2 p = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xz;
+	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	float t = TIME * wave_speed;
 	vec3 o = gerstner(p, vec2(1.0, 0.3), 0.18, 14.0, t)
 		+ gerstner(p, vec2(0.6, 1.0), 0.14, 8.0, t)
@@ -52,11 +54,14 @@ void fragment() {
 	col = mix(under * shallow_color.rgb * 1.4, col, clamp(deep * 1.6 + 0.35, 0.0, 1.0));
 	float foam = 1.0 - smoothstep(0.0, foam_width, water_depth);
 	foam += smoothstep(0.18, 0.35, crest) * 0.35;
-	foam *= 0.6 + 0.4 * sin(TIME * 2.0 + VERTEX.x * 0.7 + VERTEX.z * 0.5);
-	ALBEDO = mix(col, foam_color.rgb, clamp(foam, 0.0, 1.0));
-	ROUGHNESS = 0.06;
+	// La espuma late con la posición EN EL MUNDO (antes usaba la de la cámara: al moverte, la orilla
+	// parpadeaba en blanco) y suave, sin llegar a blanco puro.
+	foam *= 0.75 + 0.25 * sin(TIME * 1.4 + world_pos.x * 0.7 + world_pos.z * 0.5);
+	ALBEDO = mix(col, foam_color.rgb * 0.85, clamp(foam, 0.0, 0.9));
+	// Algo menos espejo: los puntos de luz (farolas, luna) ya no saltan como destellos en cada ola
+	ROUGHNESS = 0.18;
 	METALLIC = 0.0;
-	SPECULAR = 0.6;
+	SPECULAR = 0.4;
 	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 4.0);
 	ALPHA = clamp(0.82 + fres * 0.18 + foam * 0.2, 0.0, 1.0);
 }

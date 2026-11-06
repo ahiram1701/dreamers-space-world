@@ -3,6 +3,42 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.6.6] - 2026-11-05
+
+### Añadido
+- **Instalador de Windows:** `DreamersSpaceWorld-Setup-vX.Y.Z.exe` con el logo del juego.
+  - Se instala solo para tu usuario, sin pedir permisos de administrador.
+  - Crea accesos en el menú Inicio (y, si quieres, en el escritorio) y al terminar ofrece abrir el juego.
+  - Se desinstala desde *Aplicaciones instaladas*. Tus partidas solo se borran si lo marcas.
+  - El juego instalado se sigue actualizando solo desde el menú.
+- **Logo propio:** un faro bajo la luna y una órbita. Lo lleva el .exe, la ventana y la pantalla de arranque, en lugar del logo de Godot. Ya hay un solo ejecutable (sin el `.console.exe`).
+- **Tocar la puerta:**
+  - En una casa ajena ya no se entra como si nada: tocas y sale a abrir quien esté despierto.
+  - Te invita a pasar según cómo le caes, la hora y lo que le digas; si no, te atiende en el umbral.
+  - Si nadie abre, «No abre nadie». Si estaban dormidos, alguien puede despertarse de mal humor.
+  - Los negocios cerrados no dejan entrar, aunque a veces el dueño, que aún anda dentro, te deja pasar un momento.
+- **Forzar la puerta o colarse por una ventana** (de noche), con E después de tocar o con F:
+  - Hace ruido: quienes están dentro o pasan cerca pueden oírte, y lo cuentan.
+  - El dueño no te deja volver a entrar durante días.
+  - Con una barreta o un martillo es más rápido y más silencioso.
+- **Subir al techo con F** («subo al techo de mi casa») y bajar («me bajo del techo»).
+  - Hasta unos 7 m se trepa; más alto hace falta una escalera de mano, que se vende en la ferretería (igual que la barreta).
+  - Con F también puedes subirte encima de una banca o una roca.
+- **Los PNJ caminan por una malla de navegación:** buscan un camino que rodea paredes, muebles y árboles en vez de ir en línea recta y chocar.
+
+### Cambiado
+- **En el diálogo, lo que el PNJ hace va aparte**, en cursiva y en tercera persona: *(Da un sorbo al café y mira hacia la escalera.)*. Su frase es solo lo que dice. Lo que escribes entre asteriscos cuenta como lo que haces.
+- **La IA sabe qué ropa llevas** (prenda, colores y que no llevas abrigo ni sombrero) **y cómo es cada sitio por dentro** (el faro tiene una sola puerta). Ya no se inventa ropa ni puertas.
+
+### Arreglado
+- **Las bolas blancas de noche:** la luz de cada farola estaba dentro de su propio farol y quemaba el cristal a blanco. Ahora la luz va debajo del farol y el cristal brilla suave.
+- **La orilla parpadeaba al moverte:** la espuma latía según la posición de la cámara. Ahora late según su sitio en el mundo, y el agua refleja menos como un espejo.
+- **La estación cerrada tenía las ventanas encendidas;** ahora está a oscuras.
+- **Comprar café y galletas solo daba el café:** el juego los tomaba por el mismo objeto. Ahora se compara el nombre entero, y lo que compras siempre llega aunque ya tengas otro igual.
+- **El celular contaba lo que ya habíais hablado:** Samir te escribía «alguien entró en mi casa» aunque eras tú y charlasteis.
+- **Un PNJ se sentaba en el aire:** ahora solo se sienta si hay una silla o una banca cerca; si no, se queda de pie.
+- **Los PNJ chocaban sin parar con lo que tenían delante:** además de seguir el camino de la malla, cuando chocan rodean el obstáculo por el lado que acerca al destino, no al azar.
+
 ## [0.6.5] - 2026-11-03
 
 ### Añadido

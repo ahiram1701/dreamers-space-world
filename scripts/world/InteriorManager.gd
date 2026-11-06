@@ -11,6 +11,10 @@ signal message(text: String)
 signal wants(what: String)
 ## Justo antes de construir el interior (para decidir cuánta gente vive ahí, etc.).
 signal entering(kind: String, door_id: String)
+## Tocas una puerta que no se abre sola (casa ajena, negocio cerrado): la escena decide quién abre.
+signal knocked(door_id: String)
+## Pulsas E en una puerta que nadie abrió: intentas forzarla.
+signal force_requested(door_id: String)
 
 const ORIGIN := Vector3(0, -400, 0)
 const BED_TOP := 0.1   # a qué altura queda alguien tumbado sobre la cama   # bajo el mundo: nada de fuera se ve desde dentro
@@ -23,6 +27,12 @@ var _current := ""
 var _interior: Dictionary = {}
 var _fade: ColorRect
 var _busy := false
+## ¿Se puede entrar sin llamar? (la escena lo decide: tu casa sí, la casa de otro no). Si no hay, sí.
+var gate: Callable
+## Puertas por las que te han invitado a pasar (hasta que vuelves a salir).
+var invited := {}
+## Puertas que nadie abrió: durante un rato, E es «Forzar la puerta». id -> hasta cuándo (ms).
+var forcible := {}
 
 
 func _ready() -> void:
@@ -39,9 +49,15 @@ func _ready() -> void:
 
 ## Registra la puerta de un edificio. `pos`: delante de la fachada; `yaw`: hacia dónde mira.
 func add_door(id: String, pos: Vector3, yaw: float, kind: String, seed: int, label: String) -> void:
-	var door := Interactable.create(get_parent(), pos + Vector3(0, 1.0, 0), 1.6, "Entrar: %s" % label, func(p): enter(id))
+	var door := Interactable.create(get_parent(), pos + Vector3(0, 1.0, 0), 1.6, "Entrar: %s" % label, func(p): try_enter(id))
 	door.name = "Puerta_%s" % id.validate_node_name()
 	_doors[id] = {"pos": pos, "yaw": yaw, "kind": kind, "seed": seed, "label": label, "node": door}
+
+
+## El edificio de esa puerta por fuera (su base, tamaño y orientación): para subir al techo.
+func set_building(id: String, base: Vector3, size: Vector3, yaw: float) -> void:
+	if _doors.has(id):
+		_doors[id]["building"] = {"base": base, "size": size, "yaw": yaw}
 
 
 ## Datos extra de una puerta para construir su interior (p. ej. cuánta gente duerme en la casa).
@@ -66,10 +82,57 @@ func set_locked(id: String, text: String) -> void:
 		return
 	if text.is_empty():
 		locked.erase(id)
-		_doors[id].node.set_prompt("Entrar: %s" % _doors[id].label)
 	else:
 		locked[id] = text
-		_doors[id].node.set_prompt("Llamar a la puerta: %s" % _doors[id].label)
+	refresh_prompt(id)
+
+
+## Lo que dice el aviso de una puerta: entrar, tocar o (si nadie abrió) forzarla.
+func refresh_prompt(id: String) -> void:
+	if not _doors.has(id) or not is_instance_valid(_doors[id].node):
+		return
+	var label: String = _doors[id].label
+	var text := "Entrar: %s" % label
+	if forcible.get(id, 0) > Time.get_ticks_msec():
+		text = "Forzar la puerta: %s" % label
+	elif locked.has(id) or not may_enter(id):
+		text = "Tocar la puerta: %s" % label
+	_doors[id].node.set_prompt(text)
+
+
+func refresh_prompts() -> void:
+	for id in _doors:
+		refresh_prompt(id)
+
+
+func may_enter(id: String) -> bool:
+	return invited.has(id) or not gate.is_valid() or bool(gate.call(id))
+
+
+## Nadie abrió: durante 25 s, E en esa puerta es forzarla.
+func allow_force(id: String, seconds: float = 25.0) -> void:
+	forcible[id] = Time.get_ticks_msec() + int(seconds * 1000.0)
+	refresh_prompt(id)
+	get_tree().create_timer(seconds + 0.1).timeout.connect(func():
+		if forcible.get(id, 0) <= Time.get_ticks_msec():
+			forcible.erase(id)
+			refresh_prompt(id))
+
+
+## Usar la puerta desde fuera (E o un paso de F): entra si puedes; si no, tocas (o fuerzas).
+func try_enter(id: String) -> void:
+	if _busy or not _doors.has(id):
+		return
+	if forcible.get(id, 0) > Time.get_ticks_msec():
+		forcible.erase(id)
+		refresh_prompt(id)
+		force_requested.emit(id)
+		return
+	var closed := locked.has(id) and not invited.has(id)
+	if (closed or not may_enter(id)) and not knocked.get_connections().is_empty():
+		knocked.emit(id)
+		return
+	enter(id)
 
 
 ## Puerta del edificio de un tipo (para llevar a un PNJ dentro de "la cafetería").
@@ -199,10 +262,11 @@ func activity_spot(what: String, i: int) -> Dictionary:
 	return {} if p == Vector3.INF else {"pos": p, "face": p + Vector3(0, 0, 1)}
 
 
-func enter(id: String) -> void:
+## Entrar de verdad. `through`: te abrieron o forzaste la puerta (cerrada o no, pasas).
+func enter(id: String, through: bool = false) -> void:
 	if _busy or not _doors.has(id):
 		return
-	if locked.has(id):  # cerrado por dentro: llamas y no abren
+	if locked.has(id) and not through and not invited.has(id):  # cerrado por dentro: llamas y no abren
 		Sfx.knock(self)
 		message.emit(locked[id])
 		return
@@ -244,6 +308,7 @@ func leave() -> void:
 	var id := _current
 	var door: Dictionary = _doors[id]
 	_current = ""
+	invited.erase(id)  # la invitación era para esa visita
 	_clear_interior()
 	player.velocity = Vector3.ZERO
 	player.stop_gesture()
@@ -251,6 +316,7 @@ func leave() -> void:
 	player.global_position = free_spot_near(self, door.pos + outward * 1.2, outward, [player]) + Vector3(0, 0.3, 0)
 	player.look_direction(outward)
 	exited.emit(door.kind, id)
+	refresh_prompt(id)
 	await _fade_to(0.0)
 	_busy = false
 

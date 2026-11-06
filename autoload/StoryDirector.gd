@@ -22,13 +22,14 @@ func talk(npc_id: String, player_input: String, scene_context: String) -> Dictio
 		var content: String = h.text if h.who == "player" else JSON.stringify({"line": h.text})
 		messages.append({"role": "user" if h.who == "player" else "assistant", "content": content})
 	var said := player_input.strip_edges()
-	messages.append({"role": "user", "content": said if not said.is_empty() else _opening(npc_id)})
+	messages.append({"role": "user", "content": player_words(said) if not said.is_empty() else _opening(npc_id)})
 
 	var res := await ContentGenerator.request_valid("dialogue_turn", messages)
 	var turn: Dictionary = res.data if res.ok else _fallback_turn(npc, res.errors)
 	turn["ok"] = true
 	turn["source"] = "ai" if res.ok else "fallback"
 	if res.ok:
+		split_action(turn)
 		make_consistent(turn)
 	# Lo que el PNJ hace (dar, acompañar, curar, irse…) ocurre de verdad, no solo se dice
 	turn["notes"] = Actions.execute(npc_id, turn.get("actions", [])) if res.ok else []
@@ -40,6 +41,69 @@ func talk(npc_id: String, player_input: String, scene_context: String) -> Dictio
 		PlayerProfile.apply_signals(turn.get("trait_signals", []))
 	turn_finished.emit(npc_id, turn)
 	return turn
+
+
+## Lo que el jugador escribe entre asteriscos es lo que HACE, no lo que dice: «*le doy un abrazo*».
+static func player_words(said: String) -> String:
+	var re := RegEx.create_from_string(r"\*([^*]{2,})\*")
+	var out := re.sub(said, "(el jugador hace: $1)", true).strip_edges()
+	return out
+
+
+## Primera persona → tercera en las acotaciones que la IA mete en la frase («le doy un sorbo a mi
+## café» → «le da un sorbo a su café»). Lo que no se sabe pasar se queda tal cual.
+const FIRST_TO_THIRD := {"doy": "da", "miro": "mira", "tomo": "toma", "sonrío": "sonríe", "suspiro": "suspira",
+	"levanto": "levanta", "señalo": "señala", "dejo": "deja", "pongo": "pone", "saco": "saca",
+	"niego": "niega", "asiento": "asiente", "bebo": "bebe", "quedo": "queda", "acerco": "acerca", "río": "ríe",
+	"encojo": "encoge", "giro": "gira", "vuelvo": "vuelve", "cojo": "coge", "agarro": "agarra", "aparto": "aparta",
+	"cruzo": "cruza", "froto": "frota", "rasco": "rasca", "apoyo": "apoya", "sirvo": "sirve", "limpio": "limpia",
+	"enciendo": "enciende", "apago": "apaga", "abro": "abre", "cierro": "cierra", "guardo": "guarda", "hago": "hace",
+	"paso": "pasa", "echo": "echa", "muevo": "mueve", "inclino": "inclina", "golpeo": "golpea", "busco": "busca",
+	"me": "se", "mi": "su", "mis": "sus", "conmigo": "consigo"}
+static func _third_person(text: String) -> String:
+	var out := PackedStringArray()
+	for w in text.split(" "):
+		var core := w.to_lower().rstrip(",.;:!?")
+		if FIRST_TO_THIRD.has(core):
+			var rep: String = FIRST_TO_THIRD[core]
+			if w.substr(0, 1) != w.substr(0, 1).to_lower():
+				rep = rep.capitalize()
+			out.append(rep + w.substr(core.length()))
+			continue
+		out.append(w)
+	return " ".join(out)
+
+
+## Separa de la frase las acotaciones («*se ríe*», «—Le doy un sorbo al café—»): lo que dice va en
+## "line" y lo que hace en "action", en tercera persona, para que no se lea como si te hablara a ti.
+static func split_action(turn: Dictionary) -> void:
+	var line := str(turn.get("line", ""))
+	var found := PackedStringArray()
+	var action := str(turn.get("action", "")).strip_edges()
+	if not action.is_empty():
+		found.append(action)
+	for pattern in [r"\*([^*]{3,})\*", "—([^—]{6,})—", r"\(([^()]{6,})\)"]:
+		var re := RegEx.create_from_string(pattern)
+		for m in re.search_all(line):
+			var inner := m.get_string(1).strip_edges().rstrip(".")
+			# Un inciso de diálogo normal («—dice—») no es una acotación larga; estas sí lo son
+			if inner.split(" ").size() >= 3:
+				found.append(inner)
+				line = line.replace(m.get_string(0), " ")
+	line = line.replace("  ", " ").replace(". .", ".").replace(" .", ".").replace(" ,", ",").strip_edges()
+	while line.begins_with("—") or line.begins_with("-"):
+		line = line.substr(1).strip_edges()
+	if line.length() < 1:
+		line = "…"
+	turn["line"] = line
+	if found.is_empty():
+		turn.erase("action")
+		return
+	var parts := PackedStringArray()
+	for f in found:
+		var t := _third_person(f).strip_edges()
+		parts.append(t.substr(0, 1).to_upper() + t.substr(1))
+	turn["action"] = ". ".join(parts) + "."
 
 
 ## Frases en las que el PNJ dice que se va o se mete en algún sitio ("me voy a casa", "me encierro").
@@ -100,7 +164,7 @@ static func truthful_facts(facts: Array) -> Array:
 ## Pasos que tienen sentido en una acción del jugador (tecla F).
 const WORLD_STEPS := ["go_to", "play", "use", "npc_react", "give_to_npc", "give_item", "change_stat", "journal",
 	"reveal_place", "update_item", "remove_item", "place_object", "affect_nearby", "change_need", "pay", "earn",
-	"spawn_npc", "create_place", "sleep", "wait"]
+	"spawn_npc", "create_place", "sleep", "wait", "climb", "move_to", "force_door"]
 const MAX_FINDS_PER_PLACE := 6  # rebuscar sin parar no llena el inventario (fabricar no cuenta)
 const MAX_ACTION_MINUTES := 240
 ## Si la narración cuenta esto, tiene que haber un paso de este tipo (si no, se pide otra vez).
@@ -110,7 +174,9 @@ const REQUIRED_STEPS := [
 	[["golpeas", "le pegas", "puñetazo", "empujas a", "abrazas", "le das la mano", "le das una palmada", "patada"], "npc_react"],
 	[["reparas", "arreglas", "queda arreglad", "queda reparad"], "update_item"],
 	[["le das ", "le entregas", "le regalas"], "give_to_npc"],
-	[["te sientas", "te tumbas", "te acuestas", "entras en", "subes a la barca", "subes al bote"], "use"],
+	[["te sientas", "te tumbas", "te acuestas", "subes a la barca", "subes al bote"], "use"],
+	[["trepas", "subes al techo", "subes a la azotea", "llegas al techo", "estás en el techo"], "climb"],
+	[["fuerzas la puerta", "haces palanca", "te cuelas por"], "force_door"],
 	[["pagas", "le pagas", "dejas el dinero", "sueltas unas monedas"], "pay"],
 	[["te comes", "devoras", "comes ", "bebes", "te bebes", "te duchas", "te lavas"], "change_need"],
 ]
@@ -129,7 +195,10 @@ Reglas:
 "steps": lista ordenada (máximo 8). Cada paso: "type", sus campos y "narration" (una frase corta de ese momento).
 - go_to: caminar hasta algo. "target": id (npc:..., tree_..., door:..., seat:1, water…).
 - play: gesto del personaje. "target": chop, hammer, dig, pick_up, search, crouch, sit, sleep, drink, eat, wave, point, give, fish, swim, dance, think, punch, push, kick, hug, handshake, throw, pat, kneel, write, read, listen, call.
-- use: usar algo (sentarse en seat, dormir en bed, entrar por door, subir a boat). "target": id.
+- use: usar algo (sentarse en seat, dormir en bed, entrar o TOCAR en door —en casa ajena se toca y abre quien esté—, subir a boat). "target": id.
+- climb: subir al techo de un edificio o bajar de él. "target": "roof:<id de la puerta>" (p. ej. "roof:casa_2"; tu casa: "roof:home") o "down" para bajar. Sin escalera solo se trepa hasta ~7 m.
+- move_to: subirse encima de algo cercano (una banca, una mesa, una roca) o ponerse en un sitio. "target": id; "on": true para quedar encima.
+- force_door: forzar una puerta cerrada o, de noche, colarse por una ventana. "target": "door:<id>"; "window": true si es por la ventana. Hace ruido: los de dentro o quien pase pueden oírte, y luego todos lo sabrán.
 - npc_react: cómo reacciona una persona. "target": su id (npc:...); "emotion": angry, scared, happy, sad, worried, curious, amused o neutral; "gesture" (de la lista); "behavior": stay, flee, approach, follow, go_inside, fight_back, leave o guide (te lleva a un sitio: pon el sitio en "item_name"); "line": lo que suelta (corto); "amount": cuánto cambia su opinión del jugador (-30 a 30); "text": lo que recordará, desde su punto de vista ("El jugador te dio un puñetazo en el muelle sin motivo").
 - give_to_npc: das algo que llevas. "target": id de la persona; "item_name": el objeto.
 - give_item: consigue o fabrica algo que se lleva encima ("item_name", "item_description", "item_effect": para qué sirve de verdad en el juego — light (da luz), nourish (se come), hydrate (se bebe), signal (capta señales), warmth (abriga), tool (herramienta), heal (cura) o none).
@@ -146,6 +215,7 @@ Reglas:
 - sleep: dormir. "until_hour": hora a la que se despierta (0–24; 3.5 = 3:30, 15 = 3 de la tarde) o "hours": cuántas horas. Si hay una cama cerca, antes go_to a ella. Hace pasar el tiempo él solo ("minutes": 0).
 - wait: esperar sin dormir (hasta una hora o unas horas), mismos campos. Hace pasar el tiempo él solo ("minutes": 0).
 "minutes": cuánto tarda de verdad (talar ~30, construir una balsa ~180, buscar ~10, un golpe ~1, comer ~20, ducharse ~15).
+Ejemplo, "subo al techo de mi casa": "steps": [{"type": "climb", "target": "roof:home", "narration": "Trepas por la reja y el alféizar hasta el techo."}], "minutes": 2
 Ejemplo, "duermo hasta las 3:30 am": "steps": [{"type": "sleep", "until_hour": 3.5, "narration": "Te acomodas y cierras los ojos."}], "minutes": 0
 
 CREAR E INVENTAR: se puede crear casi cualquier cosa, pero como en la vida real: hacen falta conocimientos, materiales (que se gastan con remove_item), herramientas y tiempo acordes a la época y al lugar. Si falta algo, sale peor o no sale, y se cuenta qué faltó. La ciencia ficción está permitida si se apoya en algo que existe en este mundo (el Ancla, tecnología de otro mundo o época, materiales anómalos), siempre con física creíble y nunca magia.
@@ -430,7 +500,9 @@ ESCENA (es la verdad física de este momento: no digas que estás en otro sitio 
 %s
 
 CÓMO RESPONDER (JSON):
-- "line": lo que dices ahora, natural y breve (1 a 4 frases). Reacciona a lo último que dijo el jugador.
+- "line": SOLO lo que dices en voz alta, natural y breve (1 a 4 frases), sin acotaciones (nada de *…*, —…— ni paréntesis). Reacciona a lo último que dijo el jugador. Lo que el jugador pone entre paréntesis como «el jugador hace: …» es lo que HACE, no lo que dice.
+- "action" (opcional): lo que haces mientras hablas, en TERCERA persona y breve, como una acotación de teatro («Da un sorbo al café y mira hacia la escalera»). Nunca en primera persona ni dirigido al jugador.
+- NO INVENTES: ni prendas u objetos que el jugador no lleva (mira cómo le ves), ni puertas, pasadizos, cuartos o partes de un sitio que no estén en su descripción. Si no lo sabes, no lo afirmes.
 - "emotion": cómo te sientes al decirlo.
 - "choices": 2 a 4 respuestas posibles PARA EL JUGADOR, variadas en tono; al menos una que permita despedirse.
 - "new_facts": 0 a 2 cosas importantes que acabas de aprender del jugador o que acaban de pasar (en tercera persona). Incluye lo que el jugador afirma de sí mismo (p. ej. «El jugador dice que no notó nada raro»).
@@ -458,7 +530,7 @@ CÓMO RESPONDER (JSON):
 
 
 const ACTIONS_GUIDE := """  Tipos de acción ("type") y sus campos:
-  · give_item: das o prestas algo tuyo. "item_name" (nombre concreto), "item_description" (cómo es), "lent": true si es un préstamo, "item_effect" si sirve para algo (heal, restore_temporal_energy, reduce_paradox, reveal_secret, unlock_location, boost_reputation o none). Si lo vendes, "price" (dólares) y queda cobrado.
+  · give_item: das o prestas algo tuyo. UN give_item POR CADA OBJETO: «café y galletas» son dos give_item, cada uno con su precio. "item_name" (nombre concreto), "item_description" (cómo es), "lent": true si es un préstamo, "item_effect" si sirve para algo (heal, restore_temporal_energy, reduce_paradox, reveal_secret, unlock_location, boost_reputation o none). Si lo vendes, "price" (dólares) y queda cobrado.
   · charge: le cobras algo al jugador. "price" (dólares) y "text" (qué). Solo cobra lo razonable para tu oficio; el jugador paga con un botón o diciéndolo.
   · pay_player: le pagas al jugador (un trabajo, algo que te vende). "price" (dólares).
   · share_number: le das tu número de celular (si te cae bien o hay motivo).
@@ -469,6 +541,7 @@ const ACTIONS_GUIDE := """  Tipos de acción ("type") y sus campos:
   · go_to: te vas a un sitio. "target": el lugar.
   · leave: te marchas de aquí (enojo, prisa, fin de la plática). "target": a dónde (opcional). Termina la conversación.
   · go_inside: entras en un edificio (tu casa, tu trabajo…). "target": el sitio; "amount": minutos que te quedas dentro (por defecto 60). Termina la conversación. Con refuse_contact además cierras por dentro.
+  · invite_in: invitas al jugador a pasar a tu casa (solo si te tocó a la puerta y quieres; si no, le atiendes en el umbral).
   · approach: te acercas al jugador (para darle algo, para encararte…).
   · guide_player: le llevas tú a un sitio de este lugar ("llévame al faro", "¿me enseñas dónde está la panadería?"). "target": el sitio. Terminas la conversación y echas a andar delante; si se queda atrás, le esperas. Solo a sitios que existen aquí (si no sabes dónde está, dilo).
   · change_stat: le curas, le cansas… "target": health, energy o instability; "amount": de -30 a 30.

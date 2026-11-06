@@ -69,12 +69,19 @@ jobs:
           test -s build/windows/DreamersSpaceWorld.exe
           test -s build/linux/DreamersSpaceWorld.x86_64
 
+      - name: Instalador de Windows (NSIS)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq nsis
+          V="${GITHUB_REF_NAME#v}"
+          makensis -V2 -DVERSION="$V" -DNUMVER="${V%%-*}" -DSRC="$GITHUB_WORKSPACE/build/windows"             -DOUT="$GITHUB_WORKSPACE/DreamersSpaceWorld-Setup-${GITHUB_REF_NAME}.exe" installer/DreamersSpaceWorld.nsi
+          test -s "DreamersSpaceWorld-Setup-${GITHUB_REF_NAME}.exe"
+
       - name: Empaquetar
         run: |
           (cd build/windows && zip -qr "$GITHUB_WORKSPACE/DreamersSpaceWorld-${GITHUB_REF_NAME}-windows.zip" .)
           (cd build/linux && zip -qr "$GITHUB_WORKSPACE/DreamersSpaceWorld-${GITHUB_REF_NAME}-linux.zip" .)
           # El actualizador del juego verifica cada descarga contra este archivo
-          sha256sum DreamersSpaceWorld-*.zip > SHA256SUMS.txt
+          sha256sum DreamersSpaceWorld-*.zip DreamersSpaceWorld-Setup-*.exe > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Publicar Release
@@ -83,6 +90,6 @@ jobs:
         run: |
           PRE=""
           if [[ "$GITHUB_REF_NAME" == *-* ]]; then PRE="--prerelease"; fi
-          gh release create "$GITHUB_REF_NAME" DreamersSpaceWorld-*.zip SHA256SUMS.txt \
+          gh release create "$GITHUB_REF_NAME" DreamersSpaceWorld-Setup-*.exe DreamersSpaceWorld-*.zip SHA256SUMS.txt \
             --title "Dreamer's Space World ${GITHUB_REF_NAME}" \
             --generate-notes $PRE

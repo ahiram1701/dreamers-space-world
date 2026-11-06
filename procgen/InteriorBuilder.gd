@@ -31,6 +31,21 @@ const ROOMS := {
 	"hardware": {"size": Vector2(12, 9), "wall": "#d8d2c6", "floor": "#6b6660", "name": "Ferretería"},
 }
 
+## Cómo es cada sitio por dentro (lo que la IA puede dar por cierto; lo demás no existe).
+const DESCRIPTIONS := {
+	"lighthouse": "una torre con UNA sola puerta, la delantera (no hay puerta trasera, sótano ni pasadizos a la vista). Dentro, en una sola sala: la mesa y la cama de Marina, estanterías, libros y una escalera de caracol que sube hacia la lámpara",
+	"cafe": "una sola puerta delantera; barra, mesas y sillas, y la cocina detrás de la barra",
+	"station": "estación de tren cerrada; una puerta delantera, sala de espera con bancos y la ventanilla",
+	"house": "casa con una puerta delantera; sala-comedor, cocina, baño y recámara (las de dos plantas, con las recámaras arriba)",
+	"home": "la casa del jugador: una puerta delantera; sala-comedor, cocina, baño y recámara",
+	"clothes": "tienda de ropa con una puerta delantera, percheros y probador",
+	"salon": "peluquería con una puerta delantera, sillón y espejo",
+	"grocery": "tienda de abarrotes con una puerta delantera, estantes, refrigeradores y la caja",
+	"restaurant": "fonda con una puerta delantera, mesas con mantel, mostrador y la cocina",
+	"pharmacy": "farmacia con una puerta delantera, mostrador y estantes de medicinas",
+	"hardware": "ferretería con una puerta delantera, mesas y estantes de herramientas",
+}
+
 
 static func build(parent: Node3D, kind: String, seed: int, origin: Vector3, opts: Dictionary = {}) -> Dictionary:
 	var room: Dictionary = ROOMS.get(kind, ROOMS.house)

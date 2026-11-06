@@ -199,6 +199,21 @@ func _process(_delta: float) -> void:
 		_maybe_text_first()
 
 
+## Lo último que le pasó a un PNJ y aún no ha hablado contigo: lo que ocurrió ANTES de vuestra
+## última plática ya lo hablasteis (si entraste en su casa y charlasteis, no te escribe «alguien entró»).
+static func news_for(id: String, now: float) -> String:
+	var all: Array = NPCMemory.get_mem(id).recent
+	var since := 0
+	for i in all.size():
+		var t := str(all[i].text)
+		if t.begins_with("Acabas de hablar") or t.begins_with("Hablaste por teléfono"):
+			since = i + 1
+	var fresh := all.slice(since).filter(func(e): return not bool(e.get("rumor", false)))
+	if fresh.is_empty() or now - float(fresh[-1].at) >= 600.0:
+		return ""
+	return str(fresh[-1].text)
+
+
 func _maybe_text_first() -> void:
 	if Settings.use_mock or not Settings.has_api_key() or not has_phone():
 		return
@@ -210,9 +225,7 @@ func _maybe_text_first() -> void:
 			continue
 		if is_near.call(id) or now - float(NPCMemory.get_mem(id).get("last_talk", -1e9)) < RECENT_TALK:
 			continue  # está contigo o acabáis de hablar
-		var recent: Array = NPCMemory.get_mem(id).recent.filter(func(e): return not bool(e.get("rumor", false)) \
-			and not str(e.text).begins_with("Acabas de hablar") and not str(e.text).begins_with("Hablaste por teléfono"))
-		var news: String = recent[-1].text if not recent.is_empty() and now - float(recent[-1].at) < 600.0 else ""
+		var news := news_for(id, now)
 		var friendly := int(NPCMemory.get_mem(id).relationship) >= 15
 		if news.is_empty() and not (friendly and randf() < 0.3):
 			continue

@@ -32,6 +32,9 @@ const ACTION := {"t": "object", "fields": {
 	"behavior": {"t": "enum", "from": "npc_behavior", "opt": true},
 	"line": {"t": "string", "min": 1, "max": 200, "opt": true},
 	"locked": {"t": "bool", "default": false},
+	# Forzar por la ventana (force_door) y quedar encima de algo (move_to)
+	"window": {"t": "bool", "default": false},
+	"on": {"t": "bool", "default": true},
 	# Dinero (pagar, cobrar, precio de lo que te dan, recompensa de un encargo)
 	"price": {"t": "int", "min": 0, "max": 200, "default": 0},
 	# Gente nueva (spawn_npc): nombre y oficio
@@ -96,6 +99,8 @@ const SPECS := {
 	# No es una entidad del mundo: es la respuesta de un PNJ en una conversación.
 	"dialogue_turn": {
 		"line": {"t": "string", "min": 1, "max": 600},
+		# Lo que el PNJ hace mientras habla, narrado en tercera persona (aparte de lo que dice)
+		"action": {"t": "string", "min": 2, "max": 200, "opt": true},
 		"emotion": {"t": "enum", "from": "emotion", "default": "neutral"},
 		# Si el modelo no las da, el jugador siempre puede seguir: no se tira la frase del PNJ
 		"choices": {"t": "array", "min": 2, "max": 4, "lenient": true, "default": [
@@ -191,7 +196,7 @@ const SYNONYMS := {
 	"recibir_objeto": "take_item", "tomar": "take_item", "coger": "take_item", "receive_item": "take_item",
 	"seguir": "follow_player", "seguir_jugador": "follow_player", "acompañar": "follow_player",
 	"follow": "follow_player", "accompany": "follow_player", "dejar_de_seguir": "stop_following",
-	"ir_a": "go_to", "ir": "go_to", "move_to": "go_to", "curar": "change_stat", "heal": "change_stat",
+	"ir_a": "go_to", "ir": "go_to", "trepar": "climb", "forzar": "force_door", "curar": "change_stat", "heal": "change_stat",
 	"revelar_lugar": "reveal_place", "dar_mision": "give_quest", "misión": "give_quest", "mision": "give_quest",
 	"completar_mision": "complete_quest", "negarse": "refuse_contact", "diario": "journal", "nota": "journal",
 	"pista": "journal", "salud": "health", "vida": "health", "energía": "energy", "energia": "energy",

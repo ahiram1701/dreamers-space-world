@@ -38,6 +38,12 @@ var _target := Vector3.INF   # a dónde va andando
 var _follow: Node3D = null
 var _detour := 0.0          # segundos rodeando un obstáculo
 var _detour_side := 1.0
+var _path := PackedVector3Array()   # camino por la malla de navegación (vacío: en línea recta)
+var _path_i := 0
+var _path_for := Vector3.INF        # a qué destino corresponde el camino
+var _repath_t := 0.0
+var _last_bump := -100000         # cuándo chocó por última vez (ms)
+var _bumps := 0
 var _speed_override := 0.0     # > 0: corre (huir, ir con prisa)
 var _walk_time := 0.0
 var _walk_limit := 40.0      # si no llega en este tiempo (atascado), se da por llegado
@@ -120,10 +126,43 @@ func face(target: Vector3) -> void:
 		_body.rotation.y = atan2(d.x, d.z)
 
 
-## Gesto (dar algo, saludar, talar…). Ver HumanoidRig.
+const SIT_GESTURES := ["sit", "sit_eat", "sit_read"]
+
+
+## Gesto (dar algo, saludar, talar…). Ver HumanoidRig. Sentarse solo se puede EN algo: si hay
+## una silla o una banca cerca va hasta ella; si no, se queda de pie (nunca sentado en el aire).
 func play_gesture(gesture: String, duration: float = -1.0) -> void:
+	if gesture in SIT_GESTURES and not _settled:
+		var seat := seat_near(6.0)
+		if seat == null:
+			return
+		var spot := seat.global_position
+		walk_to(spot)
+		await arrived
+		if is_instance_valid(seat) and global_position.distance_to(spot) < 1.6 and not _settled:
+			settle(spot + Vector3(0, 0.05, 0), spot + seat.global_basis.z * 2.0, gesture, activity)
+			if duration > 0.0:
+				get_tree().create_timer(duration).timeout.connect(func():
+					if is_instance_valid(self) and _settled and not talking:
+						unsettle())
+		return
 	if _rig:
 		_rig.play(gesture, duration)
+
+
+## La silla, banca o asiento libre más cercano (a menos de `radius` m), o null.
+func seat_near(radius: float) -> Node3D:
+	var best: Node3D = null
+	var best_d := radius
+	for it in get_tree().get_nodes_in_group("interactables"):
+		if not (it is Interactable) or not str(it.prompt).begins_with("Sentarse") or not (it.owner_node is Node3D):
+			continue
+		var seat: Node3D = it.owner_node
+		var d := seat.global_position.distance_to(global_position)
+		if d < best_d and absf(seat.global_position.y - global_position.y) < 1.5:
+			best = seat
+			best_d = d
+	return best
 
 
 func stop_gesture() -> void:
@@ -142,7 +181,25 @@ func look_at_target(point: Vector3) -> void:
 		_rig.look_at_point = point
 
 
+## El siguiente punto al que andar: el del camino por la malla (si la hay y llega) o el destino.
+func _next_waypoint(goal: Vector3, delta: float) -> Vector3:
+	_repath_t -= delta
+	var moved := _path_for == Vector3.INF or _path_for.distance_to(goal) > (2.0 if _follow else 0.5)
+	if moved and _repath_t <= 0.0:
+		_repath_t = 0.8
+		_path = NavBaker.path(self, global_position, goal)
+		_path_i = 1
+		_path_for = goal
+	if _path.is_empty():
+		return goal
+	while _path_i < _path.size() - 1 and Vector2(_path[_path_i].x - global_position.x, _path[_path_i].z - global_position.z).length() < 0.6:
+		_path_i += 1
+	return _path[_path_i] if _path_i < _path.size() - 1 else goal
+
+
 func walk_to(pos: Vector3, run: bool = false, pace: float = 0.0) -> void:
+	_path_for = Vector3.INF
+	_repath_t = 0.0
 	unsettle()
 	_follow = null
 	_target = pos
@@ -330,6 +387,7 @@ func _physics_process(delta: float) -> void:
 				speed = _speed_override
 
 	if goal != Vector3.INF:
+		goal = _next_waypoint(goal, delta)
 		var dir := Vector3(goal.x - global_position.x, 0, goal.z - global_position.z).normalized()
 		if _detour > 0.0:  # rodear: caminar en diagonal hasta dejar atrás el obstáculo
 			_detour -= delta
@@ -344,7 +402,20 @@ func _physics_process(delta: float) -> void:
 	# Atascado contra algo mientras va a un sitio: lo rodea (y salta si es bajo)
 	if goal != Vector3.INF and is_on_wall() and _detour <= 0.0:
 		_detour = 0.9
-		_detour_side = 1.0 if randf() < 0.5 else -1.0
+		var now := Time.get_ticks_msec()
+		if now - _last_bump < 2500:
+			# Volvió a chocar enseguida: por ese lado no se pasa, prueba por el otro (cada vez más lejos)
+			_detour_side = -_detour_side
+			_detour = 0.9 + 0.5 * mini(_bumps, 4)
+			_bumps += 1
+		else:
+			# Hacia el lado por el que la pared «se abre» camino del destino (no a cara o cruz)
+			var n := get_wall_normal()
+			var to_goal := Vector3(goal.x - global_position.x, 0, goal.z - global_position.z)
+			_detour_side = 1.0 if n.cross(Vector3.UP).dot(to_goal) < 0.0 else -1.0
+			_bumps = 0
+		_last_bump = now
+		_path_for = Vector3.INF  # y busca otro camino
 		if is_on_floor():
 			velocity.y = 2.5
 	if _rig:

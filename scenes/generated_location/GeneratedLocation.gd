@@ -226,6 +226,10 @@ func _show_place() -> void:
 
 # --- Interacción ----------------------------------------------------------------------
 
+func navigation_area() -> AABB:
+	return AABB(Vector3(-_limit, -40, -_limit), Vector3(_limit * 2.0, 140, _limit * 2.0))
+
+
 func ground_at(x: float, z: float) -> float:
 	return _height_at.call(x, z)
 
@@ -313,6 +317,7 @@ func _add_doors() -> void:
 			var kind: String = businesses.pop_front()
 			var label := Shops.label(kind, era)
 			_interiors.add_door("edificio_%d" % i, pos, b.rotation.y, kind, int(_def.get("seed", 1)) * 100 + i, label)
+			_interiors.set_building("edificio_%d" % i, b.global_position, size, b.rotation.y)
 			var sign := Label3D.new()
 			sign.text = label.split(" ", false, 1)[-1].capitalize()
 			sign.font_size = 56
@@ -325,6 +330,7 @@ func _add_doors() -> void:
 			continue
 		_interiors.add_door("edificio_%d" % i, pos, b.rotation.y, "scifi" if futuristic else "house", int(_def.get("seed", 1)) * 100 + i,
 			"un edificio" if futuristic else "una casa")
+		_interiors.set_building("edificio_%d" % i, b.global_position, size, b.rotation.y)
 
 
 func _era_label(era: String) -> String:
