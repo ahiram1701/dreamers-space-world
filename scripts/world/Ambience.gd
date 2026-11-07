@@ -1,8 +1,7 @@
 class_name Ambience
 extends Node
 ## Sonido de fondo según la hora y el sitio: pájaros de día, grillos de noche, murmullo de gente
-## en la cafetería y una música suave de acordes sintetizados que cambia con el momento del día.
-## Todo se genera al vuelo (el juego no lleva archivos de audio).
+## en la cafetería. Todo se genera al vuelo. (La música va aparte: el autoload Music.)
 
 var scene: LocationScene
 
@@ -27,14 +26,7 @@ func _process(delta: float) -> void:
 	_t += delta
 	var inside := scene._interiors.is_inside()
 	var night := WorldClock.night() > 0.5
-	# Música: una progresión de día y otra de noche, con fundido al cambiar
-	var key := "night" if night else "day"
-	if key != _music_key:
-		_music_key = key
-		_music.stream = _pad(key)
-		_music.play()
-	var target := linear_to_db(maxf(Settings.music_volume * 0.35, 0.0001))
-	_music.volume_db = lerpf(_music.volume_db, target, 1.0 - exp(-0.8 * delta))
+	# (La música la pone el autoload Music, con pistas de verdad; aquí solo el ambiente.)
 	# Murmullo de gente dentro de la cafetería (si hay alguien)
 	var busy := inside and scene._interiors.current_kind() in ["cafe", "shop"] and WorldClock.hour() > 8.0 and WorldClock.hour() < 21.0
 	if busy and not _murmur.playing:

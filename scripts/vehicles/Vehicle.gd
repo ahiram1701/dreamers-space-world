@@ -32,7 +32,12 @@ const KIT := {
 const BODY_SCALE := Vector3(1.3, 1.35, 1.65)
 const BIG_SCALE := Vector3(1.45, 1.55, 2.0)
 const GEARS := [0.24, 0.43, 0.62, 0.81, 1.0]          # velocidad máxima de cada marcha (fracción)
-const GEAR_TORQUE := [1.7, 1.35, 1.1, 0.9, 0.75]
+const GEAR_TORQUE := [1.35, 1.2, 1.05, 0.9, 0.75]
+## Tracción por tipo (las demás, delantera): 4x4 las camionetas, trasera los deportivos y camiones.
+const DRIVE := {"suv": "awd", "suv_luxury": "awd", "pickup": "awd", "flatbed": "awd", "sports": "rwd", "race": "rwd",
+	"police": "rwd", "delivery": "rwd", "ambulance": "rwd", "firetruck": "rwd", "garbage": "rwd", "tractor": "rwd"}
+## Agarre de los neumáticos (VehicleWheel3D.friction_slip): antes 2.9, patinaba como en hielo.
+const GRIP := {"sports": 8.0, "race": 9.0, "police": 7.5, "delivery": 5.5, "ambulance": 5.8, "firetruck": 5.5, "garbage": 5.5, "tractor": 6.0}
 
 var entry_id := ""
 var display_name := "el vehículo"
@@ -61,6 +66,7 @@ var _prev_vel := Vector3.ZERO
 var _audio: EngineAudio
 var _smoke: CPUParticles3D
 var _rear: Array = []           # ruedas traseras (freno de mano)
+var _ground_t := 0.0
 var _flip_t := 0.0
 var _lamps: Array = []          # materiales de los faros y pilotos (piezas que brillan)
 var _beams: Array = []          # luces de los faros (de noche, conduciendo)
@@ -159,16 +165,19 @@ func _build_kit(model_path: String, kit: Dictionary, user_scale: float) -> bool:
 			w.suspension_max_force = 60000.0
 			w.damping_compression = 2.4
 			w.damping_relaxation = 3.2
-			w.wheel_friction_slip = 2.9
-			w.wheel_roll_influence = 0.12
-			w.use_as_traction = nm.contains("back")
+			var drive: String = DRIVE.get(factory_kind, "fwd")
+			w.wheel_friction_slip = float(GRIP.get(factory_kind, 6.8))
+			w.wheel_roll_influence = 0.05
+			w.use_as_traction = drive == "awd" or (nm.contains("back") if drive == "rwd" else nm.contains("front"))
 			w.use_as_steering = nm.contains("front")
+			w.set_meta("rear", nm.contains("back"))
+			w.set_meta("grip", w.wheel_friction_slip)
 			w.position = Vector3(center.x * bs.x, center.y * ws + 0.12, center.z * bs.z)
 			add_child(w)
 			mi.get_parent().remove_child(mi)
 			mi.transform = Transform3D(Basis.from_scale(Vector3.ONE * ws) * t.basis, (t.origin - center) * ws)
 			w.add_child(mi)
-			if w.use_as_traction:
+			if nm.contains("back"):
 				_rear.append(w)
 			continue
 		var a: AABB = t * local_aabb
@@ -188,7 +197,8 @@ func _build_kit(model_path: String, kit: Dictionary, user_scale: float) -> bool:
 	_box(Vector3((hi.x - lo.x) * 0.84, hi.y - belt, (hi.z - lo.z) * (0.85 if big else 0.6)), Vector3((hi.x + lo.x) / 2.0, (hi.y + belt) / 2.0, (hi.z + lo.z) / 2.0 - (hi.z - lo.z) * 0.05))
 	mass = float(kit.get("mass", 1400.0))
 	center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
-	center_of_mass = Vector3(0, bottom + 0.15, (hi.z + lo.z) / 2.0)
+	center_of_mass = Vector3(0, bottom + 0.02, (hi.z + lo.z) / 2.0)
+	angular_damp = 0.9   # sin trompos ni bamboleos de más
 	# Asientos: conductor a la izquierda (+x mirando hacia delante), copiloto y dos detrás
 	var sx := (hi.x - lo.x) * 0.2
 	var sy := bottom - 0.12
@@ -504,6 +514,17 @@ func _physics_process(delta: float) -> void:
 		_lights_t = 1.0
 		var h := WorldClock.hour()
 		_set_lights(_rider != null and health > 0.0 and (h >= 19.5 or h < 7.0 or Weather.current() in ["rain", "storm", "fog"]))
+	# Si el suelo de delante aún no tiene colisión (terreno por trozos), espera quieto en vez de caer
+	_ground_t -= delta
+	if _ground_t <= 0.0:
+		_ground_t = 0.2
+		var hold := false
+		for t in get_tree().get_nodes_in_group("chunk_terrain"):
+			if not t.call("has_ground", global_position.x, global_position.z):
+				hold = true
+		if hold != freeze:
+			freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
+			freeze = hold
 	if _rider == null:
 		engine_force = 0.0
 		brake = 12.0
@@ -534,20 +555,38 @@ func _physics_process(delta: float) -> void:
 	var lo_speed: float = 0.0 if gear == 1 else max_speed * float(GEARS[gear - 2])
 	var hi_speed: float = max_speed * float(GEARS[gear - 1])
 	var force := power * (110.0 if pedals and not uses_fuel else 260.0) * mass / 1000.0 * 1.4 * (float(GEAR_TORQUE[gear - 1]) * 0.78 if not pedals else 1.0)
+	var foot_brake := 0.0
+	var engine_brake := 0.0
 	if throttle > 0.0 and v < -0.5 or throttle < 0.0 and v > 0.5:
-		brake = 40.0 * absf(throttle) * mass / 1300.0  # frenar antes de cambiar de sentido
+		foot_brake = 40.0 * absf(throttle) * mass / 1300.0  # frenar antes de cambiar de sentido
 		engine_force = 0.0
 	else:
-		brake = 0.0 if throttle != 0.0 else 3.0 * mass / 1300.0
-		engine_force = throttle * force * (1.0 if throttle > 0.0 else 0.5) if has_fuel and av < max_speed else 0.0
+		engine_brake = 0.0 if throttle != 0.0 else 2.2 * mass / 1300.0  # el motor retiene (solo las motrices)
+		# El par cae suave al acercarse a la velocidad máxima (antes, un corte en seco)
+		var taper := clampf((max_speed - av) / maxf(max_speed * 0.18, 0.5), 0.0, 1.0)
+		engine_force = throttle * force * (1.0 if throttle > 0.0 else 0.5) * (taper if throttle > 0.0 else 1.0) if has_fuel else 0.0
+	# Control de tracción: si las ruedas motrices patinan, menos fuerza
+	if engine_force != 0.0 and not pedals:
+		var grip := 1.0
+		for w in find_children("Wheel_*", "VehicleWheel3D", false, false):
+			if (w as VehicleWheel3D).use_as_traction and (w as VehicleWheel3D).is_in_contact():
+				grip = minf(grip, (w as VehicleWheel3D).get_skidinfo())
+		if grip < 0.6:
+			engine_force *= lerpf(0.35, 1.0, grip / 0.6)
 	# Dirección: menos ángulo cuanto más rápido, y vuelve sola al centro al soltar
-	var steer_max := lerpf(0.6, 0.1, clampf(av / max_speed, 0.0, 1.0))
+	var steer_max := lerpf(0.55, 0.18, clampf(av / max_speed, 0.0, 1.0))
 	var want := -input.x * steer_max
-	steering = move_toward(steering, want, (2.6 if absf(want) > absf(steering) else 4.5) * delta)
-	# Freno de mano: bloquea las de atrás y patinan (para derrapar o aparcar en pendiente)
-	for w in _rear:
-		(w as VehicleWheel3D).brake = 30.0 * mass / 1300.0 if handbrake else 0.0
-		(w as VehicleWheel3D).wheel_friction_slip = 1.1 if handbrake else 2.9
+	steering = move_toward(steering, want, (2.4 if absf(want) > absf(steering) else 4.5) * delta)
+	# Frenos por rueda: pie, motor (las motrices) y freno de mano (las de atrás, que patinan)
+	for w in find_children("Wheel_*", "VehicleWheel3D", false, false):
+		var wh := w as VehicleWheel3D
+		var b := foot_brake + (engine_brake if wh.use_as_traction else 0.0)
+		var rear := bool(wh.get_meta("rear", false)) or _rear.has(wh)
+		if handbrake and rear:
+			b += 30.0 * mass / 1300.0
+		wh.brake = b
+		if wh.has_meta("grip"):
+			wh.wheel_friction_slip = 2.2 if handbrake and rear else float(wh.get_meta("grip"))
 	if handbrake:
 		engine_force = 0.0
 	if uses_fuel and engine_force != 0.0:

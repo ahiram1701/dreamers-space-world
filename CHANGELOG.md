@@ -3,6 +3,50 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.8.0] - 2026-11-07
+
+### Corregido
+- **Los destellos blancos, por fin.** Eran píxeles NaN: en algunos puntos del suelo la normal quedaba a cero, al normalizarla salía NaN y el resplandor (glow) convertía ese único píxel en una mancha blanca enorme. Se veían en el campo de noche y en la orilla (el agua refleja lo que tiene debajo). El shader del suelo ya no puede dar NaN.
+- Las estrellas eran una esfera fija en el centro del pueblo: lejos de él, algunas quedaban a ras de suelo, metidas en las colinas. Ahora el cielo va con la cámara y ninguna estrella baja de 8° sobre el horizonte. El agua refleja menos las farolas.
+- **Tecla F:**
+  - «Regreso al pueblo» funciona: desde otro planeta vas a tu nave, despegas y el piloto automático te deja en la plataforma del pueblo; sin nave, usas el Ancla si tiene energía. En el pueblo, te lleva caminando al sitio que digas, aunque esté lejos.
+  - «Voy a dormir a mi casa» te lleva a casa, entras y te acuestas en tu cama. Antes te tumbabas en el suelo donde estabas.
+  - «Súbete al auto» funciona aunque ya estés dentro del coche: la persona va hasta él y sube. Si no puede, lo dice.
+  - F funciona también dentro de la nave y en el espacio (aterrizar, ir a un planeta, hablar con quien va a bordo).
+- **La nave:**
+  - Vas dentro, en la cabina, no sentado encima del casco. Quien te acompaña sube contigo, va dentro y baja contigo al aterrizar, en otro planeta o de vuelta en casa.
+  - <kbd>V</kbd> cambia a la vista de cabina, con tablero, instrumentos y palanca.
+- **El espacio ya no se traba:**
+  - Shift es un crucero de 1,5 km/s; al soltarlo, la asistencia frena en unos segundos. Antes llegabas a 8 km/s y tardabas minutos en frenar.
+  - Con algo delante, el crucero se corta solo. <kbd>X</kbd> frena en seco.
+  - Un golpe ya no destroza el casco de una vez, y con el casco destrozado la nave sigue respondiendo a poca potencia para que puedas aterrizar.
+  - Pulsar Esc mientras aterrizabas podía cerrar el juego.
+- **El faro:** el techo tenía la escalera tapada y te dabas con la cabeza a media subida. Ahora tiene un hueco y un tubo hasta la trampilla de la linterna.
+- **Edificios de dos plantas:** las tiendas, el café y la estación (y los edificios altos de los planetas) tienen escalera y planta de arriba, como las casas: mesas en el café, almacén en las tiendas y oficina en la estación.
+- **Los coches del tráfico** ya no desaparecen a la vista: aparecen y se van cuando no los miras, aparcan al final de la calle y frenan ante otros coches. Hay hasta tres a la vez.
+- Un coche rápido ya no cae del terreno por trozos: el suelo con colisión se prepara por delante y, si aún no está, el coche espera en vez de caer.
+
+### Cambiado
+- **Física de los coches:**
+  - Más agarre (antes patinaban como en hielo) y tracción según el tipo: delantera los turismos, a las cuatro ruedas las camionetas y trasera los deportivos y camiones.
+  - El motor pierde fuerza poco a poco cerca de la velocidad máxima, sin corte en seco.
+  - Control de tracción, freno motor en las ruedas motrices, menos balanceo y sin trompos.
+- **El espacio, más vivo:** lunas alrededor de los planetas, naves que van y vienen entre la estación y los planetas, polvo espacial que pasa a tu lado y el sol sólido y peligroso (calienta el casco). <kbd>G</kbd> activa el piloto automático al destino marcado.
+- **Otros planetas:** al aterrizar hay un puesto avanzado con módulos, cajas, terminales y dos o tres personas, no solo naturaleza. Se ven sus lunas en el cielo y hay cosas que recoger según el planeta: cristales, obsidiana, fruta extraña…
+
+### Añadido
+- **El campo alrededor del pueblo:**
+  - Caminos de tierra, hierba alta y praderas con flores.
+  - Sitios a los que ir, que la IA conoce: la granja con ovejas y vacas en su corral, el lago con embarcadero y barca, el campamento con hoguera, las ruinas, el mirador de la montaña, la cabaña del pescador y el cruce de caminos con su poste de letreros.
+  - Pájaros que vuelan en bandada de día.
+- **Cosas que hacer:**
+  - Pescar en el muelle o en el lago: coge la caña vieja de la cabaña del pescador y pulsa <kbd>E</kbd> cuando pique.
+  - Recoger moras, setas, conchas o chatarra; vuelven a salir al día siguiente.
+- **Música de verdad** (CC0, de OpenGameArt) que cambia con fundido según dónde estés: menú, pueblo de día y de noche, campo, cafetería, otros planetas, espacio y peligro. Sustituye a los acordes sintetizados. El volumen se ajusta en Ajustes → Música.
+
+### Créditos
+- Música: pistas CC0 de OpenGameArt (polosik, beardalaxy, Pro Sensory, isaiah658, congusbongus, yd, Centurion_of_war y otros); la lista completa está en `assets/CREDITS.md`.
+
 ## [0.7.2] - 2026-11-07
 
 La v0.7.1 no llegó a publicarse con instalador: esta versión la incluye entera, con un arreglo.

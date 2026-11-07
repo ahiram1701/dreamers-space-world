@@ -38,12 +38,32 @@ static func build(parent: Node3D, def: Dictionary, height_at: Callable, rng: Ran
 			_ruins(parent, height_at, rng, avoid)
 		"anomaly_zone":
 			_floating_rocks(parent, rng, biome)
+		"planet_surface":
+			_outpost(parent, def, height_at, rng, avoid)
 	if biome == "urban" and kind != "town" and kind != "city":
 		_settlement(parent, def, height_at, rng, avoid, 14)
 	_nature(parent, biome, height_at, rng, avoid, 0.5 if kind in ["town", "city", "ruins"] else 1.0)
 
 
 # --- Asentamientos --------------------------------------------------------------------
+
+## En un planeta: un puesto avanzado (módulos con puerta, cajas, contenedores, una antena y una
+## terminal), no solo naturaleza. Aquí vive y trabaja la gente del lugar.
+static func _outpost(parent: Node3D, def: Dictionary, height_at: Callable, rng: RandomNumberGenerator, avoid: Array) -> void:
+	var d := def.duplicate()
+	# En otro planeta, lo que hay lo trajo alguien de fuera: módulos de una época avanzada
+	d["era"] = "deep_future" if str(def.get("era", "")) == "deep_future" else "far_future"
+	_settlement(parent, d, height_at, rng, avoid, rng.randi_range(4, 6))
+	var props := ["Props_Crate", "Props_CrateLong", "Props_ContainerFull", "Props_Vessel", "Props_Vessel_Tall", "Props_Computer", "Props_Pod", "Column_1"]
+	for i in 14:
+		var p := _free_spot(rng, avoid, Vector2(rng.randf_range(-20, 20), rng.randf_range(-20, 20)), 6.0, 30.0)
+		if p == Vector3.INF:
+			continue
+		p.y = height_at.call(p.x, p.z)
+		var m := AssetLibrary.instance("modular_sci_fi", str(props[rng.randi() % props.size()]))
+		if m:
+			AssetLibrary.place(parent, m, p, rng.randf_range(0.9, 2.2), rng.randf() * TAU, true)
+			avoid.append(Vector3(p.x, 2.0, p.z))
 
 static func _settlement(parent: Node3D, def: Dictionary, height_at: Callable, rng: RandomNumberGenerator, avoid: Array, count: int) -> void:
 	var style: Dictionary = ERA_STYLE.get(def.get("era", "present"), ERA_STYLE["present"])

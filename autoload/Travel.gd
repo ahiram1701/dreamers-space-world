@@ -31,15 +31,47 @@ func scene_for(location_id: String) -> String:
 # No es un salto del Ancla: es un viaje físico por este universo (no gasta energía del Ancla,
 # gasta combustible).
 
-## Despegas: la nave sale contigo al espacio (deja de estar aparcada aquí).
-func launch(ship_entry: Dictionary) -> void:
+## Despegas: la nave sale contigo al espacio (deja de estar aparcada aquí). `passengers`: ids de
+## los PNJ que van a bordo (bajan contigo donde aterrices).
+func launch(ship_entry: Dictionary, passengers: Array = []) -> void:
 	var e := ship_entry.duplicate(true)
 	var from := GameState.current_location()
 	if e.has("id"):
 		Creations.remove(str(e.id))
 	e.erase("pos")
-	WorldDB.set_state("space", {"ship": e, "from": from})
+	WorldDB.set_state("space", {"ship": e, "from": from, "passengers": passengers.duplicate()})
 	GameState.set_location(SPACE)
+
+
+## Quién viaja contigo en la nave (ids de PNJ).
+func passengers() -> Array:
+	var space: Dictionary = WorldDB.get_state("space", {})
+	return space.get("passengers", [])
+
+
+## Volar directo a un lugar ya conocido (con F: «vuelvo al pueblo»): despegas, el piloto
+## automático cruza el sistema y aterrizas. Gasta combustible y tiempo; no pasa por el espacio.
+func fly_direct(ship_entry: Dictionary, to_location: String, passengers: Array = []) -> Dictionary:
+	var e := ship_entry.duplicate(true)
+	var fuel := float(e.get("fuel", 1.0))  # (0..1)
+	if fuel < 0.12:
+		return _fail("A la nave le queda muy poco combustible para un viaje así.")
+	if e.has("id"):
+		Creations.remove(str(e.id))
+	e.erase("pos")
+	e.erase("id")
+	e["fuel"] = fuel - 0.12
+	travel_started.emit(to_location)
+	WorldDB.set_state("arrival_ship", {"to": to_location, "ship": e, "passengers": passengers.duplicate()})
+	WorldDB.set_state("space", {})
+	GameState.set_location(to_location)
+	WorldClock.advance(50)
+	for n in TimelineManager.visited_locations():
+		if n.location_id == to_location:
+			TimelineManager.move_to(n.id)
+			break
+	travel_finished.emit(to_location)
+	return {"ok": true, "location_id": to_location, "error": ""}
 
 
 ## Aterrizas en un planeta o te acoplas a una estación: el lugar de su superficie (se genera la
@@ -73,11 +105,15 @@ func land(planet_name: String) -> Dictionary:
 		planet["location_id"] = location_id
 		StarSystem.save(sys)
 		var where := {"lugar": loc.entity.name, "descripcion": loc.entity.description}
-		var npc := await ContentGenerator.generate("npc", "alguien que vive o trabaja en %s" % loc.entity.name, "location:" + location_id, where)
-		if npc.ok:
-			WorldDB.update_entity("location", location_id, {"npc_ids": [npc.id]})
+		var people := []
+		for role in ["alguien que vive o trabaja en %s", "otra persona de %s, con otro oficio y otro carácter", "alguien de paso por %s"].slice(0, 2 if station else 3):
+			var npc := await ContentGenerator.generate("npc", role % loc.entity.name, "location:" + location_id, where)
+			if npc.ok:
+				people.append(npc.id)
+		if not people.is_empty():
+			WorldDB.update_entity("location", location_id, {"npc_ids": people})
 	var space: Dictionary = WorldDB.get_state("space", {})
-	WorldDB.set_state("arrival_ship", {"to": location_id, "ship": space.get("ship", {})})
+	WorldDB.set_state("arrival_ship", {"to": location_id, "ship": space.get("ship", {}), "passengers": space.get("passengers", [])})
 	WorldDB.set_state("space", {})
 	GameState.set_location(location_id)
 	if location_id != GameState.HOME and TimelineManager.visited_locations().all(func(n): return n.location_id != location_id):

@@ -14,6 +14,9 @@ var context: Callable = func(): return ""
 var player: Player
 ## Representa los pasos (lo asigna la escena común, LocationScene).
 var performer: ActionPerformer
+## Sin performer (en el espacio, en la nave): quien representa los pasos. Recibe los pasos y
+## devuelve las notas (puede esperar). Si no hay, solo se aplican sus efectos.
+var step_handler: Callable
 ## Ideas según lo que hay cerca y cómo estás (LocationScene.suggestions). Sin IA.
 var suggestions: Callable = func(): return []
 
@@ -233,10 +236,14 @@ func _do() -> void:
 		Sfx.deny(self)
 		if performer:
 			await performer.perform(ActionPerformer.local_plan(what, performer.scene, guess))
+		elif step_handler.is_valid():
+			await step_handler.call([], what)
 	else:
 		_show(r.narration)
 		if performer and not steps.is_empty():
 			notes = await performer.perform(steps, func(text): _show(text))
+		elif step_handler.is_valid():
+			notes = await step_handler.call(steps, what)
 		else:
 			notes = Actions.execute("", steps)
 		WorldClock.advance(r.get("minutes", 0))

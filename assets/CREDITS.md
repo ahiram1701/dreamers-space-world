@@ -21,3 +21,20 @@ La licencia "todos los derechos reservados" del proyecto ([LICENSE](../LICENSE))
 ## Kenney
 
 Los coches de `assets/models/kenney_cars/` son del **[Car Kit](https://kenney.nl/assets/car-kit) de Kenney** ([www.kenney.nl](https://www.kenney.nl)), con licencia **[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)**. Se usan los GLB del paquete tal cual (con su textura `Textures/colormap.png`): coches del pueblo, del tráfico y de fábrica, y las piezas que saltan en los choques.
+
+## Música
+
+Las pistas de `assets/music/` son de [OpenGameArt](https://opengameart.org) y tienen licencia **[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)** (comprobado en cada página). La atribución no es obligatoria, pero la incluimos como agradecimiento.
+
+| Archivo | Pista | Autor | Dónde suena |
+|---|---|---|---|
+| `menu.ogg` | [Simple menu/background music loop](https://opengameart.org/content/simple-menubackground-music-loop) | polosik | Menú principal |
+| `town_day.ogg` | [Port Town Loop](https://opengameart.org/content/port-town-loop) | beardalaxy | El pueblo de día |
+| `town_day_2.mp3` | [Town](https://opengameart.org/content/town) | Pro Sensory | El pueblo de día (alterna) |
+| `town_night.ogg` | [Ambient Relaxing Loop](https://opengameart.org/content/ambient-relaxing-loop) | isaiah658 | El pueblo de noche |
+| `countryside.ogg` | [Heavenly Loop](https://opengameart.org/content/heavenly-loop) | isaiah658 | El campo |
+| `cafe.mp3` | [Tuesday Vibraphone](https://opengameart.org/content/tuesday-vibraphone) | Pro Sensory (Alex McCulloch) | La cafetería |
+| `planet.ogg` | [Cathedral in the forest (ambient loop)](https://opengameart.org/content/cathedral-in-the-forest-ambient-loop) | congusbongus | Otros planetas |
+| `space.ogg` | [Space Music: Out There](https://opengameart.org/content/space-music-out-there) | yd | El espacio |
+| `space_2.ogg` | [Space Echo](https://opengameart.org/content/space-echo) | Centurion_of_war | El espacio (alterna) |
+| `tension.ogg` | [Fast fight / battle music (looped)](https://opengameart.org/content/fast-fight-battle-music-looped) | (OpenGameArt, CC0) | Peligro: la nave con el casco destrozado |

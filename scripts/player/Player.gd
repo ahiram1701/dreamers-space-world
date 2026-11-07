@@ -482,10 +482,15 @@ func _physics_process(delta: float) -> void:
 		velocity = Vector3.ZERO
 		global_position = riding.call("seat_position")
 		_body.global_rotation.y = riding.global_rotation.y
+		var hide_me: bool = riding.get("hides_riders") == true  # en la nave vas dentro, en la cabina
+		if _body.visible == hide_me:
+			_body.visible = not hide_me
 		if _rig:
 			_rig.speed = 0.0
 			_rig.airborne = false
 		return
+	if not _body.visible:
+		_body.visible = true
 	var input := Controls.move_vector() if controls_enabled else Vector2.ZERO
 	if input != Vector2.ZERO and _auto_target != Vector3.INF:
 		cancel_auto_walk()  # el jugador retoma el control

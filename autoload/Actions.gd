@@ -69,7 +69,7 @@ func execute(npc_id: String, actions: Array) -> Array:
 			"ride_with_player":
 				if not npc_id.is_empty():
 					NPCMemory.set_fields(npc_id, {"following": true})
-					note = "%s se sube contigo." % _name(npc_id)
+					note = "%s va a subirse contigo." % _name(npc_id)
 			"get_out":
 				if not npc_id.is_empty():
 					note = "%s se baja." % _name(npc_id)

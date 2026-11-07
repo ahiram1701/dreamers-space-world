@@ -125,8 +125,61 @@ func _do_step(s: Dictionary, rest: Array) -> Array:
 			var bed: Node3D = null
 			if type == "sleep" and not _focus.is_empty() and _focus.kind == "bed" and _focus.node is Node3D:
 				bed = (_focus.node as Node3D).get_parent() as Node3D
+			if type == "sleep" and bed == null and not bool(s.get("floor", false)):
+				# «Me voy a dormir a mi casa»: primero vas a tu casa y entras; luego, a la cama
+				var where := str(s.get("target", s.get("where", ""))).to_lower()
+				if where in ["home", "casa", "mi casa", "door:home", "bed", "cama"] or where.begins_with("door:"):
+					var door := where.trim_prefix("door:")
+					if door in ["home", "casa", "mi casa", "bed", "cama", ""]:
+						door = scene._interiors.door_of_kind("home")
+					if not door.is_empty() and scene._interiors.current_door() != door and scene._interiors.doors().has(door):
+						if scene._interiors.is_inside():
+							await scene._interiors.leave()
+							await scene._interiors.wait_idle()
+						await player.auto_walk_to(scene._interiors.door_position(door), 1.0)
+						if _cancelled:
+							return []
+						scene._interiors.try_enter(door)
+						await get_tree().create_timer(0.3).timeout
+						await scene._interiors.wait_idle()
+					elif door.is_empty() and not scene._interiors.is_inside():
+						return ["Aquí no tienes casa a la que ir a dormir."]
+				bed = scene._interiors.nearest_bed(player.global_position)
+			if bed and type == "sleep":
+				var to := bed.global_position
+				await player.auto_walk_to(to, 1.3)
+				if _cancelled:
+					return []
+				await scene._interiors.sleep(bed, minutes)
+				return []
 			await scene._interiors.rest(minutes, bed, type == "sleep")
 			return []
+		"travel":
+			var target := str(s.get("target", ""))
+			var loc := scene.travel_destination_for(target)
+			if loc.is_empty():
+				# Un sitio de este mismo lugar («el pueblo» cuando ya estás en él, «la plaza»…)
+				var p := scene.place_position(target)
+				if p == Vector3.INF and target.to_lower().contains("pueblo"):
+					p = scene.place_position("plaza")
+				if p == Vector3.INF:
+					return ["No sabes cómo llegar a «%s»." % target]
+				if p.distance_to(player.global_position) > 250.0:
+					return await _long_walk(p)
+				await player.auto_walk_to(p, 2.0)
+				return []
+			var note: String = await scene.travel_to(loc)
+			return [note] if not note.is_empty() else []
+		"ride":
+			var rid := str(s.get("target", "")).trim_prefix("npc:")
+			if not scene._npcs.has(rid):
+				var e := scene.resolve_target(str(s.get("target", "")))
+				if e.is_empty() or e.kind != "npc":
+					return []
+				rid = str(e.id).trim_prefix("npc:")
+			var note: String = scene.npc_board(rid)
+			var who := str(WorldDB.get_entity("npc", rid).get("name", "")).get_slice(" ", 0)
+			return [] if note.begins_with("va hacia") else ["%s: %s." % [who, note]]
 		"use":
 			var e := scene.resolve_target(str(s.get("target", "")))
 			if e.is_empty() or e.node == null:
@@ -139,6 +192,7 @@ func _do_step(s: Dictionary, rest: Array) -> Array:
 			elif e.node is TownNPC:
 				pass  # "usar" a alguien no tiene sentido; la reacción va aparte
 			await get_tree().create_timer(0.8).timeout
+			await scene._interiors.wait_idle()  # si era una puerta, que acabe de entrar antes del paso siguiente
 			return []
 		"give_to_npc":
 			var e := scene.resolve_target(str(s.get("target", "")))
@@ -170,6 +224,33 @@ func _do_step(s: Dictionary, rest: Array) -> Array:
 			if type in EFFECTS:
 				return Actions.execute("", [s])
 	return []
+
+
+## Ir a pie muy lejos (fuera del pueblo, al otro lado del mapa): fundido, el reloj avanza lo que
+## se tardaría andando y apareces allí.
+func _long_walk(p: Vector3) -> Array:
+	var d := p.distance_to(player.global_position)
+	var minutes := d / 1.4 / 60.0
+	var fade := ColorRect.new()
+	fade.color = Color(0, 0, 0, 0)
+	fade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var layer := CanvasLayer.new()
+	layer.layer = 50
+	layer.add_child(fade)
+	add_child(layer)
+	var tw := create_tween()
+	tw.tween_property(fade, "color:a", 1.0, 0.6)
+	await tw.finished
+	WorldClock.advance(minutes)
+	player.global_position = InteriorManager.free_spot_near(scene, p, Vector3.ZERO, [player]) + Vector3(0, 0.3, 0)
+	player.velocity = Vector3.ZERO
+	await get_tree().create_timer(0.4).timeout
+	tw = create_tween()
+	tw.tween_property(fade, "color:a", 0.0, 0.6)
+	await tw.finished
+	layer.queue_free()
+	return ["Caminas un buen rato (%d min)." % roundi(minutes)]
 
 
 ## La puerta más cercana al jugador ("" si no hay ninguna a 25 m).
@@ -378,7 +459,39 @@ static func local_plan(what: String, scene_ref: LocationScene, guess: String) ->
 	if sleeping or (waiting and not rest.is_empty()):
 		var step := {"type": "sleep" if sleeping else "wait"}
 		step.merge(rest)
+		if sleeping and ["mi casa", "a casa", "en casa", "mi cama", "en la cama", "mi cuarto"].any(func(w): return low.contains(w)):
+			step["target"] = "home"
+		elif sleeping and ["cama"].any(func(w): return low.contains(w)):
+			step["target"] = "bed"
+		elif sleeping and ["suelo", "aquí", "aqui", "en el piso", "en la arena", "en el pasto"].any(func(w): return low.contains(w)):
+			step["floor"] = true
 		return [step]
+	# Viajar o volver a otro sitio: «regreso al pueblo», «vuelvo a casa», «vamos a Kepra»
+	if ["regreso", "regresar", "vuelvo", "volver", "voy a", "vamos a", "viajo", "viajar", "ir a", "llévame", "llevame"].any(func(w): return low.contains(w)):
+		var dests := scene_ref.travel_destinations()
+		for nm in dests:
+			if low.contains(nm):
+				return [{"type": "travel", "target": "location:" + dests[nm]}]
+		for nm in scene_ref._places:
+			if low.contains(str(nm).to_lower()):
+				return [{"type": "travel", "target": nm}]
+		if low.contains("pueblo"):
+			return [{"type": "travel", "target": "pueblo"}]
+	# «Súbete al coche», «sube al auto, Samir»
+	if ["súbete", "subete", "sube al", "sube a la", "suban", "súbanse"].any(func(w): return low.contains(w)):
+		var targets0 := scene_ref.nearby_targets()
+		for id in targets0:
+			var e0: Dictionary = targets0[id]
+			if e0.kind == "npc" and low.contains(str(e0.label).get_slice(",", 0).to_lower().get_slice(" ", 0)):
+				return [{"type": "ride", "target": id}]
+		for nid in scene_ref._npcs:  # alguien con nombre aunque no esté en la lista de cercanos
+			var nm := str(WorldDB.get_entity("npc", nid).get("name", "")).to_lower().get_slice(" ", 0)
+			if nm.length() > 2 and low.contains(nm):
+				return [{"type": "ride", "target": "npc:" + str(nid)}]
+		for id in targets0:
+			var e1: Dictionary = targets0[id]
+			if e1.kind == "npc" and NPCMemory.is_following(str(id).trim_prefix("npc:")):
+				return [{"type": "ride", "target": id}]
 	# Subir al techo o bajar de él; forzar una puerta o colarse por una ventana
 	if ["techo", "azotea", "tejado"].any(func(w): return low.contains(w)):
 		if ["bajo", "bajar", "me bajo"].any(func(w): return low.contains(w)):

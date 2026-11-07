@@ -1,10 +1,11 @@
 extends SceneTree
 ## Nada sólido se atraviesa: construye el pueblo del Acto 0 y todos los tipos de interior y
 ## comprueba que cada modelo colocado (casas, árboles, rocas, muebles, farolas…) tiene colisión.
-## Solo se libran las alfombras, las lámparas de techo, lo diminuto y los personajes (que tienen la suya).
+## Solo se libran las alfombras, las lámparas de techo, las flores y la hierba, lo diminuto y los
+## personajes (que tienen la suya).
 ##   godot --headless --path . -s tests/test_collision.gd
 
-const PASSABLE := ["Carpet", "Light_Ceiling"]
+const PASSABLE := ["Carpet", "Light_Ceiling", "Flowers", "Grass"]  # (las flores y la hierba alta se atraviesan)
 
 var _failed := 0
 
@@ -41,6 +42,8 @@ func _run() -> void:
 	db.delete_world(world_id)
 	db.set_last_world_id(previous_last)
 	print("\n%s" % ("TODO OK" if _failed == 0 else "%d FALLOS" % _failed))
+	for _settle_before_quit in 20:  # (que acabe lo pendiente: cerrar justo tras liberar la escena podía fallar)
+		await process_frame
 	quit(_failed)
 
 

@@ -35,7 +35,7 @@ const ROOMS := {
 const DESCRIPTIONS := {
 	"lighthouse": "una torre con UNA sola puerta, la delantera (no hay puerta trasera, sótano ni pasadizos a la vista). Dentro, en una sola sala: la mesa y la cama de Marina, estanterías, libros y una escalera de caracol que sube hacia la lámpara",
 	"cafe": "una sola puerta delantera; barra, mesas y sillas, y la cocina detrás de la barra",
-	"station": "estación de tren cerrada; una puerta delantera, sala de espera con bancos y la ventanilla",
+	"station": "estación de tren cerrada; una puerta delantera, sala de espera con bancos y la ventanilla, y una escalera a la oficina de arriba",
 	"house": "casa con una puerta delantera; sala-comedor, cocina, baño y recámara (las de dos plantas, con las recámaras arriba)",
 	"home": "la casa del jugador: una puerta delantera; sala-comedor, cocina, baño y recámara",
 	"clothes": "tienda de ropa con una puerta delantera, percheros y probador",
@@ -57,10 +57,15 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3, opts
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
 	var wall := Color(room.wall).lerp(Color(["#f0e6d2", "#d8e4e8", "#e8d4c8", "#dfe6d0"][rng.randi() % 4]), 0.3 if kind == "house" else 0.0)
-	var floors := clampi(int(opts.get("floors", 1)), 1, 2) if kind in ["house", "home"] else 1
-	_shell(root, w, d, wall, Color(room.floor), kind == "scifi", floors)
+	# Edificios de dos plantas por fuera (casas, tiendas, la estación…): también por dentro, con
+	# escalera de verdad hasta arriba. El faro tiene la suya (de caracol, hasta la linterna).
+	var floors := clampi(int(opts.get("floors", 1)), 1, 2) if kind != "lighthouse" else 1
+	var hole := Rect2(-2.2 - 2.35, -2.4 - 2.35, 4.7, 4.7) if kind == "lighthouse" else Rect2()
+	_shell(root, w, d, wall, Color(room.floor), kind == "scifi", floors, hole)
 	if kind in ["house", "home"]:
 		_home_rooms(root, w, d, wall, floors)
+	elif floors > 1:
+		_stairs_up(root, w, d)
 
 	var out := {"root": root, "spawn": origin + Vector3(0, 0.1, d / 2.0 - 2.4), "exit": origin + Vector3(0, 0.1, d / 2.0 - 0.4),
 		"npc_spots": [], "seats": [], "beds": [], "uses": [], "sofa": [], "table": [], "kitchen": []}
@@ -123,9 +128,23 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3, opts
 			PropsBuilder._cylinder(root, Vector3(-2.2, HEIGHT / 2, -2.4), 0.12, 0.12, HEIGHT, Color("#3a3a3a"), true)
 			var top_a := TAU * 11 / 12.0
 			var top := Vector3(cos(top_a) * 1.6, 0.25 + 11 * 0.25, sin(top_a) * 1.6) + Vector3(-2.2, 0, -2.4)
-			# La trampilla: un hueco oscuro en el techo con su marco, justo encima del último peldaño
-			PropsBuilder._box(root, Vector3(top.x, HEIGHT - 0.02, top.z), Vector3(1.1, 0.06, 1.1), Color("#121212"), false)
-			PropsBuilder._box(root, Vector3(top.x, HEIGHT - 0.06, top.z), Vector3(1.3, 0.08, 1.3), Color("#5a4632"), false)
+			# El techo tiene un hueco sobre la escalera (antes era macizo y te dabas con la cabeza a
+			# media subida): sube un tubo de piedra y arriba está la trampilla de la linterna
+			var shaft_h := 2.8
+			var hc := hole.get_center()
+			for side in [-1.0, 1.0]:
+				PropsBuilder._box(root, Vector3(hc.x + side * (hole.size.x / 2 + 0.1), HEIGHT + shaft_h / 2, hc.y), Vector3(0.2, shaft_h, hole.size.y + 0.4), wall.darkened(0.1), true)
+				PropsBuilder._box(root, Vector3(hc.x, HEIGHT + shaft_h / 2, hc.y + side * (hole.size.y / 2 + 0.1)), Vector3(hole.size.x, shaft_h, 0.2), wall.darkened(0.1), true)
+			PropsBuilder._box(root, Vector3(hc.x, HEIGHT + shaft_h + 0.1, hc.y), Vector3(hole.size.x + 0.4, 0.2, hole.size.y + 0.4), wall.darkened(0.2), true)
+			var lamp := OmniLight3D.new()
+			lamp.light_color = Color("#ffe2b8")
+			lamp.omni_range = 5.0
+			lamp.light_energy = 0.9
+			lamp.position = Vector3(hc.x, HEIGHT + shaft_h - 0.4, hc.y)
+			root.add_child(lamp)
+			# La trampilla, en lo alto del tubo, justo encima del último peldaño
+			PropsBuilder._box(root, Vector3(top.x, HEIGHT + shaft_h - 0.02, top.z), Vector3(1.1, 0.06, 1.1), Color("#121212"), false)
+			PropsBuilder._box(root, Vector3(top.x, HEIGHT + shaft_h - 0.06, top.z), Vector3(1.3, 0.08, 1.3), Color("#5a4632"), false)
 			_use_at(root, top + Vector3(0, 0.05, 0), out, "climb_up", "Subir a la linterna")
 			out["hatch"] = origin + top + Vector3(0, 0.1, 0)
 			_use(root, "Kitchen_Fridge", Vector3(-w / 2 + 0.6, 0, 3.2), PI / 2, out, "eat", "Comer algo de la nevera")
@@ -278,14 +297,53 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3, opts
 			out.kitchen = [{"pos": origin + Vector3(w / 2 - 1.5, 0, 1.6), "face": origin + Vector3(w / 2, 0, 1.6)},
 				{"pos": origin + Vector3(w / 2 - 1.5, 0, 0.7), "face": origin + Vector3(w / 2, 0, 0.7)}]
 			out.npc_spots = [origin + Vector3(0.8, 0, 0.2), origin + Vector3(-1.0, 0, 1.6), origin + Vector3(3.4, 0, 0.0)]
+	if floors > 1 and not (kind in ["house", "home"]):
+		_upper_floor(root, w, d, kind, out, rng)
 	return out
 
 
+## La planta de arriba de un local: más mesas en un café o una fonda; la oficina en la estación;
+## el almacén (estantes y cajas) en las tiendas y talleres.
+static func _upper_floor(root: Node3D, w: float, d: float, kind: String, out: Dictionary, rng: RandomNumberGenerator) -> void:
+	var y := HEIGHT
+	if kind in ["cafe", "restaurant"]:
+		for t in [Vector3(1.6, y, -d / 2 + 2.0), Vector3(w / 2 - 1.8, y, 0.4)]:
+			_put(root, "Table_RoundSmall", t, 0.0)
+			_seat(root, "Chair_2", t + Vector3(-0.75, 0, 0), PI / 2, out, "table")
+			_seat(root, "Chair_2", t + Vector3(0.75, 0, 0), -PI / 2, out, "table")
+		_put(root, "Houseplant_%d" % (1 + rng.randi() % 8), Vector3(w / 2 - 0.6, y, -d / 2 + 0.6), 0.0)
+	elif kind in ["station", "office", "scifi"]:
+		_put(root, "Table_RoundLarge", Vector3(1.8, y, -d / 2 + 1.4), 0.0)
+		_seat(root, "Chair_3", Vector3(1.8, y, -d / 2 + 2.4), PI, out, "table")
+		_put(root, "Shelf_Large", Vector3(w / 2 - 0.5, y, -1.0), -PI / 2)
+		_put(root, "Light_Desk", Vector3(2.4, y + 0.56, -d / 2 + 1.2), 0.0)
+	else:
+		for i in 3:
+			_put(root, ["Shelf_Large", "Shelf_1", "Shelf_2"][i], Vector3(-0.4 + i * 1.6, y, -d / 2 + 0.4), 0.0)
+		for i in 4:
+			PropsBuilder._box(root, Vector3(w / 2 - 1.2 - (i % 2) * 0.9, y + 0.3 + (i / 2) * 0.6, 1.0 + rng.randf_range(-0.2, 0.2)), Vector3(0.8, 0.6, 0.6), Color("#a07c52").darkened(rng.randf() * 0.2), true)
+
+
 ## Suelo, paredes, techo, ventanas y luz. La pared de delante tiene la puerta (hacia +Z).
-static func _shell(root: Node3D, w: float, d: float, wall: Color, floor_color: Color, scifi: bool, floors: int = 1) -> void:
+static func _shell(root: Node3D, w: float, d: float, wall: Color, floor_color: Color, scifi: bool, floors: int = 1, hole: Rect2 = Rect2()) -> void:
 	var top := HEIGHT * floors
 	PropsBuilder._box(root, Vector3(0, -0.1, 0), Vector3(w, 0.2, d), floor_color, true)
-	PropsBuilder._box(root, Vector3(0, top + 0.1, 0), Vector3(w, 0.2, d), wall.darkened(0.15), true)
+	if hole.size == Vector2.ZERO:
+		PropsBuilder._box(root, Vector3(0, top + 0.1, 0), Vector3(w, 0.2, d), wall.darkened(0.15), true)
+	else:  # techo con un hueco (x, z) para una escalera
+		var x0 := -w / 2
+		var x1 := w / 2
+		var z0 := -d / 2
+		var z1 := d / 2
+		var hx0 := hole.position.x
+		var hx1 := hole.end.x
+		var hz0 := hole.position.y
+		var hz1 := hole.end.y
+		var ceil_c := wall.darkened(0.15)
+		PropsBuilder._box(root, Vector3((x0 + hx0) / 2, top + 0.1, 0), Vector3(hx0 - x0, 0.2, d), ceil_c, true)
+		PropsBuilder._box(root, Vector3((hx1 + x1) / 2, top + 0.1, 0), Vector3(x1 - hx1, 0.2, d), ceil_c, true)
+		PropsBuilder._box(root, Vector3((hx0 + hx1) / 2, top + 0.1, (z0 + hz0) / 2), Vector3(hx1 - hx0, 0.2, hz0 - z0), ceil_c, true)
+		PropsBuilder._box(root, Vector3((hx0 + hx1) / 2, top + 0.1, (hz1 + z1) / 2), Vector3(hx1 - hx0, 0.2, z1 - hz1), ceil_c, true)
 	PropsBuilder._box(root, Vector3(0, top / 2, -d / 2), Vector3(w, top, 0.2), wall, true)
 	PropsBuilder._box(root, Vector3(-w / 2, top / 2, 0), Vector3(0.2, top, d), wall, true)
 	PropsBuilder._box(root, Vector3(w / 2, top / 2, 0), Vector3(0.2, top, d), wall, true)
@@ -354,7 +412,14 @@ static func _home_rooms(root: Node3D, w: float, d: float, wall: Color, floors: i
 		_wall_line(root, Vector2(-0.6, -d / 2), Vector2(-0.6, -d / 2 + 3.4), -1.0, c)
 		_wall_line(root, Vector2(-w / 2, -d / 2 + 3.4), Vector2(-0.6, -d / 2 + 3.4), 0.72, c)
 		return
-	# Escalera: de delante (junto a la entrada) hacia el fondo, pegada a la pared izquierda
+	_stairs_up(root, w, d)
+	# Arriba, dos cuartos
+	_wall_line(root, Vector2(0.4, -d / 2), Vector2(0.4, -d / 2 + 3.0), -1.0, c, HEIGHT)
+
+
+## Escalera a la planta de arriba: de delante (junto a la entrada) hacia el fondo, pegada a la
+## pared izquierda; el suelo de arriba con su hueco y barandilla.
+static func _stairs_up(root: Node3D, w: float, d: float) -> void:
 	var x := -w / 2 + 0.75
 	var z0 := d / 2 - 0.7     # abajo
 	var run := 4.2
@@ -378,8 +443,6 @@ static func _home_rooms(root: Node3D, w: float, d: float, wall: Color, floors: i
 	PropsBuilder._box(root, Vector3((hole_x + w / 2) / 2.0, HEIGHT, 0), Vector3(w / 2 - hole_x, 0.2, d), Color("#7d5f42"), true)
 	PropsBuilder._box(root, Vector3((-w / 2 + hole_x) / 2.0, HEIGHT, (-d / 2 + z1) / 2.0), Vector3(hole_x + w / 2, 0.2, z1 + d / 2), Color("#7d5f42"), true)
 	PropsBuilder._box(root, Vector3(hole_x, HEIGHT + 0.5, (z1 + d / 2) / 2.0), Vector3(0.06, 1.0, d / 2 - z1), Color("#5b4636"), true)  # barandilla
-	# Arriba, dos cuartos
-	_wall_line(root, Vector2(0.4, -d / 2), Vector2(0.4, -d / 2 + 3.0), -1.0, c, HEIGHT)
 
 
 ## La planta baja que se vive: sofá, mesa con sillas, alfombra y algo de decoración.

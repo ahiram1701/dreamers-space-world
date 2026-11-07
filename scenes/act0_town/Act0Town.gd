@@ -56,6 +56,9 @@ func _ready() -> void:
 	_build_terrain()
 	_build_town()
 	_build_landmarks()
+	var countryside := Countryside.new()
+	add_child(countryside)
+	countryside.build(self, _ground_height, _places)
 
 	_player = Player.new()
 	_player.position = SPAWN
@@ -385,6 +388,12 @@ var _wild: FastNoiseLite
 
 
 func _ground_height(x: float, z: float) -> float:
+	var h := _raw_height(x, z)
+	return h if CORE.has_point(Vector2(x, z)) else Countryside.shape(x, z, h)
+
+
+## El terreno sin los retoques del campo (allanar la granja, cavar el lago).
+func _raw_height(x: float, z: float) -> float:
 	var h := _town_height(x, z)
 	var out := Vector2(maxf(maxf(CORE.position.x - x, x - CORE.end.x), 0.0), maxf(maxf(CORE.position.y - z, z - CORE.end.y), 0.0)).length()
 	if out <= 0.0:
@@ -433,6 +442,8 @@ func _ground_color(x: float, z: float, h: float) -> Color:
 	var dl := Vector2(x - LIGHTHOUSE_POS.x, z - LIGHTHOUSE_POS.z).length()
 	if dl < 9.0 and h > 0.2:
 		c = Color("#7a7468").lerp(grass, smoothstep(5.0, 9.0, dl) * 0.5)
+	if x < 24.0 and (x < -45.0 or absf(z) > 66.0):  # el campo: caminos de tierra y flores
+		c = Countryside.tint(x, z, h, c)
 	if x > 100.0 and h > 1.5:  # islas: verdes por arriba
 		c = c.lerp(grass, smoothstep(1.5, 3.5, h))
 	if h > 6.0:  # montañas: roca y, arriba, nieve
@@ -445,6 +456,7 @@ func _build_terrain() -> void:
 	_noise.seed = TOWN_SEED
 	_noise.frequency = 0.02
 	_wild_height(0.0, 0.0)  # (crea su ruido aquí: los trozos se hacen en hilos)
+	Countryside.prepare(_raw_height)
 	var x0 := -110.0
 	var z0 := -130.0
 	var step := 2.0
@@ -482,16 +494,31 @@ func _build_terrain() -> void:
 	world.material = Decor.ground_material()
 	world.core = CORE
 	world.water_level = WATER_Y
-	world.prop_fn = func(x: float, _z: float, h: float, rng: RandomNumberGenerator) -> String:
+	world.prop_fn = func(x: float, z: float, h: float, rng: RandomNumberGenerator) -> String:
 		if h < 0.4:
 			return ""
 		var r := rng.randf()
 		if x < 20.0:
-			return "tree" if r < 0.32 else ("plant" if r < 0.45 else ("rock" if r < 0.52 else ""))
+			if Countryside.keep_clear(x, z):
+				return ""
+			if Countryside.flowery(x, z):
+				return "flower" if r < 0.8 else ("tree" if r < 0.84 else "")
+			return "tree" if r < 0.2 else ("plant" if r < 0.3 else ("rock" if r < 0.35 else ""))
 		return "tree" if r < 0.1 else ("rock" if r < 0.2 else "")  # islas: palmeras y rocas
 	var pine := ChunkTerrain.nature_placer("pine")
 	var palm := ChunkTerrain.nature_placer("ocean")
+	world.prop_tries = 46
+	# Hierba alta por todo el campo (no en los caminos, la arena ni la roca de la montaña)
+	world.grass_density = 0.55
+	world.grass_accept = func(x: float, z: float, h: float) -> bool:
+		return x < 20.0 and h > 0.3 and h < 9.0 and Countryside._path_dist(x, z) > Countryside.PATH_W + 0.4
 	world.prop_builder = func(parent: Node3D, kind: String, pos: Vector3, rng: RandomNumberGenerator) -> void:
+		if kind in ["grass", "flower"]:  # matas de hierba alta y de flores (sin colisión)
+			var names: Array = ["Flowers", "Flowers", "Grass"] if kind == "flower" else ["Grass", "Grass_2", "Grass"]
+			var m := AssetLibrary.instance("nature_pack", str(names[rng.randi() % names.size()]))
+			if m:
+				AssetLibrary.place(parent, m, pos, rng.randf_range(0.35, 0.7), rng.randf() * TAU, false)
+			return
 		(pine if pos.x < 20.0 else palm).call(parent, kind, pos, rng)
 	add_child(world)
 
@@ -814,6 +841,8 @@ func _add_door(root: Node3D, kind: String, id: String, label: String) -> void:
 	_interiors.set_building(id, root.global_position, size, root.rotation.y)
 	if model and model.has_meta("windows"):
 		_windows[id] = model.get_meta("windows")
+	if kind == "station":
+		_interiors.set_door_option(id, "floors", 2)  # dos plantas por fuera: también por dentro
 	if model == null or not model.has_meta("model_name") or kind in ["cafe", "station"]:
 		return  # la cafetería y la estación ya traen su fachada
 	# Casas y negocios de la calle: plantas, fachada y ventanas que se encienden con vida dentro

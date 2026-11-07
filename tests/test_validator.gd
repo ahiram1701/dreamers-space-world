@@ -52,6 +52,8 @@ func _init() -> void:
 
 	v.free()
 	print("\n%s" % ("TODO OK" if _failed == 0 else "%d FALLOS" % _failed))
+	for _settle_before_quit in 20:  # (que acabe lo pendiente: cerrar justo tras liberar la escena podía fallar)
+		await process_frame
 	quit(_failed)
 
 

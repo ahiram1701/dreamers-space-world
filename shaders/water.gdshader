@@ -61,7 +61,7 @@ void fragment() {
 	foam *= 0.75 + 0.25 * sin(TIME * 1.4 + world_pos.x * 0.7 + world_pos.z * 0.5);
 	ALBEDO = mix(col, foam_color.rgb * 0.72, clamp(foam, 0.0, 0.6));
 	// Algo menos espejo: los puntos de luz (farolas, luna) ya no saltan como destellos en cada ola
-	ROUGHNESS = 0.18;
+	ROUGHNESS = 0.3;
 	METALLIC = 0.0;
 	SPECULAR = 0.4;
 	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 4.0);

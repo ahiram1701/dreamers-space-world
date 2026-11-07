@@ -21,6 +21,14 @@ var core := Rect2()
 var props_exclude := Rect2()
 ## Qué crece: Callable(x, z, h, rng) -> String ("" nada, "tree", "rock", "bush"); y quién lo pone.
 var prop_fn: Callable
+## Cuántos intentos de poner algo por trozo.
+var prop_tries := 26
+## Hierba alta en los trozos cercanos (matas por m²; 0 = sin hierba) y dónde crece:
+## Callable(x, z, h) -> bool. Se calcula en el hilo (las alturas salen del propio trozo).
+var grass_density := 0.0
+var grass_accept: Callable
+var grass_tip := Color("#86a347")
+var grass_base := Color("#3d5a24")
 var prop_builder: Callable   # Callable(parent: Node3D, kind: String, pos: Vector3, rng) -> void
 ## A quién seguir (Node3D). Si es null, al primer jugador del grupo "player".
 var follow: Node3D
@@ -34,6 +42,7 @@ var _pending := {}        # Vector2i -> task id
 var _results := {}        # Vector2i -> datos construidos en un hilo
 var _mutex := Mutex.new()
 var _center := Vector2i(999999, 999999)
+var _ahead_c := Vector2i(999999, 999999)
 var _water: MeshInstance3D
 var _check_t := 0.0
 
@@ -58,7 +67,29 @@ func _target() -> Vector3:
 			return (r as Node3D).global_position
 		return follow.global_position
 	var players := get_tree().get_nodes_in_group("player")
+	if not players.is_empty():
+		var r2: Variant = players[0].get("riding")
+		if r2 is Node3D and is_instance_valid(r2):
+			return (r2 as Node3D).global_position
 	return (players[0] as Node3D).global_position if not players.is_empty() else Vector3.ZERO
+
+
+## Hacia dónde va (en un vehículo rápido, el suelo con colisión se prepara por delante).
+func _ahead() -> Vector3:
+	var who: Node3D = follow if follow and is_instance_valid(follow) else null
+	if who == null:
+		var players := get_tree().get_nodes_in_group("player")
+		who = players[0] if not players.is_empty() else null
+	if who == null:
+		return Vector3.ZERO
+	var r: Variant = who.get("riding")
+	var v := Vector3.ZERO
+	if r is RigidBody3D and is_instance_valid(r):
+		v = (r as RigidBody3D).linear_velocity
+	elif r is CharacterBody3D and is_instance_valid(r):
+		v = (r as CharacterBody3D).velocity
+	v.y = 0.0
+	return v.limit_length(40.0) * 1.5
 
 
 func _process(delta: float) -> void:
@@ -70,10 +101,13 @@ func _process(delta: float) -> void:
 	_collect()
 	_check_t -= delta
 	var c := Vector2i(floori(p.x / CHUNK), floori(p.z / CHUNK))
-	if c == _center and _check_t > 0.0:
+	var pa := p + _ahead()
+	var ca := Vector2i(floori(pa.x / CHUNK), floori(pa.z / CHUNK))
+	if c == _center and ca == _ahead_c and _check_t > 0.0:
 		return
-	_check_t = 0.5
+	_check_t = 0.25
 	_center = c
+	_ahead_c = ca
 	_update_around(c)
 
 
@@ -107,7 +141,8 @@ func _update_around(c: Vector2i) -> void:
 			if _skip(k):
 				continue
 			var near := absi(dx) <= 1 and absi(dz) <= 1
-			want[k] = 0 if near else 1
+			var near_ahead := absi(k.x - _ahead_c.x) <= 1 and absi(k.y - _ahead_c.y) <= 1
+			want[k] = 0 if near or near_ahead else 1
 	# Soltar lo que queda lejos
 	for k in _chunks.keys():
 		if not want.has(k):
@@ -121,7 +156,7 @@ func _update_around(c: Vector2i) -> void:
 		var lod: int = want[k]
 		if _chunks.has(k) and int(_chunks[k].lod) == lod:
 			continue
-		if _pending.has(k) or started >= 3:
+		if _pending.has(k) or started >= 4:
 			continue
 		var step := NEAR_STEP if lod == 0 else FAR_STEP
 		var near := lod == 0
@@ -196,7 +231,7 @@ func _make(k: Vector2i, step: float, near: bool) -> Dictionary:
 	if near and prop_fn.is_valid():
 		var rng := RandomNumberGenerator.new()
 		rng.seed = hash(Vector2i(k.x, k.y))
-		for t in 26:
+		for t in prop_tries:
 			var x := x0 + rng.randf() * CHUNK
 			var z := z0 + rng.randf() * CHUNK
 			if core.size != Vector2.ZERO and core.grow(6.0).has_point(Vector2(x, z)):
@@ -209,6 +244,37 @@ func _make(k: Vector2i, step: float, near: bool) -> Dictionary:
 			var kind: String = prop_fn.call(x, z, h, rng)
 			if not kind.is_empty():
 				out.props.append({"kind": kind, "pos": Vector3(x, h, z), "seed": rng.randi()})
+	if near and grass_density > 0.0:
+		var rng2 := RandomNumberGenerator.new()
+		rng2.seed = hash(Vector2i(k.y, k.x)) + 17
+		var tufts := []
+		var count := int(CHUNK * CHUNK * grass_density)
+		for t in count:
+			var gx := rng2.randf() * CHUNK
+			var gz := rng2.randf() * CHUNK
+			var x := x0 + gx
+			var z := z0 + gz
+			if core.size != Vector2.ZERO and core.has_point(Vector2(x, z)):
+				continue
+			# Altura: interpolada de la rejilla del trozo (rápido, sin volver a calcular ruido)
+			var fx := gx / step
+			var fz := gz / step
+			var ix := mini(int(fx), n - 1)
+			var iz := mini(int(fz), n - 1)
+			var tx := fx - ix
+			var tz := fz - iz
+			var h00 := heights[iz * (n + 1) + ix]
+			var h10 := heights[iz * (n + 1) + ix + 1]
+			var h01 := heights[(iz + 1) * (n + 1) + ix]
+			var h11 := heights[(iz + 1) * (n + 1) + ix + 1]
+			var h := lerpf(lerpf(h00, h10, tx), lerpf(h01, h11, tx), tz)
+			if water_level > -INF and h < water_level + 0.3:
+				continue
+			if grass_accept.is_valid() and not grass_accept.call(x, z, h):
+				continue
+			var sc := rng2.randf_range(0.7, 1.35)
+			tufts.append(Transform3D(Basis(Vector3.UP, rng2.randf() * TAU).scaled(Vector3(sc, sc * rng2.randf_range(0.7, 1.3), sc)), Vector3(x, h - 0.03, z)))
+		out["grass"] = tufts
 	return out
 
 
@@ -237,6 +303,28 @@ func _install(k: Vector2i, data: Dictionary) -> void:
 		cs.scale = Vector3(step, 1.0, step)
 		cs.position = Vector3(data.x0 + CHUNK / 2.0, 0, data.z0 + CHUNK / 2.0)
 		root.add_child(cs)
+		var tufts: Array = data.get("grass", [])
+		if not tufts.is_empty():
+			var mm := MultiMesh.new()
+			mm.transform_format = MultiMesh.TRANSFORM_3D
+			mm.use_custom_data = true
+			mm.mesh = Decor._tuft()
+			mm.instance_count = tufts.size()
+			for i in tufts.size():
+				mm.set_instance_transform(i, tufts[i])
+				mm.set_instance_custom_data(i, Color(fposmod(float(i) * 0.618, 1.0), 0, 0, 0))
+			var mmi := MultiMeshInstance3D.new()
+			mmi.multimesh = mm
+			var gm := ShaderMaterial.new()
+			gm.shader = Decor.GRASS_SHADER
+			gm.set_shader_parameter("tip_color", grass_tip)
+			gm.set_shader_parameter("base_color", grass_base)
+			mmi.material_override = gm
+			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			mmi.visibility_range_end = 75.0
+			mmi.add_to_group("grass")
+			root.add_child(mmi)
+			Decor.apply_grass_quality(mmi)
 		if prop_builder.is_valid():
 			for p in data.props:
 				var rng := RandomNumberGenerator.new()

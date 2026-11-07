@@ -29,6 +29,8 @@ func _init() -> void:
 	_expect(not S.is_newer("basura", "0.2.0"), "tag inválido: sin update")
 
 	print("\n%s" % ("TODO OK" if _failed == 0 else "%d FALLOS" % _failed))
+	for _settle_before_quit in 20:  # (que acabe lo pendiente: cerrar justo tras liberar la escena podía fallar)
+		await process_frame
 	quit(_failed)
 
 

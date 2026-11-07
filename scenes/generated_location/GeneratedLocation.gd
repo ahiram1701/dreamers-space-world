@@ -44,6 +44,7 @@ func _ready() -> void:
 		PropsBuilder.build(self, _def, _height_at, _rng(4), _placed, _extras)
 		_features = _extras.features
 		_add_doors()
+		_planet_finds()
 	elif _def.get("kind", "") == "anomaly_zone" or _def.get("finale", false):
 		PropsBuilder._floating_rocks(self, _rng(4), "void")
 
@@ -115,6 +116,14 @@ func _build_environment(space: bool) -> void:
 	Decor.bind_windows(_fx)
 	if space:
 		StationBuilder.add_starfield(self, _rng(5), _fx.sky_color)
+	if not space and str(_def.get("kind", "")) == "planet_surface":
+		# Otro planeta: en su cielo se ven sus lunas (o un segundo sol), de día y de noche
+		var seed := hash(str(_def.get("planet", _def.get("name", ""))))
+		var n := seed % 3
+		for i in n:
+			_fx.add_sky_body(Color.from_hsv(fposmod(seed * 0.13 + i * 0.37, 1.0), 0.25, 0.95), 18.0 + (seed >> (i * 4)) % 30, 20.0 + i * 25.0, float(seed % 360) + i * 110.0)
+	if space:
+		pass
 	elif _def.get("biome", "") in ["temperate", "jungle", "ocean", "urban"]:
 		var tip := Color(pal.high).lightened(0.15)
 		Decor.grass(self, Vector2.ZERO, Vector2(60, 60), 1.4 if _def.get("biome", "") != "urban" else 0.4, rng, _height_at,
@@ -354,6 +363,29 @@ func _spawn_npcs() -> void:
 		_npcs[ids[i]] = npc
 
 
+## Cosas que se encuentran por el suelo según el planeta (vuelven a salir al día siguiente).
+func _planet_finds() -> void:
+	var biome := str(_def.get("biome", "barren"))
+	var finds: Array = {
+		"crystal": ["Cristal resonante", "Un cristal que vibra un poco al tocarlo.", "none"],
+		"volcanic": ["Obsidiana", "Vidrio volcánico, negro y afilado.", "none"],
+		"desert": ["Cuarzo del desierto", "Un trozo de cuarzo pulido por el viento.", "none"],
+		"ice": ["Hielo antiguo", "Hielo limpísimo de hace miles de años. Se puede derretir y beber.", "hydrate"],
+		"temperate": ["Fruta extraña", "Una fruta de este planeta. Huele bien.", "nourish"],
+		"jungle": ["Fruta extraña", "Una fruta de este planeta. Huele dulce.", "nourish"],
+		"ocean": ["Concha iridiscente", "Una concha que cambia de color con la luz.", "none"],
+	}.get(biome, ["Mineral metálico", "Un mineral pesado y brillante. Alguien pagaría por él.", "none"])
+	var rng := _rng(9)
+	for i in 6:
+		var a := rng.randf() * TAU
+		var r := rng.randf_range(15.0, 70.0)
+		var p := Vector3(cos(a) * r, 0, sin(a) * r)
+		p.y = _height_at.call(p.x, p.z)
+		if _water_level > -INF and p.y < _water_level + 0.2:
+			continue
+		Countryside.make_forage(self, self, p, "Recoger: %s" % str(finds[0]).to_lower(), str(finds[0]), str(finds[1]), str(finds[2]), "")
+
+
 ## Nombre del lugar, época y gravedad arriba a la izquierda (HUD).
 func _show_place() -> void:
 	_ui.hud.set_place("%s · gravedad %.1f g" % [_era_label(_def.get("era", "")), float(_def.get("gravity", 1.0))])
@@ -454,6 +486,7 @@ func _add_doors() -> void:
 			var label := Shops.label(kind, era)
 			_interiors.add_door("edificio_%d" % i, pos, b.rotation.y, kind, int(_def.get("seed", 1)) * 100 + i, label)
 			_interiors.set_building("edificio_%d" % i, b.global_position, size, b.rotation.y)
+			_interiors.set_door_option("edificio_%d" % i, "floors", 2 if size.y > 7.0 else 1)
 			var sign := Label3D.new()
 			sign.text = label.split(" ", false, 1)[-1].capitalize()
 			sign.font_size = 56
@@ -467,6 +500,7 @@ func _add_doors() -> void:
 		_interiors.add_door("edificio_%d" % i, pos, b.rotation.y, "scifi" if futuristic else "house", int(_def.get("seed", 1)) * 100 + i,
 			"un edificio" if futuristic else "una casa")
 		_interiors.set_building("edificio_%d" % i, b.global_position, size, b.rotation.y)
+		_interiors.set_door_option("edificio_%d" % i, "floors", 2 if size.y > 7.0 else 1)
 
 
 func _era_label(era: String) -> String:

@@ -1153,6 +1153,11 @@ func _npc_react(npc_id: String, a: Dictionary) -> void:
 		"follow":
 			NPCMemory.set_fields(npc_id, {"following": true})
 			npc.follow(_player)
+			# Si ya vas en un vehículo, «sígueme» es subirse
+			if _player.riding != null and _player.riding.has_method("board"):
+				npc_board(npc_id)
+		"ride":
+			npc_board(npc_id)
 		"go_inside":
 			_npc_go_inside(npc_id, "", emotion in ["angry", "scared"], 0)
 		"leave":
@@ -1655,6 +1660,20 @@ func action_context() -> String:
 		lines.append("LA GENTE DE CERCA, TAL Y COMO ESTÁ (dónde, qué hace, qué lleva en la mano: no inventes nada de esto):\n- " + doing)
 	var cars := vehicles_described(_player.global_position)
 	lines.append("VEHÍCULOS CERCA: " + (cars + "." if not cars.is_empty() else "ninguno."))
+	var spots := PackedStringArray()
+	for name in _places:
+		spots.append(name)
+	if not spots.is_empty():
+		lines.append("SITIOS DE ESTE LUGAR (para go_to, aunque estén lejos): " + ", ".join(spots) + ".")
+	var dests := PackedStringArray()
+	var seen := {}
+	for nm in travel_destinations():
+		var id: String = travel_destinations()[nm]
+		if not seen.has(id):
+			seen[id] = true
+			dests.append("%s (location:%s)" % [nm, id])
+	if not dests.is_empty():
+		lines.append("OTROS LUGARES A LOS QUE PUEDE VIAJAR (paso travel): " + ", ".join(dests) + ".")
 	var around := surroundings_described(_player.global_position)
 	if not around.is_empty():
 		lines.append(around)
@@ -1746,21 +1765,38 @@ func on_npc_hit(v: Node3D, npc: TownNPC, impact: float) -> void:
 func on_player_boarded(v: Node3D) -> void:
 	for id in _npcs:
 		var npc: TownNPC = _npcs[id]
-		if not npc.is_present() or not NPCMemory.is_following(id) or npc.global_position.distance_to(v.global_position) > 18.0:
+		if not npc.is_present() or not NPCMemory.is_following(id) or npc.global_position.distance_to(v.global_position) > 25.0:
 			continue
 		_board_when_near(npc, v)
 
 
-func _board_when_near(npc: TownNPC, v: Node3D) -> void:
-	if npc.global_position.distance_to(v.global_position) > 3.5:
-		npc.walk_to(v.global_position + (npc.global_position - v.global_position).normalized() * 2.0, true)
-		var waited := 0.0
-		while waited < 10.0 and is_instance_valid(npc) and is_instance_valid(v) and npc.global_position.distance_to(v.global_position) > 3.5:
-			await get_tree().create_timer(0.25).timeout
-			waited += 0.25
-	if is_instance_valid(npc) and is_instance_valid(v) and npc.global_position.distance_to(v.global_position) < 6.0:
-		if not v.call("board", npc):
-			npc.say("No quepo. Te veo allá.", 3.0)
+## El PNJ camina hasta el vehículo (aunque se mueva un poco, o aunque ya estés dentro) y sube.
+## Si al acabar la conversación sigue hablando contigo, espera a que termine. Devuelve si subió.
+func _board_when_near(npc: TownNPC, v: Node3D) -> bool:
+	var waited := 0.0
+	var last_goal := Vector3.INF
+	# Cuánto mide: a una nave de 10 m no se llega a 3 m de su centro
+	var half: float = clampf(float(v.get("length")) * 0.5 if v.get("length") != null else 1.5, 1.2, 8.0)
+	while waited < 25.0 and is_instance_valid(npc) and is_instance_valid(v):
+		var d := npc.global_position.distance_to(v.global_position)
+		if d < half + 2.2 and not npc.talking:
+			break
+		if not npc.talking and (last_goal == Vector3.INF or last_goal.distance_to(v.global_position) > 1.5 or waited > 0.0 and fmod(waited, 2.0) < 0.25):
+			var side: Vector3 = (npc.global_position - v.global_position)
+			side.y = 0.0
+			last_goal = v.global_position + (side.normalized() if side.length() > 0.1 else Vector3.RIGHT) * (half + 1.0)
+			npc.walk_to(last_goal, true)
+		await get_tree().create_timer(0.25).timeout
+		waited += 0.25
+	if not is_instance_valid(npc) or not is_instance_valid(v):
+		return false
+	if npc.global_position.distance_to(v.global_position) > half + 4.5:
+		npc.say("No llego hasta allá.", 3.0)
+		return false
+	if not v.call("board", npc):
+		npc.say("No quepo. Te veo allá.", 3.0)
+		return false
+	return true
 
 
 ## Te bajas: los que iban contigo bajan también y, si te acompañaban, te siguen.
@@ -1794,13 +1830,24 @@ func npc_board(npc_id: String) -> String:
 	if not _npcs.has(npc_id):
 		return ""
 	var npc: TownNPC = _npcs[npc_id]
-	var v: Node3D = _player.riding if _player.riding is Vehicle else nearest_vehicle(_player.global_position, 20.0)
+	if npc.is_riding():
+		return "ya va a bordo"
+	var v: Node3D = _player.riding if _player.riding != null and _player.riding.has_method("board") else nearest_vehicle(_player.global_position, 30.0)
 	if v == null:
-		return "no hay ningún coche aquí"
+		npc.say("¿Qué coche? Aquí no veo ninguno.", 3.0)
+		return "no hay ningún vehículo cerca"
+	if npc.global_position.distance_to(v.global_position) > 40.0:
+		return "está demasiado lejos del vehículo"
 	if int(v.call("free_seats")) <= 0:
-		return "no queda sitio en %s" % v.call("the_name")
+		npc.say("No queda sitio.", 3.0)
+		return "no queda sitio en %s" % _vehicle_name(v)
+	NPCMemory.set_fields(npc_id, {"following": true})
 	_board_when_near(npc, v)
-	return "se sube a %s" % v.call("the_name")
+	return "va hacia %s para subirse" % _vehicle_name(v)
+
+
+func _vehicle_name(v: Node3D) -> String:
+	return str(v.call("the_name")) if v.has_method("the_name") else str(v.get("display_name"))
 
 
 ## El vehículo más cercano (a menos de radius), o null.
@@ -1808,7 +1855,7 @@ func nearest_vehicle(pos: Vector3, radius: float) -> Node3D:
 	var best: Node3D = null
 	var best_d := radius
 	for c in get_children():
-		if c is Vehicle and c.global_position.distance_to(pos) < best_d:
+		if c is Node3D and c.has_method("board") and c.has_method("free_seats") and c.global_position.distance_to(pos) < best_d:
 			best = c
 			best_d = c.global_position.distance_to(pos)
 	return best
@@ -1830,7 +1877,7 @@ func vehicles_described(pos: Vector3, radius: float = 30.0) -> String:
 		var who := []
 		if c.get("_rider") != null:
 			who.append("el jugador al volante")
-		if c is Vehicle:
+		if c.has_method("passengers"):
 			for p in c.call("passengers"):
 				who.append(str(WorldDB.get_entity("npc", p.npc_id).get("name", "alguien")).split(" ")[0])
 		out.append("%s%s, a %d m, %s" % [nm, whose, int(c.global_position.distance_to(pos)), ("con " + ", ".join(PackedStringArray(who))) if not who.is_empty() else "vacío"])
@@ -1858,6 +1905,109 @@ func _park_arrival_ship() -> void:
 	out.y = ground_at(out.x, out.z)
 	_player.global_position = InteriorManager.free_spot_near(self, out, -side, [_player]) + Vector3(0, 0.2, 0)
 	_player.velocity = Vector3.ZERO
+	_bring_passengers(arrival.get("passengers", []), _player.global_position, -side)
+
+
+## Los que viajaban contigo en la nave bajan a tu lado y te siguen (en un planeta aparecen
+## aunque no vivan allí; en el pueblo, son los vecinos de siempre que vuelven contigo).
+func _bring_passengers(ids: Array, near: Vector3, away: Vector3) -> void:
+	var k := 0
+	for id in ids:
+		var entity := WorldDB.get_entity("npc", str(id))
+		if entity.is_empty():
+			continue
+		var npc: TownNPC = _npcs.get(id)
+		if npc == null:
+			npc = TownNPC.new()
+			add_child(npc)
+			npc.setup(entity)
+			_npcs[id] = npc
+		k += 1
+		var spot: Vector3 = near + away.rotated(Vector3.UP, 0.6 * k) * (1.6 + 0.4 * k)
+		spot.y = ground_at(spot.x, spot.z)
+		npc.global_position = InteriorManager.free_spot_near(self, spot, away, [_player]) + Vector3(0, 0.1, 0)
+		npc.face(near)
+		NPCMemory.set_fields(str(id), {"following": true})
+		npc.follow(_player)
+
+
+## Adónde puede ir el jugador con F («vuelvo al pueblo», «vamos a Kepra»): nombre -> location_id
+## de los lugares ya conocidos (más «el pueblo»/«casa» para Bahía de las Horas).
+func travel_destinations() -> Dictionary:
+	var out := {}
+	var here := GameState.current_location()
+	if here != GameState.HOME:
+		for w in ["pueblo", "casa", "bahía", "bahia", "hogar", "bahía de las horas", "la tierra", "mi planeta"]:
+			out[w] = GameState.HOME
+	for n in TimelineManager.visited_locations():
+		var id: String = n.location_id
+		if id == here or id == Travel.SPACE:
+			continue
+		var nm := str(WorldDB.get_entity("location", id).get("name", "")) if id != GameState.HOME else "Bahía de las Horas"
+		if not nm.is_empty():
+			out[nm.to_lower()] = id
+	return out
+
+
+## Lo que dice el jugador → location_id ("" si no es un lugar al que se viaja).
+func travel_destination_for(text: String) -> String:
+	var t := text.to_lower().strip_edges().trim_prefix("location:")
+	if t.is_empty():
+		return ""
+	var dests := travel_destinations()
+	if dests.values().has(t):
+		return t
+	for nm in dests:
+		if t == nm or t.contains(nm) or (nm.length() > 5 and nm.contains(t) and t.length() > 3):
+			return dests[nm]
+	return ""
+
+
+## Viajar con F a otro lugar: en tu nave (vas hasta ella, subes y el piloto automático te lleva)
+## o con el Ancla, si tiene energía. Devuelve lo que pasó, para la narración.
+func travel_to(location_id: String) -> String:
+	if location_id == GameState.current_location():
+		return "Ya estás aquí."
+	var nm := "Bahía de las Horas" if location_id == GameState.HOME else str(WorldDB.get_entity("location", location_id).get("name", "allí"))
+	var ship: Node3D = null
+	var best := 400.0
+	for c in get_children():
+		if c is Ship and (c.get("owner_id") == null or str(c.get("owner_id")) in ["player", ""]) and c.global_position.distance_to(_player.global_position) < best:
+			ship = c
+			best = c.global_position.distance_to(_player.global_position)
+	if ship:
+		if _player.riding != ship:
+			if _player.riding != null:
+				_player.riding.call("_leave")
+			await _player.auto_walk_to(ship.global_position, 4.0)
+			if not is_instance_valid(ship):
+				return ""
+			ship.call("_on_use", _player)
+			await get_tree().create_timer(1.5).timeout
+		var e := Creations.get_entry(str(ship.get("entry_id")))
+		if e.is_empty():
+			e = ship.get("entry")
+		e = e.duplicate(true)
+		e["fuel"] = ship.get("fuel")
+		var aboard := []
+		if ship.has_method("passengers"):
+			for p in ship.call("passengers"):
+				aboard.append(p.npc_id)
+		var r := Travel.fly_direct(e, location_id, aboard)
+		if not r.ok:
+			return str(r.error)
+		_player.riding = null
+		WorldDB.flush()
+		get_tree().change_scene_to_file(Travel.scene_for(location_id))
+		return "Despegas y el piloto automático te lleva a %s." % nm
+	if GameState.is_awakened() and GameState.can_travel(location_id):
+		var r := Travel.go_to(location_id)
+		if r.ok:
+			WorldDB.flush()
+			get_tree().change_scene_to_file(Travel.scene_for(location_id))
+			return "El Ancla vibra y el mundo se pliega: llegas a %s." % nm
+		return str(r.error)
+	return "No tienes cómo ir a %s desde aquí: ni nave cerca ni energía en el Ancla." % nm
 
 
 ## Sitio donde cabe algo de tamaño size (ancho, alto, largo) cerca de near: plano y sin nada
@@ -1899,9 +2049,13 @@ func launch_ship(ship: Node3D) -> void:
 		e = ship.get("entry")
 	e = e.duplicate(true)
 	e["fuel"] = ship.get("fuel")
+	var aboard := []
+	if ship.has_method("passengers"):
+		for p in ship.call("passengers"):
+			aboard.append(p.npc_id)
 	if _player.riding == ship:
 		_player.riding = null
-	Travel.launch(e)
+	Travel.launch(e, aboard)
 	WorldDB.flush()
 	get_tree().change_scene_to_file(Travel.SPACE_SCENE)
 

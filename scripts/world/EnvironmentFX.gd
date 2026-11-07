@@ -6,6 +6,9 @@ extends Node3D
 ## Uso:  var fx := EnvironmentFX.new(); fx.sky_color = …; fx.fog_color = …; add_child(fx)
 ##       fx.env / fx.sun / fx.sky_mat quedan disponibles para secuencias (El Despertar…).
 
+## Lunas o soles extra en el cielo (otros planetas): {node, alpha_day}. Siguen a la cámara.
+var _sky_bodies: Array = []
+
 ## Llamada cuando cambia la noche (0..1): farolas, ventanas…
 signal night_changed(amount: float)
 
@@ -84,6 +87,40 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_update_weather(delta)
 	_update(false)
+	# El cielo de estrellas va con la cámara: así está siempre «en el infinito» y nunca queda
+	# metido en una colina lejana (antes era una esfera fija en el centro del pueblo).
+	var cam := get_viewport().get_camera_3d()
+	if cam:
+		if _stars and _stars.visible:
+			_stars.global_position = cam.global_position
+		for b in _sky_bodies:
+			(b as Node3D).global_position = cam.global_position
+
+
+## Una luna (o un sol lejano) en el cielo: color, tamaño aparente, altura y rumbo en grados.
+func add_sky_body(color: Color, size: float, elevation_deg: float, yaw_deg: float) -> void:
+	var holder := Node3D.new()
+	add_child(holder)
+	var mi := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = size
+	sm.height = size * 2.0
+	mi.mesh = sm
+	var m := StandardMaterial3D.new()
+	m.albedo_color = color
+	m.disable_fog = true
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	m.emission_enabled = true
+	m.emission = color.darkened(0.6)
+	m.emission_energy_multiplier = 0.4
+	mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var el := deg_to_rad(elevation_deg)
+	var yw := deg_to_rad(yaw_deg)
+	mi.position = Vector3(cos(el) * cos(yw), sin(el), cos(el) * sin(yw)) * 430.0
+	mi.extra_cull_margin = 1000.0
+	holder.add_child(mi)
+	_sky_bodies.append(holder)
 
 
 ## Mezcla suave hacia el tiempo que toca (cambia en un par de segundos reales, no de golpe).
@@ -261,6 +298,13 @@ static func _rain_loop() -> AudioStreamWAV:
 	return wav
 
 
+## Dirección de una estrella: al menos 8° sobre el horizonte (antes alguna quedaba a ras de suelo).
+static func star_direction(rng: RandomNumberGenerator) -> Vector3:
+	var yaw := rng.randf() * TAU
+	var elev := asin(rng.randf_range(sin(deg_to_rad(8.0)), 1.0))
+	return Vector3(cos(elev) * cos(yaw), sin(elev), cos(elev) * sin(yaw))
+
+
 func _build_stars() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 333
@@ -271,7 +315,7 @@ func _build_stars() -> void:
 	mm.mesh = star
 	mm.instance_count = 900
 	for i in mm.instance_count:
-		var dir := Vector3(rng.randf_range(-1, 1), rng.randf_range(0.05, 1), rng.randf_range(-1, 1)).normalized()
+		var dir := star_direction(rng)
 		var basis := Basis.looking_at(-dir).scaled(Vector3.ONE * rng.randf_range(0.4, 1.4))
 		mm.set_instance_transform(i, Transform3D(basis, dir * 450.0))
 	_stars = MultiMeshInstance3D.new()

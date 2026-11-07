@@ -3,7 +3,8 @@ extends Node3D
 ## planetas con su atmósfera, el cinturón de asteroides y la estación; todo es sólido (chocar daña
 ## el casco). Al acercarte a un planeta o a la estación, E para aterrizar o acoplarte (Travel.land).
 ##   Ratón: apuntar · W/S: empujar · A/D: alabear · Espacio/Ctrl: subir/bajar · Shift: crucero
-##   · Tab: destino · Z: asistencia de vuelo · E: aterrizar · Esc: menú
+##   · X: frenar · Tab: destino · G: piloto automático · V: cabina · Z: asistencia de vuelo
+##   · E: aterrizar · F: hacer algo · Esc: menú
 
 const PLANET_SHADER := preload("res://shaders/planet.gdshader")
 const SKY_SHADER := preload("res://shaders/space_sky.gdshader")
@@ -23,7 +24,18 @@ var _rock_t := 0.0
 var _target := 0              # índice del planeta de destino (Tab)
 var _marker: Label
 var _hit_flash := 0.0
+var _actions: ActionPanel
+var _toast: Label
+var _toast_t := 0.0
+var _land_after_auto := ""
+var _heat_t := 0.0
+var _moons: Array = []        # [{node, center, r, speed, angle}]
+var _traffic: Array = []      # [{node, from, to, t, speed}]
+var _dust: MultiMeshInstance3D
+const DUST := 260
+const DUST_BOX := 160.0
 const MOUSE := 0.0022
+const SUN_RADIUS := 2200.0
 
 
 func _ready() -> void:
@@ -33,7 +45,10 @@ func _ready() -> void:
 	for p in system.planets:
 		_bodies.append({"planet": p, "node": _planet(p)})
 	_belt()
+	_add_moons()
 	_spawn_ship()
+	_add_traffic()
+	_add_dust()
 	_ui()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_target = maxi(system.planets.find(StarSystem.home_planet(system)), 0)
@@ -74,6 +89,7 @@ func _sun() -> void:
 	sun.material_override = mat
 	sun.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(sun)
+	_solid_sphere(sun, SUN_RADIUS)  # (antes se atravesaba)
 	_label(Vector3(0, 2800, 0), str(system.get("star", "Sol")), Color("#ffe6a8"))
 	_sun_light = DirectionalLight3D.new()
 	_sun_light.light_energy = 1.4
@@ -296,8 +312,32 @@ func _ui() -> void:
 	_marker.add_theme_color_override("font_outline_color", Color.BLACK)
 	_marker.add_theme_constant_override("outline_size", 6)
 	layer.add_child(_marker)
+	_toast = Label.new()
+	_toast.anchor_left = 0.5
+	_toast.anchor_right = 0.5
+	_toast.anchor_top = 0.62
+	_toast.offset_left = -360
+	_toast.offset_right = 360
+	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_toast.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_toast.add_theme_font_size_override("font_size", 20)
+	_toast.add_theme_color_override("font_color", Color("#ffe6a8"))
+	_toast.add_theme_color_override("font_outline_color", Color.BLACK)
+	_toast.add_theme_constant_override("outline_size", 6)
+	layer.add_child(_toast)
+	# F: hacer algo también aquí, a bordo (hablar con quien va contigo, aterrizar, ir a un sitio…)
+	_actions = ActionPanel.new()
+	_actions.context = space_context
+	_actions.step_handler = _space_steps
+	add_child(_actions)
+	_actions.opened.connect(func():
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		if ship: ship.piloted = false)
+	_actions.closed.connect(func():
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		if ship: ship.piloted = true)
 	var help := Label.new()
-	help.text = "Ratón apuntar · W/S empujar · A/D alabear · Espacio/Ctrl subir/bajar · Shift crucero · Tab destino · Z asistencia · E aterrizar · Esc menú"
+	help.text = "Ratón apuntar · W/S empujar · A/D alabear · Shift crucero · X frenar · Tab destino · G piloto automático · V cabina · Z asistencia · E aterrizar · F hacer algo · Esc menú"
 	help.anchor_top = 1.0
 	help.anchor_bottom = 1.0
 	help.position = Vector2(24, -40)
@@ -305,7 +345,226 @@ func _ui() -> void:
 	layer.add_child(help)
 
 
+## Algunos planetas tienen lunas (sólidas: también se chocan) que giran a su alrededor.
+func _add_moons() -> void:
+	for p in system.planets:
+		if p.kind == "station":
+			continue
+		var h := hash(str(p.name))
+		var count := 2 if p.kind == "gas" else (1 if h % 3 != 0 else 0)
+		for i in count:
+			var r := float(p.radius) * (0.18 + 0.08 * ((h >> (i + 2)) % 3))
+			var node := Node3D.new()
+			add_child(node)
+			var mi := MeshInstance3D.new()
+			var sm := SphereMesh.new()
+			sm.radius = r
+			sm.height = r * 2.0
+			sm.radial_segments = 48
+			sm.rings = 24
+			mi.mesh = sm
+			var m := StandardMaterial3D.new()
+			m.albedo_color = Color.from_hsv(fposmod(h * 0.0007 + i * 0.2, 1.0), 0.12, 0.62)
+			m.roughness = 1.0
+			mi.material_override = m
+			node.add_child(mi)
+			_solid_sphere(node, r)
+			_moons.append({"node": node, "center": StarSystem.position_of(p), "dist": float(p.radius) * (2.4 + i * 1.3), "speed": 0.01 + 0.006 * i, "angle": float(h % 628) / 100.0 + i * 2.0})
+
+
+## Otras naves que van y vienen entre la estación y los planetas (el sistema está vivo).
+func _add_traffic() -> void:
+	var models := ["Bob", "Dispatcher", "Striker"]
+	var stops: Array = system.planets.map(func(p): return StarSystem.position_of(p) + Vector3(0, float(p.radius) * 1.3, 0))
+	if stops.size() < 2:
+		return
+	for i in 4:
+		var model := AssetLibrary.instance(Ship.MODEL_DIR, models[i % models.size()])
+		if model == null:
+			continue
+		var holder := Node3D.new()
+		add_child(holder)
+		AssetLibrary.place(holder, model, Vector3.ZERO, 3.0, 0.0, false)
+		var glow := OmniLight3D.new()
+		glow.light_color = Color("#7fd0ff")
+		glow.omni_range = 12.0
+		glow.light_energy = 2.0
+		glow.position = Vector3(0, 1.5, -4)
+		holder.add_child(glow)
+		var a: int = i % stops.size()
+		var b: int = (i * 3 + 1) % stops.size()
+		if a == b:
+			b = (b + 1) % stops.size()
+		_traffic.append({"node": holder, "from": stops[a], "to": stops[b], "t": randf(), "speed": 1.0 / randf_range(120.0, 260.0)})
+
+
+## Polvo y partículas a tu alrededor: al moverte pasan de largo (se nota la velocidad).
+func _add_dust() -> void:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	var q := BoxMesh.new()
+	q.size = Vector3(0.08, 0.08, 0.6)
+	mm.mesh = q
+	mm.instance_count = DUST
+	_dust = MultiMeshInstance3D.new()
+	_dust.multimesh = mm
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.albedo_color = Color(0.75, 0.8, 0.9, 0.5)
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_dust.material_override = m
+	_dust.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_dust.extra_cull_margin = DUST_BOX
+	add_child(_dust)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 99
+	for i in DUST:
+		_dust.set_meta("p%d" % i, Vector3(rng.randf(), rng.randf(), rng.randf()) * DUST_BOX)
+
+
+func _update_world(delta: float) -> void:
+	for mo in _moons:
+		mo.angle = float(mo.angle) + float(mo.speed) * delta
+		(mo.node as Node3D).global_position = (mo.center as Vector3) + Vector3(cos(mo.angle), 0.15 * sin(mo.angle * 0.7), sin(mo.angle)) * float(mo.dist)
+	for tr in _traffic:
+		tr.t = float(tr.t) + float(tr.speed) * delta
+		if float(tr.t) >= 1.0:  # llega y vuelve (otra ruta)
+			tr.t = 0.0
+			var f: Vector3 = tr.to
+			tr.to = tr.from
+			tr.from = f
+		var from: Vector3 = tr.from
+		var to: Vector3 = tr.to
+		var p := from.lerp(to, smoothstep(0.0, 1.0, float(tr.t))) + Vector3(0, sin(float(tr.t) * PI) * 1500.0, 0)
+		var n := tr.node as Node3D
+		if n.global_position.distance_to(p) > 0.5:
+			n.look_at(p + (p - n.global_position), Vector3.UP)
+			n.rotate_object_local(Vector3.UP, PI)
+		n.global_position = p
+	# Polvo: cada mota vive en una caja que va con la nave (se recoloca al salirse)
+	if _dust and ship:
+		var c := ship.global_position
+		var v := ship.velocity
+		var stretch := clampf(v.length() / 30.0, 1.0, 40.0)
+		var look := v.normalized() if v.length() > 1.0 else ship.global_basis.z
+		var up := Vector3.UP if absf(look.y) < 0.95 else Vector3.RIGHT
+		var basis := Basis.looking_at(look, up).scaled(Vector3(1, 1, stretch))
+		for i in DUST:
+			var p0: Vector3 = _dust.get_meta("p%d" % i)
+			var lp := Vector3(fposmod(p0.x - c.x, DUST_BOX), fposmod(p0.y - c.y, DUST_BOX), fposmod(p0.z - c.z, DUST_BOX)) - Vector3.ONE * DUST_BOX / 2.0
+			_dust.multimesh.set_instance_transform(i, Transform3D(basis, c + lp))
+		(_dust.material_override as StandardMaterial3D).albedo_color.a = clampf(v.length() / 200.0, 0.15, 0.6)
+
+
+func toast(text: String, seconds: float = 4.0) -> void:
+	_toast.text = text
+	_toast_t = seconds
+
+
+## Lo que la IA sabe al pulsar F en el espacio.
+func space_context() -> String:
+	var lines := PackedStringArray()
+	lines.append("El jugador va EN EL ESPACIO, pilotando %s (combustible %d%%, casco %d%%, a %s)." % [ship.display_name, int(ship.fuel * 100.0), int(ship.hull), _speed_text(ship.speed())])
+	var pax := PackedStringArray()
+	for id in Travel.passengers():
+		pax.append(str(WorldDB.get_entity("npc", str(id)).get("name", "alguien")))
+	lines.append("A BORDO CON ÉL: " + (", ".join(pax) if not pax.is_empty() else "nadie") + ". No hay nadie más en la nave.")
+	var bodies := PackedStringArray()
+	for p in system.planets:
+		var d := maxf(ship.global_position.distance_to(StarSystem.position_of(p)) - float(p.radius), 0.0)
+		bodies.append("%s (%s, a %s%s)" % [p.name, StarSystem.describe(p), _dist_text(d), ", se puede aterrizar" if StarSystem.can_land(p) else ""])
+	lines.append("CUERPOS DEL SISTEMA: " + "; ".join(bodies) + ".")
+	lines.append("Aquí solo valen estos pasos: land (target: nombre del planeta o la estación), travel (target: nombre de un planeta: el piloto automático te lleva), npc_react con quien va a bordo, change_need, give_item, remove_item, journal y change_stat. No se camina ni se sale de la nave.")
+	return "\n".join(lines)
+
+
+## Los pasos de F en el espacio: aterrizar o ir a un planeta (piloto automático), y los efectos.
+func _space_steps(steps: Array, what: String = "") -> Array:
+	var notes := []
+	if steps.is_empty() and not what.is_empty():  # sin IA: entender lo básico
+		var low := what.to_lower()
+		for p in system.planets:
+			if low.contains(str(p.name).to_lower()) or (p.get("home", false) and ["casa", "pueblo", "mi planeta", "volver", "regres"].any(func(w): return low.contains(w))):
+				steps = [{"type": "land" if ["aterriz", "baj", "volver", "regres", "casa", "pueblo"].any(func(w): return low.contains(w)) else "travel", "target": p.name}]
+				break
+	for s in steps:
+		if not (s is Dictionary):
+			continue
+		var type := str(s.get("type", ""))
+		if type in ["land", "travel"]:
+			var p := _planet_named(str(s.get("target", "")))
+			if p.is_empty():
+				notes.append("No sabes adónde ir: «%s» no está en este sistema." % str(s.get("target", "")))
+				continue
+			_target = system.planets.find(p)
+			_start_autopilot(p, type == "land")
+			notes.append("Piloto automático rumbo a %s." % p.name)
+		elif type in StoryDirector.WORLD_STEPS and not (type in ["go_to", "play", "use", "climb", "move_to", "force_door", "sleep", "wait", "ride", "spawn_npc", "create_place", "place_object", "affect_nearby"]):
+			notes.append_array(Actions.execute("", [s]))
+	return notes
+
+
+func _planet_named(text: String) -> Dictionary:
+	var t := text.to_lower().strip_edges().trim_prefix("location:")
+	for p in system.planets:
+		if str(p.name).to_lower() == t or t.contains(str(p.name).to_lower()) or (t.length() > 3 and str(p.name).to_lower().contains(t)):
+			return p
+		if p.get("home", false) and (t == GameState.HOME or ["casa", "pueblo", "bahía", "mi planeta", "tierra"].any(func(w): return t.contains(w))):
+			return p
+		if str(p.get("location_id", "")) == t and not t.is_empty():
+			return p
+	return {}
+
+
+func _start_autopilot(p: Dictionary, land_on_arrival: bool) -> void:
+	ship.auto_point = StarSystem.position_of(p)
+	ship.auto_stop = float(p.radius) * 1.25 + 60.0
+	ship.autopilot = true
+	_land_after_auto = str(p.name) if land_on_arrival and StarSystem.can_land(p) else ""
+	if not ship.autopilot_arrived.is_connected(_on_autopilot_arrived):
+		ship.autopilot_arrived.connect(_on_autopilot_arrived)
+
+
+func _on_autopilot_arrived() -> void:
+	if not _land_after_auto.is_empty() and not _landing:
+		var n := _land_after_auto
+		_land_after_auto = ""
+		_land(n)
+	else:
+		toast("Has llegado.")
+
+
+func _physics_process(delta: float) -> void:
+	if ship == null:
+		return
+	# No se atraviesan los planetas ni el sol: si la nave queda dentro (con su tamaño), sale
+	for p in system.planets:
+		if p.kind == "station":
+			continue
+		var c := StarSystem.position_of(p)
+		var min_d := float(p.radius) + ship.length * 0.6 + 2.0
+		var off := ship.global_position - c
+		if off.length() < min_d:
+			ship.global_position = c + (off.normalized() if off.length() > 0.01 else Vector3.UP) * min_d
+			ship.velocity = ship.velocity.slide(off.normalized()) * 0.3
+	var sd := ship.global_position.length()
+	if sd < SUN_RADIUS + ship.length + 2.0:
+		ship.global_position = ship.global_position.normalized() * (SUN_RADIUS + ship.length + 2.0)
+		ship.velocity = ship.velocity.slide(ship.global_position.normalized()) * 0.3
+	# Cerca del sol, el calor daña el casco
+	if sd < SUN_RADIUS * 3.0:
+		_heat_t += delta
+		if _heat_t > 1.0:
+			_heat_t = 0.0
+			ship.hull = maxf(ship.hull - lerpf(6.0, 1.0, (sd - SUN_RADIUS) / (SUN_RADIUS * 2.0)), 0.0)
+			toast("¡Demasiado cerca del sol! El casco se calienta.", 1.5)
+
+
 func _process(delta: float) -> void:
+	_update_world(delta)
+	if _toast_t > 0.0:
+		_toast_t -= delta
+		_toast.modulate.a = clampf(_toast_t, 0.0, 1.0)
 	for b in _bodies:
 		(b.node as Node3D).rotate_y(float(b.node.get_meta("spin", 0.0)) * delta)
 	if ship == null:
@@ -328,16 +587,16 @@ func _process(delta: float) -> void:
 			best_d = d
 			best = p
 	_near = best if best_d < float(best.get("radius", 0.0)) * 0.6 + 80.0 else {}
-	if best_d < 0.0 and not best.is_empty():  # no se atraviesan los planetas
-		var c := StarSystem.position_of(best)
-		ship.global_position = c + (ship.global_position - c).normalized() * float(best.radius)
-		ship.velocity = Vector3.ZERO
 	var tgt: Dictionary = system.planets[clampi(_target, 0, system.planets.size() - 1)]
 	var tpos := StarSystem.position_of(tgt)
 	var tdist := maxf(ship.global_position.distance_to(tpos) - float(tgt.radius), 0.0)
-	_hud.text = "%s · %s · combustible %d%% · casco %d%%%s\nCerca: %s a %s\nDestino: %s a %s%s" % [ship.display_name, _speed_text(ship.speed()), int(ship.fuel * 100.0),
-		int(ship.hull), "" if ship.assist else " · asistencia APAGADA", best.get("name", "?"), _dist_text(maxf(best_d, 0.0)), tgt.name, _dist_text(tdist),
-		"  (Shift para crucero)" if tdist > 20000.0 and ship.speed() < 2000.0 else ""]
+	var pax := PackedStringArray()
+	for id in Travel.passengers():
+		pax.append(str(WorldDB.get_entity("npc", str(id)).get("name", "?")).split(" ")[0])
+	_hud.text = "%s · %s · combustible %d%% · casco %d%%%s%s\nCerca: %s a %s\nDestino: %s a %s%s%s" % [ship.display_name, _speed_text(ship.speed()), int(ship.fuel * 100.0),
+		int(ship.hull), "" if ship.assist else " · asistencia APAGADA", " · ¡PROXIMIDAD!" if ship.proximity else "", best.get("name", "?"), _dist_text(maxf(best_d, 0.0)), tgt.name, _dist_text(tdist),
+		"  · PILOTO AUTOMÁTICO" if ship.autopilot else ("  (G: piloto automático · Shift: crucero)" if tdist > 20000.0 and ship.speed() < 1000.0 else ""),
+		("\nA bordo: " + ", ".join(pax)) if not pax.is_empty() else ""]
 	_update_marker(tpos, str(tgt.name), tdist)
 	_place_rock_bodies(delta)
 	if _hit_flash > 0.0:
@@ -349,6 +608,8 @@ func _process(delta: float) -> void:
 		_prompt.text = "Entrando en la atmósfera…" if best.get("kind", "") != "station" else "Acoplando…"
 	elif _near.is_empty():
 		_prompt.text = "" if ship.fuel > 0.0 else "Sin combustible: la nave va a la deriva."
+		if ship.hull <= 0.0 and ship.fuel > 0.0:
+			_prompt.text = "Casco crítico: la nave apenas responde. Aterriza para repararla."
 	elif StarSystem.can_land(_near):
 		_prompt.text = "[E] %s %s — %s" % ["Acoplarte a" if _near.kind == "station" else "Aterrizar en", _near.name, StarSystem.describe(_near)]
 	else:
@@ -364,6 +625,21 @@ func _dist_text(d: float) -> String:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _landing:  # aterrizando: ni menú ni mandos (antes Esc a mitad del aterrizaje cerraba el juego)
+		return
+	if event.is_action_pressed("act") and _actions and not _actions.is_busy():
+		_actions.open()
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed("autopilot") and ship:
+		if ship.autopilot:
+			ship.autopilot = false
+			toast("Piloto automático desactivado.")
+		else:
+			var tgt: Dictionary = system.planets[clampi(_target, 0, system.planets.size() - 1)]
+			_start_autopilot(tgt, false)
+			toast("Piloto automático rumbo a %s." % tgt.name)
+		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and ship:
 		ship.steer += Vector2(event.relative.x, event.relative.y * (-1.0 if Settings.invert_y else 1.0)) * MOUSE * Settings.mouse_sensitivity
 	elif event is InputEventMouseButton and event.pressed:
@@ -403,14 +679,17 @@ func _place_rock_bodies(delta: float) -> void:
 	_rock_t -= delta
 	if _rock_t > 0.0 or ship == null:
 		return
-	_rock_t = 0.5
+	# Más a menudo cuanto más rápido vas (a crucero se cruzan kilómetros en medio segundo)
+	_rock_t = 0.5 if ship.speed() < 150.0 else 0.1
 	var p := ship.global_position
-	if absf(p.length() - float(system.get("belt", 30000.0))) > 6000.0:
+	var reach := maxf(2500.0, ship.speed() * 1.5)
+	if absf(p.length() - float(system.get("belt", 30000.0))) > 6000.0 + reach:
 		return  # lejos del cinturón
 	var near := []
 	for t in _rocks:
 		var d: float = (t.origin as Vector3).distance_squared_to(p)
-		if d < 2500.0 * 2500.0:
+		var r: float = t.basis.get_scale().x * 0.92
+		if d < reach * reach and sqrt(d) > r + ship.length:  # nunca uno que ya esté encima de la nave
 			near.append([d, t])
 	near.sort_custom(func(a, b): return a[0] < b[0])
 	for i in _rock_bodies.size():
@@ -432,12 +711,17 @@ func on_ship_hit(strength: float) -> void:
 
 func _land(planet_name: String) -> void:
 	_landing = true
+	if _actions:
+		_actions.close()
 	var space: Dictionary = WorldDB.get_state("space", {})
 	var e: Dictionary = space.get("ship", {})
 	e["fuel"] = ship.fuel
+	e["hull"] = ship.hull
 	space["ship"] = e
 	WorldDB.set_state("space", space)
 	var r := await Travel.land(planet_name)
+	if not is_inside_tree():
+		return
 	if not r.ok:
 		_prompt.text = r.error
 		_landing = false

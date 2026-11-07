@@ -416,9 +416,32 @@ func use_fixture(what: String, node: Node3D) -> void:
 	_busy = false
 
 
-## Dormir en una cama hasta la mañana (o una siesta de 3 h si ya es casi de día).
-func sleep(bed: Node3D) -> void:
-	var minutes := maxf(fposmod(8.0 - WorldClock.hour(), 24.0) * 60.0, 180.0)
+## Espera a que termine lo que esté haciendo (entrar, salir, dormir…): para encadenar pasos de F.
+func wait_idle(max_seconds: float = 6.0) -> void:
+	var t := 0.0
+	while _busy and t < max_seconds:
+		await get_tree().process_frame
+		t += get_process_delta_time()
+
+
+## La cama más cercana a `pos` en el interior actual (null si no hay ninguna).
+func nearest_bed(pos: Vector3) -> Node3D:
+	if not is_inside():
+		return null
+	var best: Node3D = null
+	var best_d := INF
+	for b in _interior.beds:
+		var node: Node3D = b.node
+		if is_instance_valid(node) and node.global_position.distance_to(pos) < best_d:
+			best = node
+			best_d = node.global_position.distance_to(pos)
+	return best
+
+
+## Dormir en una cama hasta la mañana (o una siesta de 3 h si ya es casi de día), o `minutes`.
+func sleep(bed: Node3D, minutes: float = -1.0) -> void:
+	if minutes <= 0.0:
+		minutes = maxf(fposmod(8.0 - WorldClock.hour(), 24.0) * 60.0, 180.0)
 	var by := ""
 	if sleep_check.is_valid() and is_inside():
 		var r: Dictionary = sleep_check.call(_current, bed, minutes)

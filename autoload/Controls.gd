@@ -9,6 +9,9 @@ const KEYS := {
 	"inventory": [KEY_I], "anchor": [KEY_T], "pause": [KEY_ESCAPE], "phone": [KEY_C], "fullscreen": [KEY_F11],
 	"choice_1": [KEY_1], "choice_2": [KEY_2], "choice_3": [KEY_3], "choice_4": [KEY_4],
 	"descend": [KEY_CTRL, KEY_Q],   # en una nave: bajar (subir es "jump")
+	"cockpit_view": [KEY_V],        # en la nave: vista de cabina o de fuera
+	"ship_brake": [KEY_X],          # en la nave (espacio): frenar en seco
+	"autopilot": [KEY_G],           # en el espacio: piloto automático al destino marcado
 	"horn": [KEY_H],                # en un vehículo: claxon
 	"next_target": [KEY_TAB],       # en el espacio: cambiar de destino
 	"flight_assist": [KEY_Z],       # en el espacio: amortiguar la inercia o no

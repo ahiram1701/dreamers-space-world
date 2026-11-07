@@ -51,6 +51,10 @@ const REMOVE := ["se quita el", "se quita la", "se quita los"]
 ## Subirse o bajarse de un vehículo (si hay uno cerca: si no, la frase no se muestra).
 const RIDE := ["se sube al coche", "se sube al auto", "se sube al carro", "se sube a la camioneta", "se sube a la furgoneta",
 	"se monta en el", "se monta en la", "se sienta en el asiento del copiloto", "sube al coche", "sube al auto", "se sube al asiento"]
+## «se sube a tu coche», «se sube a la moto», «se sienta atrás», «sube a la nave»…
+## (Se crea cada vez: un RegEx en una variable estática puede fallar al cerrar el juego.)
+static func _ride_re() -> RegEx:
+	return RegEx.create_from_string("(se sube|sube|se monta|se mete|se acomoda|se sienta)( contigo)? (a|al|en|en el|en la|a la|a tu|en tu)( [a-záéíóúñ]+)? (coche|auto|carro|camioneta|furgoneta|moto|nave|lancha|bote|barca|veh[ií]culo|sed[aá]n|taxi|pickup|copiloto)|(se sienta|se sube) atr[aá]s")
 const GET_OUT := ["se baja del coche", "se baja del auto", "se baja del carro", "se baja de la camioneta", "baja del coche", "sale del coche"]
 
 
@@ -78,7 +82,7 @@ static func _sentence(sentence: String, known: Array) -> Array:
 			out.append({"type": "wear", "garment": garment})
 		elif REMOVE.any(func(w): return low.contains(w)):
 			out.append({"type": "remove", "garment": garment})
-	if RIDE.any(func(w): return low.contains(w)):
+	if RIDE.any(func(w): return low.contains(w)) or _ride_re().search(low) != null:
 		out.append({"type": "ride"})
 	elif GET_OUT.any(func(w): return low.contains(w)):
 		out.append({"type": "get_out"})

@@ -5,10 +5,14 @@ extends CharacterBody3D
 ## ratón (la nave gira hacia donde miras), W/S avanza y frena, A/D se desplaza de lado, Espacio
 ## sube, Ctrl/Q baja y Shift da potencia; sin combustible cae. Si sube lo bastante, sale al
 ## espacio (SpaceScene). En el espacio: el ratón cabecea y gira, A/D alabea, W/S empuja, Shift
-## crucero, Z asistencia de vuelo (frena la inercia sola). Choca de verdad: los golpes dañan el casco.
+## crucero, Z asistencia de vuelo (frena la inercia sola), X frena en seco. Choca de verdad: los
+## golpes dañan el casco. Dentro vas sentado en la cabina (no encima): V cambia entre la vista de
+## cabina, con el tablero, y la de fuera. Lleva pasajeros (quien te acompaña sube contigo).
 
 const SPACE_ALTITUDE := 160.0   # por encima de esto (sobre el suelo) estás saliendo de la atmósfera
 const MODEL_DIR := "spaceships_pack"
+const CRUISE := 1500.0          # crucero (Shift) en el espacio, m/s: rápido pero controlable
+const MAX_HIT := 35.0           # un golpe nunca quita más que esto del casco
 
 var entry: Dictionary = {}
 var entry_id := ""
@@ -23,6 +27,16 @@ var assist := true              # asistencia de vuelo (en el espacio)
 ## Giro pedido con el ratón en el espacio (lo suma SpaceScene; se consume cada frame).
 var steer := Vector2.ZERO
 var length := 8.0
+## Quien va dentro no se ve (va en la cabina, no sentado encima del casco).
+var hides_riders := true
+## Vista desde la cabina (V): cámara en el asiento del piloto y tablero con los instrumentos.
+var cockpit := false
+var proximity := false          # el crucero se corta: hay algo delante
+## Piloto automático (en el espacio): vuela solo hasta auto_point y se para a auto_stop de él.
+var autopilot := false
+var auto_point := Vector3.ZERO
+var auto_stop := 0.0
+signal autopilot_arrived
 
 var _rider: Player
 var _use: Interactable
@@ -33,6 +47,15 @@ var _save_t := 0.0
 var _launching := false
 var _audio: EngineAudio
 var _bump_cool := 0.0
+var _seats: Array = []          # 0 = piloto; el resto, pasajeros
+var _passengers := {}           # asiento -> TownNPC
+var _eye := Vector3(0, 2.0, 1.0)
+var _cockpit_root: Node3D
+var _cockpit_cam: Camera3D
+var _prev_cam: Camera3D
+var _cam_pitch := 0.0
+var _gauges: Label3D
+var _stick: Node3D
 
 
 static func build(s: Node, e: Dictionary, space: bool = false) -> Node3D:
@@ -110,6 +133,10 @@ static func build(s: Node, e: Dictionary, space: bool = false) -> Node3D:
 	ship.length = hi.z - lo.z
 	if ship._seat == Vector3(0, 1.2, 0):
 		ship._seat = Vector3(0, hi.y * 0.55, (hi.z + lo.z) / 2.0 + (hi.z - lo.z) * 0.15)
+	# Asientos: el piloto delante y, detrás, los pasajeros (todos dentro del casco)
+	var back := clampf(ship.length * 0.12, 0.9, 1.6)
+	ship._seats = [ship._seat, ship._seat + Vector3(0.75, 0, -back), ship._seat + Vector3(-0.75, 0, -back), ship._seat + Vector3(0, 0, -back * 2.0)]
+	ship._eye = Vector3(0, maxf(ship._seat.y + 0.7, hi.y * 0.72), ship._seat.z + clampf(ship.length * 0.12, 0.4, 1.4))
 	# Las toberas brillan al empujar (las piezas "thruster" o, en un modelo, la cola)
 	var nozzles: Array = []
 	for i in parts.size():
@@ -177,8 +204,51 @@ func _model_shapes(placed: Node3D, user_scale: float) -> void:
 		add_child(cs)
 
 
-func seat_position() -> Vector3:
-	return global_transform * _seat
+func seat_position(i: int = 0) -> Vector3:
+	var at: Vector3 = _seats[i] if i < _seats.size() else _seat
+	return global_transform * at
+
+
+func free_seats() -> int:
+	return maxi(_seats.size() - 1 - _passengers.size(), 0)
+
+
+## Un PNJ sube de pasajero (va dentro: no se ve). false si no cabe.
+func board(npc: TownNPC) -> bool:
+	if _passengers.values().has(npc):
+		return true
+	for i in range(1, _seats.size()):
+		if not _passengers.has(i):
+			_passengers[i] = npc
+			npc.ride(self, i)
+			add_collision_exception_with(npc)
+			return true
+	return false
+
+
+func passengers() -> Array:
+	return _passengers.values().filter(func(n): return is_instance_valid(n))
+
+
+## Bajan todos, por el costado de la nave.
+func alight_all() -> Array:
+	var out := []
+	var k := 0
+	for i in _passengers.keys():
+		var npc: TownNPC = _passengers[i]
+		if not is_instance_valid(npc):
+			continue
+		k += 1
+		var side := global_basis.x.normalized()
+		var spot := global_position - side * (length * 0.5 + 2.0) - global_basis.z.normalized() * (1.2 * k)
+		if scene and scene.has_method("ground_at"):
+			spot.y = float(scene.call("ground_at", spot.x, spot.z)) + 0.2
+		spot = InteriorManager.free_spot_near(self, spot, -side, [self, npc]) + Vector3(0, 0.15, 0)
+		npc.get_off(spot)
+		remove_collision_exception_with(npc)
+		out.append(npc)
+	_passengers.clear()
+	return out
 
 
 func is_occupied() -> bool:
@@ -202,6 +272,8 @@ func _on_use(player: Player) -> void:
 		player.play_gesture("sit")
 		_use.set_prompt("Bajar")
 		Sfx.at(self, "door", global_position + Vector3(0, 1, 0))
+		if scene and scene.has_method("on_player_boarded"):
+			scene.call("on_player_boarded", self)
 	else:
 		if not is_on_floor() and _ground_gap() > 2.5:
 			if scene and scene.get("_ui") and scene.get("_ui").has_method("toast"):
@@ -212,9 +284,13 @@ func _on_use(player: Player) -> void:
 
 func _leave() -> void:
 	var player := _rider
+	set_cockpit(false)
 	_rider = null
 	player.riding = null
 	player.stop_gesture()
+	var left := alight_all()
+	if scene and scene.has_method("on_player_alighted"):
+		scene.call("on_player_alighted", self, left)
 	_use.set_prompt("Pilotar %s" % display_name)
 	var side := global_basis.x.normalized()
 	var out := global_position - side * (length * 0.5 + 2.0)
@@ -248,7 +324,7 @@ func _physics_process(delta: float) -> void:
 	_bump_cool -= delta
 	var active := (_rider != null and _rider.controls_enabled) or piloted
 	var c: Dictionary = controls() if active else {"side": 0.0, "up": 0.0, "thrust": 0.0, "boost": false}
-	var has_fuel := fuel > 0.0 and hull > 0.0
+	var has_fuel := fuel > 0.0  # (con el casco destrozado aún responde, a poca potencia)
 	if in_space:
 		_fly_space(c, delta, has_fuel)
 	else:
@@ -260,7 +336,10 @@ func _physics_process(delta: float) -> void:
 	if _audio:
 		_audio.running = active and has_fuel
 		_audio.load = clampf(absf(c.thrust) + absf(c.up) * 0.7 + (0.6 if c.boost else 0.0), 0.0, 1.0)
-		_audio.rpm = velocity.length() * 20.0
+		# (limitado: a velocidad de crucero el silbido se salía del rango audible y sonaba raro)
+		_audio.rpm = minf(velocity.length() * 20.0, 4200.0)
+	if cockpit:
+		_update_cockpit(delta, c)
 	if pushing:
 		fuel = maxf(fuel - delta * (0.0009 if not c.boost else 0.003), 0.0)
 	_save_t += delta
@@ -269,8 +348,11 @@ func _physics_process(delta: float) -> void:
 		_save()
 
 
-## Hacia dónde miras (la cámara): la nave gira hacia ahí al volar.
+## Hacia dónde miras (la cámara): la nave gira hacia ahí al volar. En la cabina el ratón ya gira
+## la nave directamente.
 func _aim_yaw() -> float:
+	if cockpit:
+		return rotation.y
 	var cam := get_viewport().get_camera_3d()
 	if cam == null:
 		return rotation.y
@@ -315,27 +397,67 @@ func _fly_air(c: Dictionary, delta: float, has_fuel: bool, active: bool) -> void
 
 func _fly_space(c: Dictionary, delta: float, has_fuel: bool) -> void:
 	var acc := 14.0 + power * 6.0
-	var top := (50.0 + power * 14.0) * (60.0 if c.boost else 1.0)
+	var normal_top := (50.0 + power * 14.0) * (0.35 if hull <= 0.0 else 1.0)
+	# Crucero con Shift, pero no a ciegas: si hay algo delante (un planeta, un asteroide, la
+	# estación), se corta solo. Antes llegaba a 8 km/s y luego tardaba minutos en frenar.
+	var boost: bool = c.boost and has_fuel and hull > 0.0
+	proximity = false
+	if boost and velocity.length() > normal_top:
+		var ahead := velocity.normalized() * clampf(velocity.length() * 2.0, 300.0, 4000.0)
+		var q := PhysicsRayQueryParameters3D.create(global_position, global_position + ahead, collision_mask, [get_rid()])
+		if not get_world_3d().direct_space_state.intersect_ray(q).is_empty():
+			boost = false
+			proximity = true
+	var top := CRUISE if boost else normal_top
 	# El ratón cabecea y gira; A/D alabean. Todo suavizado (una nave tiene inercia al girar)
 	var s := steer
 	steer = Vector2.ZERO
+	if autopilot and (s.length() > 0.02 or float(c.thrust) != 0.0 or Input.is_action_pressed("ship_brake")):
+		autopilot = false  # tomas el mando
 	rotate_object_local(Vector3.UP, -s.x)
 	rotate_object_local(Vector3.RIGHT, s.y)
 	rotate_object_local(Vector3.FORWARD, float(c.side) * 1.4 * delta)
-	if has_fuel and (float(c.thrust) != 0.0 or float(c.up) != 0.0):
+	transform = transform.orthonormalized()
+	var spd := velocity.length()
+	if autopilot and has_fuel:
+		var to := auto_point - global_position
+		var dist := to.length() - auto_stop
+		if dist < 25.0:
+			autopilot = false
+			velocity = velocity.limit_length(10.0)
+			autopilot_arrived.emit()
+		else:
+			var dir := to.normalized()
+			var up := global_basis.y if absf(global_basis.y.dot(dir)) < 0.95 else global_basis.x
+			global_basis = global_basis.slerp(Basis.looking_at(-dir, up), clampf(1.5 * delta, 0.0, 1.0)).orthonormalized()
+			# Acelera hasta crucero y frena con tiempo (llega a ~2 km de la superficie ya despacio)
+			var want := clampf(sqrt(maxf(dist, 0.0) * 2.0 * (CRUISE / 3.0)) * 0.7, 20.0, CRUISE)
+			if global_basis.z.dot(dir) < 0.9:
+				want = minf(want, normal_top)  # primero se orienta
+			velocity = velocity.move_toward(dir * want, CRUISE / 3.0 * delta)
+	elif Input.is_action_pressed("ship_brake") and (_rider != null or piloted):
+		velocity = velocity.move_toward(Vector3.ZERO, maxf(acc * 4.0, spd * 1.6) * delta)  # frenazo
+	elif has_fuel and boost:
+		velocity = velocity.move_toward(global_basis.z * top, CRUISE / 3.0 * delta)  # ~3 s hasta crucero
+	elif has_fuel and (float(c.thrust) != 0.0 or float(c.up) != 0.0):
 		var want := (global_basis.z * float(c.thrust) + global_basis.y * float(c.up) * 0.5) * top
-		velocity = velocity.move_toward(want, acc * (40.0 if c.boost else 1.0) * delta)
-	elif assist and not c.boost:
-		velocity = velocity.move_toward(Vector3.ZERO, acc * 0.35 * delta)  # amortiguadores de inercia
+		var rate := acc * (4.0 if float(c.thrust) < 0.0 and velocity.dot(global_basis.z) > 0.0 else 1.0)
+		velocity = velocity.move_toward(want, rate * delta)
+		if spd > top * 1.05:  # vienes de crucero: los amortiguadores bajan el exceso en ~2 s
+			velocity = velocity.limit_length(maxf(spd - maxf(spd - top, 200.0) * 0.5 * delta * 2.0, top))
+	elif assist:
+		var bleed := acc * 0.35 if spd <= normal_top * 1.05 else maxf((spd - normal_top) * 1.2, acc)
+		velocity = velocity.move_toward(Vector3.ZERO if spd <= normal_top * 1.05 else velocity.normalized() * normal_top, bleed * delta)
 	var hit := move_and_collide(velocity * delta)
 	if hit:  # rebota y se daña el casco según lo fuerte del golpe
 		var n := hit.get_normal()
 		var into := -velocity.dot(n)
 		if into > 0.0:
 			velocity = velocity.bounce(n) * 0.35
+			velocity = velocity.limit_length(maxf(normal_top, 40.0))  # tras un golpe, a velocidad manejable
 			if into > 8.0 and _bump_cool <= 0.0:
 				_bump_cool = 0.6
-				hull = maxf(hull - (into - 8.0) * 0.6, 0.0)
+				hull = maxf(hull - minf((into - 8.0) * 0.6, MAX_HIT), 0.0)
 				Sfx.at(self, "crash", global_position)
 				if scene and scene.has_method("on_ship_hit"):
 					scene.call("on_ship_hit", into)
@@ -348,7 +470,7 @@ func _check_bump(before: float) -> void:
 	var lost := before - velocity.length()
 	if lost > 9.0:
 		_bump_cool = 0.8
-		hull = maxf(hull - (lost - 9.0) * 1.2, 0.0)
+		hull = maxf(hull - minf((lost - 9.0) * 1.2, MAX_HIT), 0.0)
 		Sfx.at(self, "crash", global_position)
 		if _rider:
 			_rider.shake(0.4, 0.06)
@@ -358,6 +480,145 @@ func _check_bump(before: float) -> void:
 
 func speed() -> float:
 	return velocity.length()
+
+
+# --- Cabina ---------------------------------------------------------------------------------
+
+func _unhandled_input(event: InputEvent) -> void:
+	if _rider == null and not piloted:
+		return
+	if event.is_action_pressed("cockpit_view"):
+		set_cockpit(not cockpit)
+		get_viewport().set_input_as_handled()
+	elif cockpit and event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		var rel: Vector2 = (event as InputEventMouseMotion).relative * Settings.mouse_sensitivity
+		if not in_space:  # en un planeta, el ratón gira la nave y mira arriba/abajo
+			rotation.y -= rel.x * 0.0025
+			_cam_pitch = clampf(_cam_pitch - rel.y * 0.002, -0.6, 0.45)
+
+
+## Entrar o salir de la vista de cabina.
+func set_cockpit(on: bool) -> void:
+	if on == cockpit:
+		return
+	cockpit = on
+	if on:
+		if _cockpit_root == null:
+			_build_cockpit()
+		_prev_cam = get_viewport().get_camera_3d()
+		_cockpit_root.visible = true
+		_cockpit_cam.fov = Settings.fov
+		_cockpit_cam.make_current()
+	else:
+		if _cockpit_root:
+			_cockpit_root.visible = false
+		if _prev_cam and is_instance_valid(_prev_cam):
+			_prev_cam.make_current()
+		_prev_cam = null
+
+
+## El tablero: consola, marco del cristal, palanca y una pantalla con los instrumentos.
+func _build_cockpit() -> void:
+	_cockpit_root = Node3D.new()
+	_cockpit_root.name = "Cabina"
+	add_child(_cockpit_root)
+	var dark := StandardMaterial3D.new()
+	dark.albedo_color = Color("#23272e")
+	dark.roughness = 0.6
+	var frame_m := StandardMaterial3D.new()
+	frame_m.albedo_color = Color("#3b414b")
+	frame_m.metallic = 0.6
+	frame_m.roughness = 0.4
+	var screen_m := StandardMaterial3D.new()
+	screen_m.albedo_color = Color("#06131c")
+	screen_m.emission_enabled = true
+	screen_m.emission = Color("#0d3a4f")
+	screen_m.emission_energy_multiplier = 0.6
+	var e := _eye
+	# Consola bajo la vista, inclinada hacia el piloto
+	_cockpit_box(Vector3(1.5, 0.08, 0.55), e + Vector3(0, -0.52, 0.62), Vector3(-0.5, 0, 0), dark)
+	_cockpit_box(Vector3(1.5, 0.45, 0.08), e + Vector3(0, -0.78, 0.86), Vector3.ZERO, dark)
+	_cockpit_box(Vector3(0.66, 0.24, 0.02), e + Vector3(0, -0.29, 0.95), Vector3.ZERO, screen_m)
+	# Marco del cristal: dos montantes y el arco de arriba
+	for sx in [-1.0, 1.0]:
+		_cockpit_box(Vector3(0.06, 1.0, 0.06), e + Vector3(0.78 * sx, 0.0, 0.85), Vector3(0, 0, 0.25 * sx), frame_m)
+	_cockpit_box(Vector3(1.7, 0.07, 0.07), e + Vector3(0, 0.48, 0.78), Vector3.ZERO, frame_m)
+	# Palanca
+	_stick = Node3D.new()
+	_stick.position = e + Vector3(0, -0.85, 0.35)
+	_cockpit_root.add_child(_stick)
+	var stick_mesh := MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 0.02
+	cyl.bottom_radius = 0.03
+	cyl.height = 0.32
+	stick_mesh.mesh = cyl
+	stick_mesh.position.y = 0.16
+	stick_mesh.material_override = frame_m
+	_stick.add_child(stick_mesh)
+	# Instrumentos (texto en la pantalla)
+	_gauges = Label3D.new()
+	_gauges.font_size = 28
+	_gauges.pixel_size = 0.0008
+	_gauges.modulate = Color("#8fe3ff")
+	_gauges.outline_size = 0
+	_gauges.shaded = false
+	_gauges.double_sided = false
+	_gauges.position = e + Vector3(0, -0.29, 0.92)
+	_gauges.rotation = Vector3(0, PI, 0)
+	_cockpit_root.add_child(_gauges)
+	# La retícula en el centro
+	var cross := Label3D.new()
+	cross.text = "+"
+	cross.font_size = 48
+	cross.pixel_size = 0.0012
+	cross.modulate = Color(0.6, 0.95, 1.0, 0.6)
+	cross.no_depth_test = true
+	cross.position = e + Vector3(0, 0, 2.0)
+	cross.rotation.y = PI
+	_cockpit_root.add_child(cross)
+	_cockpit_cam = Camera3D.new()
+	_cockpit_cam.position = e
+	_cockpit_cam.rotation = Vector3(0, PI, 0)  # la cámara mira a -Z; la nave apunta a +Z
+	_cockpit_cam.near = 0.05
+	_cockpit_cam.far = 400000.0 if in_space else 4000.0
+	_cockpit_root.add_child(_cockpit_cam)
+
+
+func _cockpit_box(size: Vector3, at: Vector3, rot: Vector3, mat: Material) -> void:
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = size
+	mi.mesh = bm
+	mi.material_override = mat
+	mi.position = at
+	mi.rotation = rot
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_cockpit_root.add_child(mi)
+
+
+func _update_cockpit(delta: float, c: Dictionary) -> void:
+	if _cockpit_cam == null:
+		return
+	_cockpit_cam.rotation.x = lerpf(_cockpit_cam.rotation.x, _cam_pitch, 1.0 - exp(-10.0 * delta))
+	if _stick:
+		_stick.rotation.x = lerpf(_stick.rotation.x, float(c.thrust) * 0.35, 8.0 * delta)
+		_stick.rotation.z = lerpf(_stick.rotation.z, -float(c.side) * 0.35, 8.0 * delta)
+	if _gauges:
+		var v := velocity.length()
+		var lines := PackedStringArray()
+		lines.append("VEL %s" % (("%.1f km/s" % (v / 1000.0)) if v >= 1000.0 else ("%d m/s" % roundi(v))))
+		if not in_space:
+			lines.append("ALT %d m" % roundi(_ground_gap()))
+		lines.append("COMB %d%%   CASCO %d%%" % [roundi(fuel * 100.0), roundi(hull)])
+		if proximity:
+			lines.append("¡PROXIMIDAD!")
+		elif in_space:
+			lines.append("ASIST " + ("ON" if assist else "OFF"))
+		var pax := passengers().size()
+		if pax > 0:
+			lines.append("A BORDO: %d" % pax)
+		_gauges.text = "\n".join(lines)
 
 
 func _save() -> void:

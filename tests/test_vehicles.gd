@@ -62,6 +62,7 @@ func _run() -> void:
 	await create_timer(1.2).timeout
 	Input.action_release("move_left")
 	_expect(absf(angle_difference(car.global_rotation.y, yaw0)) > 0.15, "gira")
+	_expect(car.global_basis.y.dot(Vector3.UP) > 0.9 and absf(car.angular_velocity.y) < 2.0, "y gira sin volcar ni hacer un trompo")
 	Input.action_release("move_forward")
 	Input.action_press("move_back")
 	await create_timer(1.5).timeout
@@ -94,15 +95,22 @@ func _run() -> void:
 		for c in town.get_children():
 			if c.get_script() and str(c.get_script().resource_path).ends_with("Traffic.gd"):
 				traffic = c
-	traffic.set("_wait", 0.0)
+	traffic.call("_spawn", 0)
 	await create_timer(0.5).timeout
 	var tcar: Node3D = traffic.car()
 	_expect(tcar != null, "pasa un coche por la calle")
 	if tcar:
-		var dir: Vector3 = (traffic.LANES[traffic._lane][1] - traffic.LANES[traffic._lane][0]).normalized()
+		var tc: Dictionary = traffic._cars[0]
+		var dir: Vector3 = (traffic.LANES[int(tc.lane)][1] - traffic.LANES[int(tc.lane)][0]).normalized()
 		player.global_position = tcar.global_position + dir * 6.0 + Vector3(0, 0.3, 0)
 		await create_timer(1.5).timeout
-		_expect(traffic._speed < 1.0, "y frena si estás delante (%.1f m/s)" % traffic._speed)
+		_expect(float(tc.speed) < 1.0, "y frena si estás delante (%.1f m/s)" % float(tc.speed))
+		# Al final de la calle aparca; no se esfuma delante de ti
+		player.global_position = traffic.LANES[int(tc.lane)][1] + Vector3(6, 0.3, -8)
+		player.call("look_direction", Vector3(-0.5, 0, 1))
+		tcar.global_position = traffic.LANES[int(tc.lane)][1] - dir * 10.0
+		await create_timer(5.0).timeout
+		_expect(is_instance_valid(tcar) and bool(tc.parked), "al final de la calle aparca y sigue ahí mientras lo miras")
 
 	# --- Reglas: «si llueve, enciende la luz» ----------------------------------------------------
 	agent.tools.call_tool("spawn", {"name": "Farol", "parts": [{"shape": "cylinder", "size": [0.1, 2.0, 0.1], "pos": [0, 1, 0], "material": "metal"}]})
@@ -170,6 +178,8 @@ func _run() -> void:
 	db.delete_world(world_id)
 	db.set_last_world_id(previous_last)
 	print("\n%s" % ("TODO OK" if _failed == 0 else "%d FALLOS" % _failed))
+	for _settle_before_quit in 20:  # (que acabe lo pendiente: cerrar justo tras liberar la escena podía fallar)
+		await process_frame
 	quit(_failed)
 
 

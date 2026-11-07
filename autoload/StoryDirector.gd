@@ -222,7 +222,7 @@ static func truthful_facts(facts: Array) -> Array:
 ## Pasos que tienen sentido en una acción del jugador (tecla F).
 const WORLD_STEPS := ["go_to", "play", "use", "npc_react", "give_to_npc", "give_item", "change_stat", "journal",
 	"reveal_place", "update_item", "remove_item", "place_object", "affect_nearby", "change_need", "pay", "earn",
-	"spawn_npc", "create_place", "sleep", "wait", "climb", "move_to", "force_door"]
+	"spawn_npc", "create_place", "sleep", "wait", "climb", "move_to", "force_door", "travel", "ride", "land"]
 const MAX_FINDS_PER_PLACE := 6  # rebuscar sin parar no llena el inventario (fabricar no cuenta)
 const MAX_ACTION_MINUTES := 240
 ## Si la narración cuenta esto, tiene que haber un paso de este tipo (si no, se pide otra vez).
@@ -258,7 +258,7 @@ Reglas:
 - climb: subir al techo de un edificio o bajar de él. "target": "roof:<id de la puerta>" (p. ej. "roof:casa_2"; tu casa: "roof:home") o "down" para bajar. Sin escalera solo se trepa hasta ~7 m.
 - move_to: subirse encima de algo cercano (una banca, una mesa, una roca) o ponerse en un sitio. "target": id; "on": true para quedar encima.
 - force_door: forzar una puerta cerrada o, de noche, colarse por una ventana. "target": "door:<id>"; "window": true si es por la ventana. Hace ruido: los de dentro o quien pase pueden oírte, y luego todos lo sabrán.
-- npc_react: cómo reacciona una persona. "target": su id (npc:...); "emotion": angry, scared, happy, sad, worried, curious, amused o neutral; "gesture" (de la lista); "behavior": stay, flee, approach, follow, go_inside, fight_back, leave o guide (te lleva a un sitio: pon el sitio en "item_name"); "line": lo que suelta (corto); "amount": cuánto cambia su opinión del jugador (-30 a 30); "text": lo que recordará, desde su punto de vista ("El jugador te dio un puñetazo en el muelle sin motivo").
+- npc_react: cómo reacciona una persona. "target": su id (npc:...); "emotion": angry, scared, happy, sad, worried, curious, amused o neutral; "gesture" (de la lista); "behavior": stay, flee, approach, follow, go_inside, fight_back, leave, guide (te lleva a un sitio: pon el sitio en "item_name"), ride (se sube a tu vehículo); "line": lo que suelta (corto); "amount": cuánto cambia su opinión del jugador (-30 a 30); "text": lo que recordará, desde su punto de vista ("El jugador te dio un puñetazo en el muelle sin motivo").
 - give_to_npc: das algo que llevas. "target": id de la persona; "item_name": el objeto.
 - give_item: consigue o fabrica algo que se lleva encima ("item_name", "item_description", "item_effect": para qué sirve de verdad en el juego — light (da luz), nourish (se come), hydrate (se bebe), signal (capta señales), warmth (abriga), tool (herramienta), heal (cura) o none).
 - update_item: repara o modifica algo que LLEVA ENCIMA. "target": nombre actual; "item_name": nombre nuevo; "item_description".
@@ -271,7 +271,10 @@ Reglas:
 - earn: al jugador le pagan (un trabajo hecho, algo vendido). "price" en dólares, razonable.
 - spawn_npc: aparece una persona nueva que tiene sentido aquí (llamaste a un fontanero, pasa una vendedora…). "name" (nombre y apellido), "occupation", "text" (cómo es y su carácter, 1-2 frases), "line" (lo primero que dice). Se queda a vivir en el lugar.
 - create_place: aparece o se abre un sitio nuevo que encaja con el lugar y la época (una panadería, un taller…). "item_name": su nombre (el del letrero); "target": shop, bakery, bar, workshop, house, office, clinic o market; "text": cómo es.
-- sleep: dormir. "until_hour": hora a la que se despierta (0–24; 3.5 = 3:30, 15 = 3 de la tarde) o "hours": cuántas horas. Si hay una cama cerca, antes go_to a ella. Hace pasar el tiempo él solo ("minutes": 0).
+- sleep: dormir. "until_hour": hora a la que se despierta (0–24; 3.5 = 3:30, 15 = 3 de la tarde) o "hours": cuántas horas. "target": "home" si va a dormir a su casa (el juego le lleva, entra y se acuesta en su cama), "bed" para la cama más cercana; "floor": true SOLO si quiere dormir en el suelo. Hace pasar el tiempo él solo ("minutes": 0).
+- travel: ir a otro lugar. "target": "location:<id>" de "OTROS LUGARES A LOS QUE PUEDE VIAJAR" (va en su nave o con el Ancla) o el nombre de un sitio de "SITIOS DE ESTE LUGAR" aunque esté lejos ("regreso al pueblo" = "pueblo"/la plaza).
+- land: (solo en el espacio, en la nave) aterrizar. "target": el nombre del planeta o la estación; la nave va sola hasta allí si está lejos.
+- ride: una persona se sube al vehículo del jugador (o al más cercano). "target": su id (npc:...). Úsalo cuando el jugador le pide que suba y ella acepta.
 - wait: esperar sin dormir (hasta una hora o unas horas), mismos campos. Hace pasar el tiempo él solo ("minutes": 0).
 "minutes": cuánto tarda de verdad (talar ~30, construir una balsa ~180, buscar ~10, un golpe ~1, comer ~20, ducharse ~15).
 Ejemplo, "subo al techo de mi casa": "steps": [{"type": "climb", "target": "roof:home", "narration": "Trepas por la reja y el alféizar hasta el techo."}], "minutes": 2

@@ -58,6 +58,9 @@ Si la IA no está disponible, el juego usa contenido de respaldo y **nunca se qu
 | ✅ | Memoria de PNJs (hechos, relación) y perfil del jugador inferido de sus decisiones |
 | ✅ | **El Despertar** (ciencia ficción): la IA elige el origen científico de tu Ancla según cómo jugaste, con canon permanente y una decisión que ramifica la historia |
 | ✅ | Árbol de líneas temporales, energía, inestabilidad y saltos con el Ancla (<kbd>T</kbd>) |
+| ✅ | **El campo** alrededor del pueblo: caminos, praderas con flores, la granja con animales, el lago (se pesca), el campamento, las ruinas, el mirador y la cabaña del pescador |
+| ✅ | **Música de verdad** (CC0) que cambia según dónde estés: pueblo de día y de noche, campo, cafetería, planetas, espacio y peligro |
+| ✅ | **Naves por dentro**: vas en la cabina (vista de cabina con <kbd>V</kbd>), con pasajeros que viajan contigo a otros planetas; piloto automático y crucero que frena |
 | ✅ | **Mundos generados**: cada salto a lo desconocido crea un lugar 3D nuevo (terreno, cielo, gravedad, balizas) con sus habitantes |
 | ✅ | **Mundos variados**: ciudades y pueblos con el estilo de su época, estaciones espaciales entre estrellas, ruinas, vegetación, cristales, lava, océanos y zonas de anomalía |
 | ✅ | **Misiones generadas** en cada mundo, ancladas a lugares, personas y objetos reales |
@@ -128,9 +131,10 @@ Desde la **v0.2.0**, el juego comprueba al arrancar si hay una versión estable 
 | Cámara / acercar y alejar | Ratón / rueda (al mínimo, primera persona) |
 | Hablar / recoger / entrar / sentarse / subir a una barca, un coche o una nave | <kbd>E</kbd> (lo que tienes delante, indicado abajo en pantalla) |
 | Conducir | <kbd>W</kbd><kbd>S</kbd> acelerar y frenar (o los gatillos del mando), <kbd>A</kbd><kbd>D</kbd> volante, <kbd>Espacio</kbd> freno de mano, <kbd>H</kbd> claxon |
-| Pilotar una nave | Apuntas con el ratón; <kbd>W</kbd><kbd>S</kbd> empujar, <kbd>A</kbd><kbd>D</kbd> de lado (en el espacio, alabear), <kbd>Espacio</kbd> sube y <kbd>Ctrl</kbd>/<kbd>Q</kbd> baja, <kbd>Shift</kbd> potencia o crucero; en el espacio <kbd>Tab</kbd> elige destino y <kbd>Z</kbd> la asistencia de vuelo |
+| Pilotar una nave | Apuntas con el ratón; <kbd>W</kbd><kbd>S</kbd> empujar, <kbd>A</kbd><kbd>D</kbd> de lado (en el espacio, alabear), <kbd>Espacio</kbd> sube y <kbd>Ctrl</kbd>/<kbd>Q</kbd> baja, <kbd>Shift</kbd> potencia o crucero, <kbd>V</kbd> vista de cabina; en el espacio <kbd>X</kbd> frena en seco, <kbd>Tab</kbd> elige destino, <kbd>G</kbd> piloto automático y <kbd>Z</kbd> la asistencia de vuelo |
+| Pescar | <kbd>E</kbd> en el muelle o el lago con una caña, y otra vez <kbd>E</kbd> cuando pica |
 | Elegir respuesta en un diálogo | <kbd>1</kbd>–<kbd>4</kbd> |
-| Hacer algo (acción libre) | <kbd>F</kbd> |
+| Hacer algo (acción libre), también dentro de la nave y en el espacio | <kbd>F</kbd> |
 | Ancla (saltar) | <kbd>T</kbd> |
 | Cuaderno: objetos, encargos, diario y personas | <kbd>I</kbd> |
 | Celular | <kbd>C</kbd> |
@@ -208,6 +212,10 @@ godot --headless --path . -s tests/test_agent.gd       # el agente creador: herr
 godot --headless --path . -s tests/test_vehicles.gd    # coches, bici, tráfico, robo, nave, espacio y reglas
 godot --headless --path . -s tests/test_world_edges.gd # el mundo sin borde: terreno por trozos y mar sin fin
 godot --headless --path . -s tests/test_realism.gd     # atropellos, choques, pasajeros, mesero, cama ajena, faro, IA sin inventos
+godot --headless --path . -s tests/test_space_flight.gd # la nave por dentro, pasajeros, crucero que frena, choques, piloto automático
+godot --headless --path . -s tests/test_stairs.gd       # la escalera del faro sin techo encima y escaleras a la planta de arriba
+godot --headless --path . -s tests/test_no_glare.gd     # sin destellos, estrellas en el cielo, música y el campo con sus sitios
+godot --headless --path . -s tests/test_f_travel.gd     # F: dormir en tu cama, «súbete al auto», volver al pueblo en tu nave
 bash tests/smoke.sh                                    # arranca las escenas y busca errores de script
 ```
 

@@ -530,11 +530,16 @@ func ride(vehicle: Node3D, seat: int) -> void:
 		_shape.set_deferred("disabled", true)
 	if _rig:
 		_rig.play("sit", 1.0e6)
+	if vehicle.get("hides_riders") == true:  # en la nave va dentro, no se le ve
+		_body.visible = false
+		_name_label.visible = false
 	set_activity("va en %s" % (vehicle.call("the_name") if vehicle.has_method("the_name") else "el coche"), "sit")
 
 
 func get_off(at: Vector3) -> void:
 	_riding = null
+	_body.visible = true
+	_name_label.visible = true
 	global_position = at
 	velocity = Vector3.ZERO
 	if _shape:

@@ -19,12 +19,18 @@ float noise(vec2 p) {
 
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	// Un triángulo degenerado (dos vértices iguales) deja la normal a cero; normalizarla da NaN,
+	// y un solo píxel NaN el resplandor (glow) lo convierte en una mancha blanca enorme: eran los
+	// «destellos» que se veían de noche en el campo y en la orilla (el agua refleja lo de debajo).
+	if (dot(NORMAL, NORMAL) < 1e-8) {
+		NORMAL = vec3(0.0, 1.0, 0.0);
+	}
 	world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
 
 void fragment() {
 	float n = noise(world_pos.xz * 0.08) * 0.6 + noise(world_pos.xz * 0.6) * 0.3 + noise(world_pos.xz * 3.0) * 0.1;
-	vec3 base = pow(COLOR.rgb, vec3(2.2));  // los colores de vértice vienen en sRGB
+	vec3 base = pow(max(COLOR.rgb, vec3(0.0)), vec3(2.2));  // los colores de vértice vienen en sRGB
 	vec3 col = base * (1.0 - variation + n * variation * 2.0);
 	float slope = 1.0 - clamp(world_normal.y, 0.0, 1.0);
 	col = mix(col, rock_color.rgb * (0.8 + n * 0.4), smoothstep(0.35, 0.65, slope));

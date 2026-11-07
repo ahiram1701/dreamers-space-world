@@ -7,7 +7,7 @@ config_version=5
 
 config/name="Dreamer's Space World"
 config/description="Un multiverso que crece contigo: la IA genera el mundo según tus decisiones."
-config/version="0.7.2"
+config/version="0.8.0"
 run/main_scene="res://scenes/main_menu/MainMenu.tscn"
 config/features=PackedStringArray("4.7")
 boot_splash/bg_color=Color(0.03, 0.04, 0.11, 1)
@@ -41,6 +41,7 @@ Body="*res://autoload/Body.gd"
 Wallet="*res://autoload/Wallet.gd"
 Phone="*res://autoload/Phone.gd"
 Jobs="*res://autoload/Jobs.gd"
+Music="*res://autoload/Music.gd"
 
 [display]
 

@@ -21,7 +21,7 @@
 	"placeable": ["boat", "raft", "campfire", "tent", "shelter", "table", "chair", "bed", "fence", "sign", "torch", "box", "garden", "other"],
 	"world_feature": ["tree", "rock", "bush", "crop"],
 	"gesture": ["chop", "hammer", "dig", "pick_up", "search", "crouch", "sit", "sleep", "drink", "eat", "wave", "point", "give", "fish", "row", "swim", "dance", "think", "cross_arms", "shrug", "nod", "shake_head", "punch", "push", "kick", "hug", "handshake", "throw", "pat", "kneel", "write", "read", "listen", "call", "wipe", "yawn", "cook", "knock", "climb"],
-	"npc_behavior": ["stay", "flee", "approach", "follow", "go_inside", "fight_back", "leave", "guide"],
+	"npc_behavior": ["stay", "flee", "approach", "follow", "go_inside", "fight_back", "leave", "guide", "ride"],
 	"need": ["hunger", "thirst", "rest", "hygiene"],
 	"place_kind": ["shop", "bakery", "bar", "workshop", "house", "office", "clinic", "market", "grocery", "restaurant", "pharmacy", "hardware"],
 	"placed_function": ["none", "light", "seat", "bed", "shelter", "heat", "storage", "signal"],
