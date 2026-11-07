@@ -84,17 +84,25 @@ static func _settlement(parent: Node3D, def: Dictionary, height_at: Callable, rn
 				var b := AssetLibrary.bounds(model)
 				var building := AssetLibrary.place(parent, model, p + Vector3(0, 0.25, 0), b.size.y * rng.randf_range(2.4, 3.0),
 					atan2(hub.x - p.x, hub.y - p.z), true)  # mirando a la plaza
+				building.set_meta("style", "model")
+				building.set_meta("model_name", str(model.get_meta("model_name", "")))
 				if _extras.has("buildings"):
 					_extras.buildings.append(building)
 				avoid.append(p)
 				continue
+		var yaw := atan2(hub.x - p.x, hub.y - p.z)
+		# Lo que mide de verdad cada forma (de ahí salen la puerta y cuántas plantas tiene dentro)
+		var real: Vector3 = {"hut": Vector3(w * 0.9, h + 2.0, w * 0.9), "house": Vector3(w, h, w * 0.9), "factory": Vector3(w, h, w * 1.6),
+			"tower": Vector3(w * 0.8, h, w * 0.8), "dome": Vector3(w * 1.4, w * 0.7, w * 1.4 + 2.2), "spire": Vector3(w * 0.7, h, w * 0.7)}.get(style.shape, Vector3(w, h, w))
 		if _extras.has("buildings"):  # también se entra en las cabañas, cúpulas y torres procedurales
 			var marker := Node3D.new()
 			marker.position = p
-			marker.rotation.y = atan2(hub.x - p.x, hub.y - p.z)
-			marker.set_meta("size", Vector3(w, h, w * (1.4 if style.shape == "dome" else 0.95)))
+			marker.rotation.y = yaw
+			marker.set_meta("size", real)
+			marker.set_meta("style", style.shape)
 			parent.add_child(marker)
 			_extras.buildings.append(marker)
+		var front := Vector3(sin(yaw), 0, cos(yaw))
 		match style.shape:
 			"hut":
 				_cylinder(parent, p + Vector3(0, h / 2, 0), w * 0.4, w * 0.45, h, wall, true)
@@ -103,20 +111,41 @@ static func _settlement(parent: Node3D, def: Dictionary, height_at: Callable, rn
 				_box(parent, p + Vector3(0, h / 2, 0), Vector3(w, h, w * 0.9), wall, true)
 				_prism(parent, p + Vector3(0, h + 0.9, 0), Vector3(w + 0.6, 1.8, w * 0.9 + 0.6), roof)
 			"factory":
-				_box(parent, p + Vector3(0, h / 2, 0), Vector3(w * 1.6, h, w), wall, true)
+				var fb := _box(parent, p + Vector3(0, h / 2, 0), Vector3(w, h, w * 1.6), wall, true)
+				fb.rotation.y = yaw
 				_cylinder(parent, p + Vector3(w * 0.5, h + 2.5, 0), 0.5, 0.6, 5.0, roof, true)
 			"tower":
 				_box(parent, p + Vector3(0, h / 2, 0), Vector3(w * 0.8, h, w * 0.8), wall, true)
 				_emissive_box(parent, p + Vector3(0, h * 0.75, 0), Vector3(w * 0.82, 0.3, w * 0.82), Color(style.roof).lightened(0.5))
 			"dome":
+				# Media cúpula sobre el suelo, con un vestíbulo de entrada (antes: una esfera
+				# medio enterrada, sin puerta: parecía un iglú)
 				_sphere(parent, p, w * 0.7, wall, true)
 				_emissive_box(parent, p + Vector3(0, w * 0.7, 0), Vector3(0.4, 0.4, 0.4), roof)
+				var vest := _box(parent, p + front * (w * 0.7 + 0.35) + Vector3(0, 1.45, 0), Vector3(2.0, 2.6, 1.6), wall.darkened(0.08), true)
+				vest.rotation.y = yaw
 				if rng.randf() < 0.4:
-					_cylinder(parent, p + Vector3(w, h / 2, 0), 0.3, 0.6, h, wall, true)
+					_cylinder(parent, p - front * w + Vector3(0, h / 2, 0), 0.3, 0.6, h, wall, true)
 			"spire":
 				_cylinder(parent, p + Vector3(0, h / 2, 0), 0.4, w * 0.35, h, wall, true)
 				_emissive_box(parent, p + Vector3(0, h, 0), Vector3(0.6, 0.6, 0.6), roof)
+		# La puerta, que se vea: marco y hoja en la cara que da a la plaza
+		var face: float = real.z / 2.0 + (0.0 if style.shape != "dome" else -0.7)
+		if style.shape == "dome":
+			face = w * 0.7 + 1.16
+		_door_mesh(parent, p + front * face, yaw, roof)
 		avoid.append(p)
+
+
+## Una puerta que se ve: marco oscuro y hoja con su tirador, mirando hacia `yaw`.
+static func _door_mesh(parent: Node3D, at: Vector3, yaw: float, accent: Color) -> void:
+	var holder := Node3D.new()
+	holder.position = at
+	holder.rotation.y = yaw
+	parent.add_child(holder)
+	_box(holder, Vector3(0, 1.15, 0.02), Vector3(1.3, 2.4, 0.08), Color("#2a2a2e"), false)
+	_box(holder, Vector3(0, 1.1, 0.06), Vector3(1.05, 2.15, 0.05), accent.darkened(0.35), false)
+	_box(holder, Vector3(0.38, 1.05, 0.1), Vector3(0.05, 0.18, 0.05), Color("#d8d2c6"), false)
 
 
 static func _ruins(parent: Node3D, height_at: Callable, rng: RandomNumberGenerator, avoid: Array) -> void:

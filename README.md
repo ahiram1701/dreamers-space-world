@@ -133,6 +133,8 @@ Desde la **v0.2.0**, el juego comprueba al arrancar si hay una versión estable 
 | Conducir | <kbd>W</kbd><kbd>S</kbd> acelerar y frenar (o los gatillos del mando), <kbd>A</kbd><kbd>D</kbd> volante, <kbd>Espacio</kbd> freno de mano, <kbd>H</kbd> claxon |
 | Pilotar una nave | Apuntas con el ratón; <kbd>W</kbd><kbd>S</kbd> empujar, <kbd>A</kbd><kbd>D</kbd> de lado (en el espacio, alabear), <kbd>Espacio</kbd> sube y <kbd>Ctrl</kbd>/<kbd>Q</kbd> baja, <kbd>Shift</kbd> potencia o crucero, <kbd>V</kbd> vista de cabina; en el espacio <kbd>X</kbd> frena en seco, <kbd>Tab</kbd> elige destino, <kbd>G</kbd> piloto automático y <kbd>Z</kbd> la asistencia de vuelo |
 | Pescar | <kbd>E</kbd> en el muelle o el lago con una caña, y otra vez <kbd>E</kbd> cuando pica |
+| Leer un letrero, examinar algo, tomar una cosa pequeña | <kbd>E</kbd> delante («Leer», «Examinar», «Tomar») |
+| En una mesa de la cafetería | <kbd>E</kbd> «Llamar a la mesera» para pedir; en la carta se piden varias cosas y «Listo» |
 | Elegir respuesta en un diálogo | <kbd>1</kbd>–<kbd>4</kbd> |
 | Hacer algo (acción libre), también dentro de la nave y en el espacio | <kbd>F</kbd> |
 | Ancla (saltar) | <kbd>T</kbd> |
@@ -216,6 +218,9 @@ godot --headless --path . -s tests/test_space_flight.gd # la nave por dentro, pa
 godot --headless --path . -s tests/test_stairs.gd       # la escalera del faro sin techo encima y escaleras a la planta de arriba
 godot --headless --path . -s tests/test_no_glare.gd     # sin destellos, estrellas en el cielo, música y el campo con sus sitios
 godot --headless --path . -s tests/test_f_travel.gd     # F: dormir en tu cama, «súbete al auto», volver al pueblo en tu nave
+godot --headless --path . -s tests/test_physics_body.gd # escalones sin saltar, daño por caída, bici y moto, restos de choque
+godot --headless --path . -s tests/test_service.gd      # la cafetería: varios pedidos, vaso o plato, mesera sin atorarse, llamarla
+godot --headless --path . -s tests/test_interact.gd     # leer, examinar, tomar, la nevera, 3 plantas y balcón, cúpulas, guiar
 bash tests/smoke.sh                                    # arranca las escenas y busca errores de script
 ```
 

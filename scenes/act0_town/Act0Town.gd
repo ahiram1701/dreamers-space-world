@@ -846,7 +846,10 @@ func _add_door(root: Node3D, kind: String, id: String, label: String) -> void:
 	if model == null or not model.has_meta("model_name") or kind in ["cafe", "station"]:
 		return  # la cafetería y la estación ya traen su fachada
 	# Casas y negocios de la calle: plantas, fachada y ventanas que se encienden con vida dentro
-	_interiors.set_door_option(id, "floors", 2 if size.y > 7.5 else 1)
+	# Tantas plantas como tiene el modelo («3Story_Balcony» = 3, con balcón), no a ojo por su altura
+	var mname := str(model.get_meta("model_name"))
+	_interiors.set_door_option(id, "floors", AssetLibrary.floors_of(mname, size.y))
+	_interiors.set_door_option(id, "balcony", mname.contains("Balcony"))
 	var sign: String = {"clothes": "Ropa", "salon": "Peluquería"}.get(kind, str(Shops.info(kind).get("sign", "")) if Shops.is_shop(kind) else "")
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(id)

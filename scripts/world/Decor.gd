@@ -125,6 +125,7 @@ static func landmark(parent: Node3D, pos: Vector3, label: String, kind: String =
 	m.set_meta("kind", kind)
 	parent.add_child(m)
 	m.position = pos
+	Examine.attach(parent, pos, label, kind)  # y se puede examinar de cerca (E)
 
 
 static func streetlight(parent: Node3D, pos: Vector3, yaw: float, fx: EnvironmentFX) -> OmniLight3D:
@@ -262,6 +263,7 @@ static func facade(parent: Node3D, door: Vector3, yaw: float, business: String, 
 	l2.rotation.y = yaw - PI / 2
 	l2.position = board_at - side * 0.05
 	parent.add_child(l2)
+	Examine.sign(parent, board_at - Vector3(0, 1.3, 0) + out * 0.4, business, "%s.\n\nEl letrero cuelga sobre la puerta. Dentro se ve lo que venden; los horarios están en la puerta." % business)
 
 
 # --- Olas (las mismas que water.gdshader, para que las barcas floten con el agua) ---------

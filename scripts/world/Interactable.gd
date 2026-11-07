@@ -11,6 +11,9 @@ var on_use: Callable
 var owner_node: Node = null
 ## Desactivado (p. ej. una puerta cerrada con pestillo sigue mostrando su aviso, pero no abre).
 var enabled := true
+## Preferencia al elegir qué tienes delante: > 0 gana a lo cercano (llamar al mesero desde la
+## mesa); < 0 cede (examinar un objeto cualquiera no tapa una puerta ni a una persona).
+var pick_priority := 0.0
 
 
 static func create(parent: Node3D, pos: Vector3, radius: float, prompt_text: String, callback: Callable, owner_of: Node = null) -> Interactable:

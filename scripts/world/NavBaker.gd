@@ -4,7 +4,8 @@ extends RefCounted
 ## (paredes, muebles, árboles, bancas) y se hornea en un hilo aparte. Con ella los PNJ buscan un
 ## camino que rodea lo que hay en medio en vez de ir en línea recta y chocar.
 
-const AGENT_RADIUS := 0.5   # múltiplos de la celda (0.25 × 0.2): si no, Godot redondea y avisa
+const AGENT_RADIUS := 0.25  # múltiplos de la celda (0.25 × 0.2): si no, Godot redondea y avisa
+                            # (con 0.5 no cabían por el paso tras la barra ni entre mesas)
 const AGENT_HEIGHT := 1.8
 
 
@@ -41,6 +42,14 @@ static func bake(root: Node3D, area: AABB, name: String = "Navegacion", now: boo
 			region.navigation_mesh = mesh  # vuelve a asignarla para que el servidor la recoja ya horneada
 			region.set_meta("baked", true))
 	return region
+
+
+## El punto de la malla más cercano a `to` (para no apuntar dentro de un mueble), o `to` si no hay.
+static func closest(node: Node3D, to: Vector3) -> Vector3:
+	if not ready_for(node):
+		return to
+	var p := NavigationServer3D.map_get_closest_point(node.get_world_3d().navigation_map, to)
+	return p if p.distance_to(to) < 1.6 else to
 
 
 ## ¿Hay malla en el mapa de este nodo? (antes de hornear, o en una escena sin ella, se va recto).

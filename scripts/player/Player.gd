@@ -63,6 +63,13 @@ var _auto_check_t := 0.0
 var _auto_detour := 0.0
 var _auto_side := 1.0
 var _stuck_t := 0.0   # tiempo intentando moverse sin avanzar
+var _down_t := 0.0    # en el suelo tras una caída fuerte (no te puedes mover)
+const STEP_MAX := 0.38          # sube solo escalones de hasta esta altura (sin saltar)
+const FALL_SAFE := 9.0          # m/s al tocar el suelo sin hacerse daño (~4 m de caída)
+const FALL_KO := 22.0           # m/s: te deja sin sentido (~25 m)
+
+## Te has hecho daño al caer (para la escena: avisos, testigos).
+signal fell(impact: float, damage: int)
 var _cam_vehicle: Node3D = null   # en el que va (la cámara no choca con él y le sigue por detrás)
 var _look_idle := 10.0            # segundos sin mover la cámara (al conducir vuelve detrás)
 var _safe_pos := Vector3.INF      # último sitio pisando suelo firme (si caes al vacío, vuelves aquí)
@@ -74,8 +81,10 @@ func _ready() -> void:
 	var shape := CollisionShape3D.new()
 	shape.shape = CapsuleShape3D.new()
 	shape.shape.radius = 0.32
+	shape.shape.height = 1.8   # de los pies (y = 0) a la cabeza (antes asomaba 10 cm bajo los pies)
 	shape.position.y = 0.9
 	add_child(shape)
+	floor_snap_length = 0.3    # al bajar un escalón no «vuela»: se queda pegado al suelo
 
 	_body = Node3D.new()
 	add_child(_body)
@@ -241,6 +250,15 @@ func _follow_lamp() -> void:
 
 
 ## provided: la herramienta te la dan (en el trabajo); si no, solo sale si la tienes.
+## Mantener un gesto que dura (en un vehículo, cada frame): solo lo empieza si no está ya
+## sonando. (Antes se reiniciaba cada frame: el pedaleo no avanzaba y el remo se creaba 60 veces
+## por segundo.)
+func hold_gesture(gesture: String) -> void:
+	if _rig and _rig.gesture() == gesture:
+		return
+	play_gesture(gesture)
+
+
 func play_gesture(gesture: String, duration: float = -1.0, provided: bool = false) -> void:
 	if _rig:
 		_rig.play(gesture, duration, provided or has_tool_for(gesture))
@@ -491,6 +509,16 @@ func _physics_process(delta: float) -> void:
 		return
 	if not _body.visible:
 		_body.visible = true
+	if _down_t > 0.0:  # tirado en el suelo tras la caída: te levantas en un momento
+		_down_t -= delta
+		velocity.x = 0.0
+		velocity.z = 0.0
+		if not is_on_floor():
+			velocity.y -= _gravity * gravity_scale * delta
+		move_and_slide()
+		if _down_t <= 0.0:
+			stop_gesture()
+		return
 	var input := Controls.move_vector() if controls_enabled else Vector2.ZERO
 	if input != Vector2.ZERO and _auto_target != Vector3.INF:
 		cancel_auto_walk()  # el jugador retoma el control
@@ -538,7 +566,13 @@ func _physics_process(delta: float) -> void:
 		velocity.x = move_toward(velocity.x, 0, speed * 8.0 * delta)
 		velocity.z = move_toward(velocity.z, 0, speed * 8.0 * delta)
 	var before := global_position
+	var fall_v := -velocity.y
+	var was_air := not is_on_floor()
 	move_and_slide()
+	if dir != Vector3.ZERO and not swimming:
+		_try_step(dir)
+	if was_air and is_on_floor() and not swimming and fall_v > FALL_SAFE:
+		_landed_hard(fall_v)
 	_check_stuck(dir, speed, before, delta)
 	if is_on_floor() and not swimming:
 		_safe_pos = global_position
@@ -548,6 +582,42 @@ func _physics_process(delta: float) -> void:
 		_rig.swimming = swimming
 		if dir != Vector3.ZERO and _rig.gesture() in ["sit", "sleep", "crouch", "search", "chop", "hammer", "dig", "fish", "think", "kneel", "read", "write", "listen"]:
 			_rig.stop_gesture()  # moverse interrumpe lo que estaba haciendo
+
+
+## Escalones: si al andar chocas con algo bajo (un peldaño, un bordillo), subes encima sin saltar.
+func _try_step(dir: Vector3) -> void:
+	if not is_on_floor() or not is_on_wall():
+		return
+	var motion := dir.normalized() * 0.3
+	var raised := global_transform.translated(Vector3(0, STEP_MAX, 0))
+	if test_move(raised, motion):
+		return  # sigue chocando aun subiendo: es una pared, no un escalón
+	var from := global_position + Vector3(0, STEP_MAX + 0.05, 0) + motion
+	var q := PhysicsRayQueryParameters3D.create(from, global_position + motion - Vector3(0, 0.05, 0), Layers.WORLD, [get_rid()])
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	if hit.is_empty():
+		return
+	var rise: float = hit.position.y - global_position.y
+	if rise > 0.02 and rise <= STEP_MAX and (hit.normal as Vector3).y > 0.7:
+		global_position += Vector3(0, rise + 0.02, 0) + motion * 0.4
+		velocity.y = maxf(velocity.y, 0.0)
+
+
+## Una caída fuerte: duele según lo rápido que llegas al suelo; muy fuerte, pierdes el sentido.
+func _landed_hard(impact: float) -> void:
+	var damage := int((impact - FALL_SAFE) * 6.5)
+	shake(0.5, clampf(impact * 0.012, 0.08, 0.3))
+	Sfx.at(self, "thump", global_position + Vector3(0, 0.3, 0))
+	if impact > FALL_SAFE + 4.0:
+		play_gesture("fallen", 2.5)
+		_down_t = clampf((impact - FALL_SAFE) * 0.25, 1.0, 4.0)
+	if GameState.is_awakened():
+		GameState.change_stat("health", -damage)
+	# (antes del Despertar no hay barra de salud: el golpe te deja molido y, si fue brutal, sin sentido)
+	Body.change("rest", -minf(damage * 0.4, 40.0))
+	fell.emit(impact, damage)
+	if impact >= FALL_KO and not GameState.is_awakened():
+		_down_t = 6.0
 
 
 ## Si llevas un rato empujando sin avanzar y estás metido dentro de algo (un arbusto, un mueble),

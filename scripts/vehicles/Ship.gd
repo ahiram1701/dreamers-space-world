@@ -37,6 +37,9 @@ var autopilot := false
 var auto_point := Vector3.ZERO
 var auto_stop := 0.0
 signal autopilot_arrived
+signal autopilot_stopped(why: String)
+var _detour := Vector3.INF
+var _detour_t := 0.0
 
 var _rider: Player
 var _use: Interactable
@@ -412,17 +415,42 @@ func _fly_space(c: Dictionary, delta: float, has_fuel: bool) -> void:
 	# El ratón cabecea y gira; A/D alabean. Todo suavizado (una nave tiene inercia al girar)
 	var s := steer
 	steer = Vector2.ZERO
-	if autopilot and (s.length() > 0.02 or float(c.thrust) != 0.0 or Input.is_action_pressed("ship_brake")):
-		autopilot = false  # tomas el mando
-	rotate_object_local(Vector3.UP, -s.x)
-	rotate_object_local(Vector3.RIGHT, s.y)
+	# El piloto automático solo lo cortas a propósito: W/S, X o G (el ratón ya no lo corta: antes un
+	# roce lo apagaba). Sin combustible se apaga y avisa.
+	if autopilot and (float(c.thrust) != 0.0 or Input.is_action_pressed("ship_brake")):
+		autopilot = false
+		autopilot_stopped.emit("tomas el mando")
+	if autopilot and not has_fuel:
+		autopilot = false
+		autopilot_stopped.emit("sin combustible")
+	if not autopilot:
+		rotate_object_local(Vector3.UP, -s.x)
+		rotate_object_local(Vector3.RIGHT, s.y)
 	rotate_object_local(Vector3.FORWARD, float(c.side) * 1.4 * delta)
 	transform = transform.orthonormalized()
 	var spd := velocity.length()
 	if autopilot and has_fuel:
-		var to := auto_point - global_position
-		var dist := to.length() - auto_stop
-		if dist < 25.0:
+		# Esquiva: si hay algo entre la nave y el destino (una luna, el sol, otro planeta), pasa por
+		# encima de ello antes de seguir
+		_detour_t -= delta
+		if _detour_t <= 0.0:
+			_detour_t = 0.5
+			var aim := auto_point - global_position
+			var reach := minf(aim.length() - auto_stop * 0.8, 8000.0)
+			if reach > 50.0:
+				var q := PhysicsRayQueryParameters3D.create(global_position, global_position + aim.normalized() * reach, collision_mask, [get_rid()])
+				var hit := get_world_3d().direct_space_state.intersect_ray(q)
+				if not hit.is_empty():
+					var side := (hit.normal as Vector3) + Vector3.UP
+					_detour = (hit.position as Vector3) + side.normalized() * 900.0
+				elif _detour != Vector3.INF and global_position.distance_to(_detour) < 300.0:
+					_detour = Vector3.INF
+		var goal := _detour if _detour != Vector3.INF else auto_point
+		var to := goal - global_position
+		var dist := to.length() - (0.0 if _detour != Vector3.INF else auto_stop)
+		if dist < 25.0 and _detour != Vector3.INF:
+			_detour = Vector3.INF
+		elif dist < 25.0:
 			autopilot = false
 			velocity = velocity.limit_length(10.0)
 			autopilot_arrived.emit()
@@ -448,7 +476,15 @@ func _fly_space(c: Dictionary, delta: float, has_fuel: bool) -> void:
 	elif assist:
 		var bleed := acc * 0.35 if spd <= normal_top * 1.05 else maxf((spd - normal_top) * 1.2, acc)
 		velocity = velocity.move_toward(Vector3.ZERO if spd <= normal_top * 1.05 else velocity.normalized() * normal_top, bleed * delta)
-	var hit := move_and_collide(velocity * delta)
+	# A crucero se recorren decenas de metros por paso: se mueve en tramos cortos para no atravesar
+	# un asteroide pequeño
+	var motion := velocity * delta
+	var hit: KinematicCollision3D = null
+	var steps := clampi(int(ceil(motion.length() / 10.0)), 1, 8)
+	for i in steps:
+		hit = move_and_collide(motion / steps)
+		if hit:
+			break
 	if hit:  # rebota y se daña el casco según lo fuerte del golpe
 		var n := hit.get_normal()
 		var into := -velocity.dot(n)

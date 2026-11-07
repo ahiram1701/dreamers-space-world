@@ -66,6 +66,7 @@ var _prev_vel := Vector3.ZERO
 var _audio: EngineAudio
 var _smoke: CPUParticles3D
 var _rear: Array = []           # ruedas traseras (freno de mano)
+var _two_wheel := false         # bici o moto
 var _ground_t := 0.0
 var _flip_t := 0.0
 var _lamps: Array = []          # materiales de los faros y pilotos (piezas que brillan)
@@ -253,9 +254,12 @@ func _build_parts(e: Dictionary, wheels: Array) -> void:
 			w.suspension_max_force = 9000.0
 			w.damping_compression = 2.2
 			w.damping_relaxation = 2.8
-			w.wheel_friction_slip = 2.8
-			w.wheel_roll_influence = 0.25
-			w.use_as_traction = at.z <= 0.0 or wheels.size() <= 2 or pedals
+			var two := wheels.size() <= 2
+			w.wheel_friction_slip = 6.5 if two else 5.5
+			w.set_meta("grip", w.wheel_friction_slip)
+			w.set_meta("rear", at.z <= 0.0)
+			w.wheel_roll_influence = 0.05 if two else 0.12
+			w.use_as_traction = at.z <= 0.0 if (two or not pedals) else true  # bici y moto: tracción atrás
 			w.use_as_steering = at.z > 0.0
 			w.position = at + Vector3(0, 0.1, 0)
 			add_child(w)
@@ -299,6 +303,8 @@ func _build_parts(e: Dictionary, wheels: Array) -> void:
 	length = size.z
 	var volume := size.x * size.y * size.z
 	mass = clampf(volume * (90.0 if pedals else 160.0), 15.0, 2600.0)
+	if wheels.size() <= 2:  # con la persona encima pesa más (y no rebota como una pluma)
+		mass = maxf(mass, 80.0 if pedals else 180.0)
 	center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
 	center_of_mass = Vector3((hi.x + lo.x) / 2.0, bottom + 0.1, (hi.z + lo.z) / 2.0)
 	if _seat == Vector3(0, 1.0, 0):
@@ -332,8 +338,9 @@ func _finish(wheel_count: int) -> void:
 			if wheel_count <= 2:
 				break
 	_set_lights(false)
-	if wheel_count <= 2:  # bici o moto: no se cae de lado (no simulamos el equilibrio)
-		axis_lock_angular_z = true
+	if wheel_count <= 2:  # bici o moto: un par la mantiene derecha (y se inclina, a la vista, al girar)
+		_two_wheel = true
+		angular_damp = 1.8
 	_use = Interactable.create(self, Vector3(0, 1.0, 0), maxf(length * 0.6, 1.8), _prompt(), _on_use, self)
 	contact_monitor = true
 	max_contacts_reported = 6
@@ -525,6 +532,8 @@ func _physics_process(delta: float) -> void:
 		if hold != freeze:
 			freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 			freeze = hold
+	if _two_wheel:
+		_balance(delta)
 	if _rider == null:
 		engine_force = 0.0
 		brake = 12.0
@@ -574,7 +583,7 @@ func _physics_process(delta: float) -> void:
 		if grip < 0.6:
 			engine_force *= lerpf(0.35, 1.0, grip / 0.6)
 	# Dirección: menos ángulo cuanto más rápido, y vuelve sola al centro al soltar
-	var steer_max := lerpf(0.55, 0.18, clampf(av / max_speed, 0.0, 1.0))
+	var steer_max := lerpf(0.4, 0.08, clampf(av / max_speed, 0.0, 1.0)) if _two_wheel else lerpf(0.55, 0.18, clampf(av / max_speed, 0.0, 1.0))
 	var want := -input.x * steer_max
 	steering = move_toward(steering, want, (2.4 if absf(want) > absf(steering) else 4.5) * delta)
 	# Frenos por rueda: pie, motor (las motrices) y freno de mano (las de atrás, que patinan)
@@ -604,7 +613,7 @@ func _physics_process(delta: float) -> void:
 		Sfx.horn(self)
 		if scene and scene.has_method("on_horn"):
 			scene.call("on_horn", self)
-	_rider.play_gesture("row" if pedals and not uses_fuel and absf(throttle) > 0.0 else "sit")
+	_rider.hold_gesture(("pedal" if pedals and not uses_fuel else "ride") if _two_wheel else "sit")
 	_prev_vel = linear_velocity
 	_save_t += delta
 	if _save_t > 3.0:
@@ -724,6 +733,11 @@ func _update_smoke() -> void:
 func _debris(at: Vector3) -> void:
 	if scene == null:
 		return
+	# Cada vehículo suelta lo suyo: un coche del kit, sus piezas; una moto, un retrovisor, un faro y
+	# un trozo de carenado; una bici, como mucho la cadena; lo que inventa la IA, trozos de su color.
+	if _two_wheel or not KIT.has(factory_kind):
+		_small_debris(at)
+		return
 	for k in ["debris-bumper", "debris-plate-a", "debris-door"]:
 		if randf() < 0.4:
 			continue
@@ -734,6 +748,7 @@ func _debris(at: Vector3) -> void:
 		rb.collision_layer = Layers.WORLD
 		rb.collision_mask = Layers.WORLD
 		rb.mass = 12.0
+		rb.set_meta("debris", "kit")
 		m.scale = BODY_SCALE
 		rb.add_child(m)
 		var cs := CollisionShape3D.new()
@@ -744,6 +759,63 @@ func _debris(at: Vector3) -> void:
 		scene.add_child(rb)
 		rb.global_position = at + Vector3(randf_range(-0.5, 0.5), 0.3, randf_range(-0.5, 0.5))
 		rb.linear_velocity = _prev_vel * 0.4 + Vector3(randf_range(-2, 2), 3.0, randf_range(-2, 2))
+		rb.angular_velocity = Vector3(randf_range(-6, 6), randf_range(-6, 6), randf_range(-6, 6))
+		get_tree().create_timer(90.0).timeout.connect(func(): if is_instance_valid(rb): rb.queue_free())
+
+
+## Bici y moto: un par las mantiene derechas (no simulamos el equilibrio del ciclista) y, a la
+## vista, se inclinan hacia dentro de la curva.
+func _balance(delta: float) -> void:
+	var fwd := global_basis.z.normalized()
+	var roll_err := global_basis.y.cross(Vector3.UP).dot(fwd)
+	var roll_rate := angular_velocity.dot(fwd)
+	apply_torque(fwd * (roll_err * mass * 40.0 - roll_rate * mass * 6.0))
+	var body := get_node_or_null("Body") as Node3D
+	if body:
+		var lean := -steering * clampf(absf(speed()) / maxf(max_speed * 0.5, 1.0), 0.0, 1.0) * 0.6
+		body.rotation.z = lerpf(body.rotation.z, lean, clampf(6.0 * delta, 0.0, 1.0))
+
+
+func _small_debris(at: Vector3) -> void:
+	var col := Color("#9aa3ad")
+	for mi in find_children("*", "MeshInstance3D", true, false):
+		var m: Variant = (mi as MeshInstance3D).material_override
+		if m is StandardMaterial3D and not (m as StandardMaterial3D).emission_enabled:
+			col = (m as StandardMaterial3D).albedo_color
+			break
+	var pieces: Array = []
+	if pedals and not uses_fuel:
+		if randf() < 0.5:
+			pieces = [[Vector3(0.4, 0.03, 0.06), Color("#2b2b2b")]]  # la cadena
+	elif _two_wheel:
+		pieces = [[Vector3(0.12, 0.12, 0.04), Color("#cfd6dc")], [Vector3(0.16, 0.12, 0.1), Color("#fff3d6")], [Vector3(0.5, 0.05, 0.35), col]]
+	else:
+		pieces = [[Vector3(0.6, 0.06, 0.4), col], [Vector3(0.35, 0.05, 0.3), col], [Vector3(0.2, 0.08, 0.15), Color("#2b2f3a")]]
+	for pc in pieces:
+		if randf() < 0.25:
+			continue
+		var size: Vector3 = pc[0]
+		var rb := RigidBody3D.new()
+		rb.collision_layer = Layers.WORLD
+		rb.collision_mask = Layers.WORLD
+		rb.mass = maxf(size.x * size.y * size.z * 900.0, 0.4)
+		var mesh := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = size
+		mesh.mesh = bm
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = pc[1]
+		mesh.material_override = mat
+		rb.add_child(mesh)
+		var cs := CollisionShape3D.new()
+		var bx := BoxShape3D.new()
+		bx.size = size.max(Vector3.ONE * 0.04)
+		cs.shape = bx
+		rb.add_child(cs)
+		rb.set_meta("debris", "small")
+		scene.add_child(rb)
+		rb.global_position = at + Vector3(randf_range(-0.3, 0.3), 0.2, randf_range(-0.3, 0.3))
+		rb.linear_velocity = _prev_vel * 0.3 + Vector3(randf_range(-1.5, 1.5), 2.0, randf_range(-1.5, 1.5))
 		rb.angular_velocity = Vector3(randf_range(-6, 6), randf_range(-6, 6), randf_range(-6, 6))
 		get_tree().create_timer(90.0).timeout.connect(func(): if is_instance_valid(rb): rb.queue_free())
 

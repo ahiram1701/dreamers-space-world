@@ -67,6 +67,14 @@ static func path(pack: String, model: String) -> String:
 
 
 ## Instancia un modelo o null si no existe.
+## Plantas de un edificio: las que dice su modelo («2Story_…» = 2) o, si no, por su altura.
+static func floors_of(model_name: String, height: float) -> int:
+	var i := model_name.find("Story")
+	if i > 0 and model_name.left(i).is_valid_int():
+		return clampi(int(model_name.left(i)), 1, 4)
+	return clampi(int(height / 3.6), 1, 4)
+
+
 static func instance(pack: String, model: String) -> Node3D:
 	var p := path(pack, model)
 	if not _cache.has(p):

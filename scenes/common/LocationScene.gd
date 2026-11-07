@@ -269,14 +269,26 @@ func _open_shop() -> void:
 	panel.title = label.left(1).to_upper() + label.substr(1)
 	panel.items = info.items
 	panel.verb = "Pedir" if info.get("menu", false) else "Comprar"
+	var menu: bool = info.get("menu", false)
+	var order: Array = []
+	if menu:
+		panel.close_text = "Listo"
 	_ui.block(true)
 	add_child(panel)
-	panel.closed.connect(func(): _ui.block(false))
+	panel.closed.connect(func():
+		_ui.block(false)
+		if menu and not order.is_empty():  # ya pediste todo: te lo traen junto
+			_serve_order(order, staff))
 	panel.bought.connect(func(entry: Dictionary):
-		if info.get("menu", false):  # se pide y se come aquí: te lo sirven en la mesa
+		if menu:  # se pide y se come aquí: puedes pedir varias cosas; al pulsar «Listo», te lo sirven
 			if Wallet.pay(int(entry.price)):
-				panel.close()
-				_serve(entry, staff)
+				order.append(entry)
+				var names := PackedStringArray()
+				for o in order:
+					names.append(str(o.name).to_lower())
+				panel.set_note("Tu pedido: %s. Pide algo más o pulsa «Listo»." % ", ".join(names))
+				if staff:
+					staff.say(["Anotado.", "Muy bien.", "¿Algo más?"][randi() % 3], 2.0)
 			return
 		var id := Shops.buy(entry)
 		if id.is_empty():
@@ -292,10 +304,72 @@ func _open_shop() -> void:
 ## mesa y te lo deja delante (si no te sientas, en la barra). Comes, se nota en el cuerpo y pasa
 ## el rato que se tarda en comer.
 func _serve(entry: Dictionary, staff: TownNPC) -> void:
+	await _serve_order([entry], staff)
+
+
+## ¿Se bebe? (agua, café, jugo…): se sirve en vaso o taza, no en un plato.
+static func is_drink(entry: Dictionary) -> bool:
+	if str(entry.get("effect", "")) == "hydrate":
+		return true
+	var n := str(entry.get("name", "")).to_lower()
+	return ["agua", "café", "cafe", "té ", "jugo", "zumo", "refresco", "leche", "cerveza", "vino", "chocolate caliente", "limonada", "licuado", "atole"].any(func(w): return n.begins_with(w) or n.contains(" " + w))
+
+
+## Lo que se deja en la mesa: una taza para lo caliente, un vaso para lo frío, un plato para comer.
+func _served_prop(entry: Dictionary) -> Node3D:
+	if is_drink(entry):
+		var n := str(entry.get("name", "")).to_lower()
+		var hot := ["café", "cafe", "té", "chocolate", "atole"].any(func(w): return n.contains(w))
+		var holder := Node3D.new()
+		holder.set_meta("served", "taza" if hot else "vaso")
+		var cup := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.045 if hot else 0.038
+		cm.bottom_radius = 0.035 if hot else 0.032
+		cm.height = 0.09 if hot else 0.12
+		cup.mesh = cm
+		var glass := StandardMaterial3D.new()
+		if hot:
+			glass.albedo_color = Color("#f2efe8")
+		else:
+			glass.albedo_color = Color(0.85, 0.92, 1.0, 0.35)
+			glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			glass.roughness = 0.1
+		cup.material_override = glass
+		cup.position.y = cm.height / 2.0
+		holder.add_child(cup)
+		var drink := MeshInstance3D.new()
+		var dm := CylinderMesh.new()
+		dm.top_radius = cm.top_radius * 0.9
+		dm.bottom_radius = cm.bottom_radius * 0.9
+		dm.height = cm.height * 0.75
+		drink.mesh = dm
+		var liquid := StandardMaterial3D.new()
+		liquid.albedo_color = Color("#4a2c1a") if hot else (Color(0.7, 0.85, 1.0, 0.5) if n.contains("agua") else Color("#e8a33a"))
+		if n.contains("agua"):
+			liquid.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		drink.material_override = liquid
+		drink.position.y = dm.height / 2.0 + 0.004
+		holder.add_child(drink)
+		return holder
+	var plate := AssetLibrary.instance("house_interior_pack", "Plate_%d" % (1 + randi() % 3))
+	if plate:
+		plate.set_meta("served", "plato")
+	return plate
+
+
+## Todo lo pedido, junto: el mesero lo prepara en la barra y te lo trae en la bandeja.
+func _serve_order(order: Array, staff: TownNPC) -> void:
+	var entry: Dictionary = order[0]
 	_serving = true
 	if staff:
 		staff.say("Enseguida se lo traigo." + ("" if _player.hold_position else " Siéntese donde guste."), 3.5)
-	_ui.toast("Pediste %s (%s).%s" % [str(entry.name).to_lower(), Wallet.text(int(entry.price)), "" if _player.hold_position else " Siéntate a una mesa mientras te lo traen."])
+	var names := PackedStringArray()
+	var total := 0
+	for o in order:
+		names.append(str(o.name).to_lower())
+		total += int(o.price)
+	_ui.toast("Pediste %s (%s).%s" % [", ".join(names), Wallet.text(total), "" if _player.hold_position else " Siéntate a una mesa mientras te lo traen."])
 	var door := _interiors.current_door()
 	var bar: Vector3 = _interiors.npc_spot(0)
 	if staff and bar != Vector3.INF:  # a la barra a prepararlo
@@ -327,10 +401,23 @@ func _serve(entry: Dictionary, staff: TownNPC) -> void:
 	if _interiors.current_door() != door:
 		_serving = false
 		return
-	var plate := AssetLibrary.instance("house_interior_pack", "Plate_%d" % (1 + randi() % 3))
 	var front := _player.view_forward() if not seated else _player.facing_dir()
-	var plate_at := _player.global_position + front * (0.55 if seated else 0.45) + Vector3(0, 0.8 if seated else 1.0, 0)
-	var placed: Node3D = AssetLibrary.place(self, plate, plate_at, 0.04, 0.0, false) if plate else null
+	var side := front.cross(Vector3.UP).normalized()
+	var served: Array = []
+	for i in order.size():
+		var prop := _served_prop(order[i])
+		if prop == null:
+			continue
+		var at := _player.global_position + front * (0.55 if seated else 0.45) + side * ((i - (order.size() - 1) / 2.0) * 0.25) + Vector3(0, 0.8 if seated else 1.0, 0)
+		if str(prop.get_meta("served", "")) == "plato":
+			var placed_plate: Node3D = AssetLibrary.place(self, prop, at, 0.04, 0.0, false)
+			placed_plate.set_meta("served", "plato")
+			served.append(placed_plate)
+		else:
+			add_child(prop)
+			prop.global_position = at
+			served.append(prop)
+	var placed: Node3D = served[0] if not served.is_empty() else null
 	if staff and is_instance_valid(staff):
 		staff.say("Aquí tiene. ¡Buen provecho!", 3.0)
 		staff.hold("", "")
@@ -343,21 +430,24 @@ func _serve(entry: Dictionary, staff: TownNPC) -> void:
 				if is_instance_valid(waiter):
 					waiter.settle(back + Vector3(0, 0.1, 0), back + Vector3(0, 0, 2), "", "atendiendo"))
 	_serving = false
-	_player.play_gesture("sit_eat" if seated else "eat", 7.0)
+	var only_drinks := order.all(func(o): return is_drink(o))
+	_player.play_gesture(("drink" if only_drinks else "sit_eat") if seated else ("drink" if only_drinks else "eat"), 7.0)
 	await get_tree().create_timer(7.0).timeout
-	var power := int(entry.get("power", 20))
-	if entry.effect == "nourish":
-		Body.change("hunger", clampf(power * 1.5, 20.0, 70.0))
-	else:
-		Body.change("thirst", clampf(power * 2.0, 25.0, 70.0))
-	WorldClock.advance(20 if entry.effect == "nourish" else 8)
-	if is_instance_valid(placed):
-		placed.queue_free()
+	for o in order:
+		var power := int(o.get("power", 20))
+		if is_drink(o):
+			Body.change("thirst", clampf(power * 2.0, 25.0, 70.0))
+		else:
+			Body.change("hunger", clampf(power * 1.5, 20.0, 70.0))
+	WorldClock.advance(8 if only_drinks else 20)
+	for s in served:
+		if is_instance_valid(s):
+			s.queue_free()
 	if seated and _player.hold_position:
 		_player.play_gesture("sit")
-	_ui.toast("Te terminas %s. %s" % [str(entry.name).to_lower(), ["Estaba buenísimo.", "Te sienta de maravilla.", "Justo lo que necesitabas."][randi() % 3]])
+	_ui.toast("Te terminas %s. %s" % [", ".join(names), ["Estaba buenísimo.", "Te sienta de maravilla.", "Justo lo que necesitabas."][randi() % 3]])
 	if staff and is_instance_valid(staff):
-		NPCMemory.add_event(staff.npc_id, "Le serviste %s al jugador." % str(entry.name).to_lower(), 1)
+		NPCMemory.add_event(staff.npc_id, "Le serviste %s al jugador." % ", ".join(names), 1)
 
 
 var _serving := false
@@ -376,20 +466,59 @@ func _await_arrival(npc: TownNPC, limit: float) -> void:
 		t += 0.25
 
 
+## Sentado en una mesa de un local con carta: «Llamar al mesero» (E), por si quieres pedir más.
+var _call_it: Interactable
+
+func _offer_call(seat: Node3D) -> void:
+	if is_instance_valid(_call_it):
+		_call_it.queue_free()
+	var waiter := _households.staff_here()
+	if waiter == null:
+		return
+	var female: bool = WorldDB.get_entity("npc", waiter.npc_id).get("appearance", {}).get("figure", "") == "feminine"
+	_call_it = Interactable.create(self, seat.global_position + Vector3(0, 1.0, 0), 1.2, "Llamar a %s" % ("la mesera" if female else "al mesero"), func(_p): call_waiter())
+	_call_it.pick_priority = 3.0
+	var door := _interiors.current_door()
+	while is_instance_valid(_call_it) and _player.hold_position and _interiors.current_door() == door:
+		await get_tree().create_timer(0.5).timeout
+	if is_instance_valid(_call_it):
+		_call_it.queue_free()
+
+
+## El mesero viene a tu mesa a tomarte nota (también lo puedes pedir con F o hablándole).
+func call_waiter() -> void:
+	if _serving:
+		_ui.toast("Ya te están atendiendo.")
+		return
+	var waiter := _households.staff_here()
+	if waiter == null:
+		_ui.toast("No hay nadie atendiendo.")
+		return
+	waiter.say("¡Voy!", 1.5)
+	await _take_order(waiter)
+
+
 ## Te sientas a una mesa de la cafetería o la fonda: el mesero viene a tomarte nota.
 func _on_sat(seat: Node3D) -> void:
 	var kind := _interiors.current_kind()
-	if not Shops.info(kind).get("menu", false) or _serving:
+	if not Shops.info(kind).get("menu", false):
 		return
-	var waiter := _households.staff_here()
-	if waiter == null or waiter.talking:
+	_offer_call(seat)
+	if _serving:
+		return
+	var w0 := _households.staff_here()
+	if w0 == null or w0.talking:
+		return
+	await get_tree().create_timer(1.5).timeout
+	if _player.hold_position:
+		await _take_order(w0)
+
+
+func _take_order(waiter: TownNPC) -> void:
+	if _serving or not is_instance_valid(waiter) or waiter.talking:
 		return
 	_serving = true
 	var door := _interiors.current_door()
-	await get_tree().create_timer(1.5).timeout
-	if not is_instance_valid(waiter) or _interiors.current_door() != door or not _player.hold_position:
-		_serving = false
-		return
 	waiter.walk_to(_near_player(waiter, 1.0))
 	await _await_arrival(waiter, 12.0)
 	if not is_instance_valid(waiter) or not _player.hold_position or _interiors.current_door() != door:
@@ -1278,6 +1407,19 @@ func guide(npc_id: String, target: String) -> void:
 	var npc: TownNPC = _npcs[npc_id]
 	var dest := place_position(target)
 	var label := target
+	if dest == Vector3.INF:  # ¿a una persona? («te llevo con Marina», «con unas vecinas»)
+		var who := _people_for_text(target, npc_id)
+		if not who.is_empty():
+			var other: TownNPC = _npcs[who[0]]
+			if InteriorManager.is_interior_pos(other.global_position):
+				var hd := _npc_home_door(who[0])
+				dest = _interiors.door_position(hd) if not hd.is_empty() else Vector3.INF
+			else:
+				dest = other.global_position
+			var names := PackedStringArray()
+			for id in who:
+				names.append(str(WorldDB.get_entity("npc", id).get("name", "")).get_slice(" ", 0))
+			label = "con " + " y ".join(names)
 	if dest == Vector3.INF:
 		var door := _door_for_text(target)
 		if not door.is_empty():
@@ -1294,6 +1436,27 @@ func guide(npc_id: String, target: String) -> void:
 	npc.play_gesture("point", 1.5)
 	# A paso de quien acompaña a alguien (más ágil que un paseo)
 	npc_go(npc_id, _on_ground(dest) + Vector3(randf_range(-1.5, 1.5), 0, randf_range(-1.5, 1.5)), func(): _guide_arrived(npc_id), false, 2.6)
+
+
+## Personas que nombra un texto: por su nombre, o «vecinas/vecinos/alguien» → la gente que hay
+## cerca (sin contar a quien guía). Ids de PNJ, el más cercano primero.
+func _people_for_text(target: String, guide_id: String) -> Array:
+	var t := target.to_lower()
+	var out := []
+	for id in _npcs:
+		if id == guide_id:
+			continue
+		var first := str(WorldDB.get_entity("npc", id).get("name", "")).to_lower().get_slice(" ", 0)
+		if first.length() > 2 and t.contains(first):
+			out.append(id)
+	if not out.is_empty():
+		return out
+	if ["vecin", "alguien", "gente", "amig", "señora", "señor", "chica", "chico"].any(func(w): return t.contains(w)):
+		var g: TownNPC = _npcs[guide_id]
+		var near := _npcs.keys().filter(func(id): return id != guide_id and (_npcs[id] as TownNPC).is_present())
+		near.sort_custom(func(a, b): return (_npcs[a] as TownNPC).global_position.distance_to(g.global_position) < (_npcs[b] as TownNPC).global_position.distance_to(g.global_position))
+		return near.slice(0, 2 if t.contains("vecinas") or t.contains("vecinos") else 1)
+	return []
 
 
 ## Puerta que nombra un texto, sin caer en la casa del PNJ si no coincide nada.

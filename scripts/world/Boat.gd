@@ -174,4 +174,4 @@ func _process(delta: float) -> void:
 	var rowing := absf(throttle) > 0.0 or absf(turn) > 0.0
 	if rowing != _rowing:
 		_rowing = rowing
-		_rider.play_gesture("row" if rowing and not motor else "sit")
+		_rider.hold_gesture("row" if rowing and not motor else "sit")

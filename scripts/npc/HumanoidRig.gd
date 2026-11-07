@@ -19,7 +19,7 @@ const SPINE := ["Hips", "Abdomen", "Torso", "Chest", "Neck", "Head"]
 const BLEND := 0.25            # segundos para entrar o salir de un gesto
 ## Gestos que duran hasta que se paran (los demás son de un par de segundos).
 const LOOPING := ["chop", "hammer", "dig", "search", "fish", "dance", "sleep", "sit", "crouch", "row", "swim", "think", "cross_arms",
-	"kneel", "write", "read", "listen", "call", "hug", "wipe", "cook", "sit_eat", "sit_read", "fallen"]
+	"kneel", "write", "read", "listen", "call", "hug", "wipe", "cook", "sit_eat", "sit_read", "fallen", "pedal", "ride"]
 
 ## Cada vez que un pie toca el suelo al andar o correr (para el sonido de los pasos).
 signal footstep(running: bool)
@@ -364,6 +364,26 @@ func _gesture_pose(g: String, t: float) -> Dictionary:
 				var pull := sin(t * 2.2)
 				_both_arms(p, Vector3(55 + pull * 30, 0, 10), Vector3(35 - pull * 30, 0, 0))
 				p["Torso"] = Vector3(pull * 14, 0, 0)
+		"pedal", "ride":  # en la bici (pedalea) o en la moto (piernas quietas): manos al manillar
+			p["_y"] = -0.36
+			p["Torso"] = Vector3(18 if g == "pedal" else 22, 0, 0)
+			p["Head"] = Vector3(-14, 0, 0)
+			_both_arms(p, Vector3(62, 0, 8), Vector3(22, 0, 0))
+			if g == "pedal":
+				var k := t * 5.5
+				p["UpperLeg.L"] = Vector3(55 + sin(k) * 25, 0, 4)
+				p["LowerLeg.L"] = Vector3(-70 - cos(k) * 25, 0, 0)
+				p["UpperLeg.R"] = Vector3(55 + sin(k + PI) * 25, 0, 4)
+				p["LowerLeg.R"] = Vector3(-70 - cos(k + PI) * 25, 0, 0)
+			else:
+				p["UpperLeg.L"] = Vector3(50, 0, 12)
+				p["UpperLeg.R"] = Vector3(50, 0, 12)
+				p["LowerLeg.L"] = Vector3(-80, 0, 0)
+				p["LowerLeg.R"] = Vector3(-80, 0, 0)
+		"open", "reach":  # abrir una puerta o alcanzar algo: un brazo al frente
+			p["UpperArm.R"] = Vector3(75 * w, 0, 8)
+			p["LowerArm.R"] = Vector3(15, 0, 0)
+			p["Torso"] = Vector3(8 * w, 0, 0)
 		"fallen":  # tirado en el suelo tras un golpe: brazos abiertos, una pierna doblada, se queja
 			p["_lie"] = 1.0
 			p["UpperArm.L"] = Vector3(10, 0, 60)

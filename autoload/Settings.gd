@@ -42,6 +42,34 @@ var show_fps: bool = false
 
 func _ready() -> void:
 	load_settings()
+	_check_weak_gpu.call_deferred()
+
+
+## Gráficas antiguas (como una NVIDIA NVS o una Intel HD) se colgaban con todo al máximo: la
+## primera vez se pone la calidad baja sola (se puede cambiar en Ajustes).
+var gpu_checked := false
+
+func _check_weak_gpu() -> void:
+	if gpu_checked:
+		return
+	var name := RenderingServer.get_video_adapter_name()
+	if name.is_empty() or DisplayServer.get_name() == "headless":
+		return
+	gpu_checked = true
+	if is_weak_gpu(name, RenderingServer.get_video_adapter_api_version()):
+		graphics_quality = 0
+		changed.emit()
+	if not OS.has_environment("DSW_NO_SAVE_SETTINGS"):
+		save_settings()
+
+
+static func is_weak_gpu(adapter: String, api: String) -> bool:
+	var a := adapter.to_lower()
+	for k in ["nvs ", "nvs5", "quadro k", "quadro fx", "intel(r) hd", "intel hd", "gt 7", "gt 6", "gt 5", "radeon hd", "radeon r5", "mesa", "llvmpipe"]:
+		if a.contains(k):
+			return true
+	var parts := api.split(".")
+	return parts.size() >= 2 and int(parts[0]) == 1 and int(parts[1]) < 3
 
 
 func has_api_key() -> bool:
@@ -75,6 +103,7 @@ func load_settings() -> void:
 	text_scale = cfg.get_value("game", "text_scale", 1.0)
 	text_speed = cfg.get_value("game", "text_speed", 1.0)
 	seen_hints = cfg.get_value("game", "seen_hints", [])
+	gpu_checked = cfg.get_value("game", "gpu_checked", false)
 	_apply_volume()
 
 
@@ -94,6 +123,7 @@ func save_settings() -> void:
 	cfg.set_value("game", "volume", volume)
 	cfg.set_value("game", "music_volume", music_volume)
 	cfg.set_value("game", "graphics_quality", graphics_quality)
+	cfg.set_value("game", "gpu_checked", gpu_checked)
 	cfg.set_value("game", "player_figure", player_figure)
 	cfg.set_value("game", "day_minutes", day_minutes)
 	cfg.set_value("game", "fov", fov)

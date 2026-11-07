@@ -64,6 +64,7 @@ var held := ""
 
 
 func setup(entity: Dictionary) -> void:
+	add_to_group("townsfolk")
 	npc_id = entity.id
 	Layers.character(self)
 	var look: Dictionary = entity.get("appearance", {}).duplicate()
@@ -227,6 +228,30 @@ func look_at_target(point: Vector3) -> void:
 		_rig.look_at_point = point
 
 
+## Se aparta de quien tiene muy cerca delante (otra persona o tú), en vez de chocar.
+var _avoid_t := 0.0
+var _avoid := Vector3.ZERO
+
+func _avoid_people() -> Vector3:
+	_avoid_t -= get_physics_process_delta_time()
+	if _avoid_t > 0.0:
+		return _avoid
+	_avoid_t = 0.2
+	_avoid = Vector3.ZERO
+	var fwd := Vector3(velocity.x, 0, velocity.z).normalized()
+	for other in get_tree().get_nodes_in_group("player") + get_tree().get_nodes_in_group("townsfolk"):
+		if other == self or not (other is Node3D) or not (other as Node3D).visible:
+			continue
+		var off := (other as Node3D).global_position - global_position
+		off.y = 0.0
+		var d := off.length()
+		if d < 0.05 or d > 1.6 or (fwd != Vector3.ZERO and fwd.dot(off / d) < 0.2):
+			continue
+		_avoid -= off.normalized() * (1.6 - d) / 1.6  # lejos de él…
+		_avoid += fwd.cross(Vector3.UP) * (1.6 - d) * 0.6  # …y por su derecha
+	return _avoid
+
+
 ## El siguiente punto al que andar: el del camino por la malla (si la hay y llega) o el destino.
 func _next_waypoint(goal: Vector3, delta: float) -> Vector3:
 	_repath_t -= delta
@@ -248,7 +273,7 @@ func walk_to(pos: Vector3, run: bool = false, pace: float = 0.0) -> void:
 	_repath_t = 0.0
 	unsettle()
 	_follow = null
-	_target = pos
+	_target = NavBaker.closest(self, pos)  # a donde se puede llegar andando (no dentro de la barra)
 	_walk_time = 0.0
 	_speed_override = RUN_SPEED if run else pace
 	var dist := Vector2(pos.x - global_position.x, pos.z - global_position.z).length()
@@ -318,7 +343,10 @@ func unsettle() -> void:
 		_shape.set_deferred("disabled", not _present)
 	if _rig:
 		_rig.stop_gesture()
-	global_position += _body.global_basis.z * 0.6 + Vector3(0, 0.2, 0)  # se pone de pie al lado
+	# Se pone de pie al lado: hacia un sitio libre (antes, siempre hacia delante: tras la barra se
+	# metía dentro del mueble y acababa encima)
+	var ahead := global_position + _body.global_basis.z * 0.6
+	global_position = InteriorManager.free_spot_near(self, ahead, _body.global_basis.z, [self]) + Vector3(0, 0.15, 0)
 
 
 func is_settled() -> bool:
@@ -487,6 +515,7 @@ func _physics_process(delta: float) -> void:
 			dir = dir.rotated(Vector3.UP, deg_to_rad(75.0) * _detour_side)
 		if _limp > 0.0:
 			speed = minf(speed, WALK_SPEED * 0.6)
+		dir = (dir + _avoid_people() * 0.8).normalized()
 		velocity.x = dir.x * speed
 		velocity.z = dir.z * speed
 		_body.rotation.y = lerp_angle(_body.rotation.y, atan2(dir.x, dir.z), 8.0 * delta)
@@ -511,8 +540,8 @@ func _physics_process(delta: float) -> void:
 			_bumps = 0
 		_last_bump = now
 		_path_for = Vector3.INF  # y busca otro camino
-		if is_on_floor():
-			velocity.y = 2.5
+		if is_on_floor() and not InteriorManager.is_interior_pos(global_position):
+			velocity.y = 2.5  # (fuera, un bordillo; dentro no: se subía encima de la barra y las mesas)
 	if _rig:
 		_rig.speed = Vector2(velocity.x, velocity.z).length()
 		_rig.airborne = not is_on_floor() and velocity.y < -2.0

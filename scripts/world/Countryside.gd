@@ -180,6 +180,7 @@ func _sign(at: Vector3, text: String) -> void:
 	l.double_sided = true
 	l.visibility_range_end = 16.0
 	add_child(l)
+	Examine.sign(self, at + Vector3(0, 1.0, 0), text, {"Granja": "Granja. Huevos, leche y verdura de temporada. Se vende en la puerta.", "Lago": "Lago. Se permite pescar con caña. Prohibido tirar basura.", "Campamento": "Campamento. Apaga el fuego antes de irte.", "Ruinas": "Ruinas. Nadie sabe bien quién las levantó. Cuidado con las piedras sueltas.", "Mirador": "Mirador. Desde aquí se ve todo Bahía de las Horas y el mar.", "Cabaña": "Cabaña del pescador. Si tomas la caña, devuélvela."}.get(text, text))
 
 
 func _model(pack: String, model: String, at: Vector3, height: float, yaw: float, collide: Variant = true) -> Node3D:

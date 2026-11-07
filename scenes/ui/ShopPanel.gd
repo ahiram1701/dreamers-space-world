@@ -10,6 +10,8 @@ signal closed
 var title := "Tienda"
 var items: Array = []
 var verb := "Comprar"
+## Texto del botón de cerrar (en la carta: «Listo» = ya pediste todo).
+var close_text := "Cerrar"
 
 var _money: Label
 var _status: Label
@@ -47,7 +49,7 @@ func _ready() -> void:
 	_money.add_theme_color_override("font_color", UITheme.MONEY)
 	head.add_child(_money)
 	var close_btn := Button.new()
-	close_btn.text = "Cerrar"
+	close_btn.text = close_text
 	close_btn.pressed.connect(close)
 	head.add_child(close_btn)
 	var scroll := ScrollContainer.new()
@@ -95,6 +97,13 @@ func _rebuild() -> void:
 		row.add_child(b)
 	if _list.get_child_count() > 0:
 		(func(): if is_instance_valid(_list) and _list.get_child_count() > 0: _list.get_child(0).get_child(1).grab_focus()).call_deferred()
+
+
+## Una nota bajo la lista (en la carta: lo que llevas pedido).
+func set_note(text: String) -> void:
+	if _status:
+		_status.add_theme_color_override("font_color", UITheme.MUTED)
+		_status.text = text
 
 
 func _buy(entry: Dictionary) -> void:

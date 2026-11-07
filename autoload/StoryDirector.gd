@@ -173,6 +173,7 @@ const INSIDE_WORDS := ["me encierro", "me meto en", "me meto dentro", "entro en"
 const MOVEMENT_FACT := ["entr", "encerr", "pestillo", "se fue", "se va ", "march", "irse", "largarse", "se larg", "salió", "sale de",
 	"se dirig", "camin", "se metió", "se mete", "cerró la puerta", "dio la espalda y se"]
 const LEAVING_TYPES := ["leave", "go_inside", "guide_player"]
+const GUIDE_WORDS := ["te llevo", "le llevo", "sígueme", "sigueme", "vamos con", "vamos a ver a", "te acompaño a", "te acompaño con", "ven conmigo", "acompáñame"]
 
 
 ## Lo que el PNJ dice que hace, lo hace: si anuncia que se va o se encierra y no trae la acción,
@@ -181,6 +182,18 @@ static func make_consistent(turn: Dictionary) -> void:
 	var actions: Array = turn.get("actions", [])
 	var types: Array = actions.map(func(a): return a.get("type", ""))
 	var low := " " + str(turn.get("line", "")).to_lower()
+	# «Te llevo», «sígueme», «vamos con…»: lo dice, así que lo hace (antes, sin su acción, no pasaba nada)
+	if not types.any(func(t): return t in LEAVING_TYPES) and GUIDE_WORDS.any(func(w): return low.contains(w)):
+		var where := ""
+		for marker in [" con ", " a la ", " al ", " a ver a ", " hasta "]:
+			var i := low.find(marker, low.find(GUIDE_WORDS.filter(func(w): return low.contains(w))[0]))
+			if i >= 0:
+				where = low.substr(i + 1).get_slice(".", 0).get_slice(",", 0).get_slice("!", 0).strip_edges()
+				break
+		if not where.is_empty():
+			var g := {"type": "guide_player", "target": where}
+			actions.append(g)
+			types.append(g.type)
 	if not types.any(func(t): return t in LEAVING_TYPES):
 		var inside := INSIDE_WORDS.any(func(w): return low.contains(w))
 		var leave := inside or LEAVE_WORDS.any(func(w): return low.contains(w))
@@ -671,7 +684,7 @@ const ACTIONS_GUIDE := """  Tipos de acción ("type") y sus campos:
   · go_inside: entras en un edificio (tu casa, tu trabajo…). "target": el sitio; "amount": minutos que te quedas dentro (por defecto 60). Termina la conversación. Con refuse_contact además cierras por dentro.
   · invite_in: invitas al jugador a pasar a tu casa (solo si te tocó a la puerta y quieres; si no, le atiendes en el umbral).
   · approach: te acercas al jugador (para darle algo, para encararte…).
-  · guide_player: le llevas tú a un sitio de este lugar ("llévame al faro", "¿me enseñas dónde está la panadería?"). "target": el sitio. Terminas la conversación y echas a andar delante; si se queda atrás, le esperas. Solo a sitios que existen aquí (si no sabes dónde está, dilo).
+  · guide_player: le llevas tú a un sitio de este lugar ("llévame al faro", "¿me enseñas dónde está la panadería?"). "target": el sitio. Terminas la conversación y echas a andar delante; si se queda atrás, le esperas. Solo a sitios que existen aquí, o con una persona de aquí ("target": "con Marina", "con las vecinas"). Si no sabes dónde está, dilo.
   · change_stat: le curas, le cansas… "target": health, energy o instability; "amount": de -30 a 30.
   · reveal_place: le hablas de un lugar que puede visitar. "target": nombre, "text": cómo es o cómo llegar.
   · give_quest: le pides un favor o un trabajo. "target": título corto, "text": qué tiene que hacer; "price": lo que pagarás al terminar (0 si es un favor).

@@ -219,7 +219,7 @@ func _on_settings_changed() -> void:
 
 func _apply_quality() -> void:
 	var q := Settings.graphics_quality
-	env.glow_enabled = true
+	env.glow_enabled = q >= 1  # (en calidad baja, sin resplandor: las gráficas antiguas sufrían)
 	env.glow_intensity = 0.6
 	env.glow_bloom = 0.0  # solo brilla lo que emite luz (no los textos blancos de noche)
 	env.glow_hdr_threshold = 1.35  # (más alto: de día, la espuma y los faros no hacen manchas blancas)

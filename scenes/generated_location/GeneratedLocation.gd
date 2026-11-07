@@ -265,7 +265,7 @@ func _beacon(pos: Vector3, label: String, _color: Color, poi_index: int) -> void
 	var sign := PropsBuilder._box(root, Vector3(2.4, 1.25, 2.4), Vector3(1.4, 0.4, 0.05), Color("#8a6a44"), false)
 	sign.look_at(root.global_position + Vector3(0, 1.25, 0), Vector3.UP)
 	var l := Label3D.new()
-	l.text = label
+	l.text = label.get_slice(":", 0).strip_edges()  # en el letrero, el nombre; el resto se lee de cerca (E)
 	l.font_size = 40
 	l.outline_size = 6
 	l.pixel_size = 0.004
@@ -278,6 +278,7 @@ func _beacon(pos: Vector3, label: String, _color: Color, poi_index: int) -> void
 	l.visibility_range_end_margin = 2.0
 	l.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 	root.add_child(l)
+	Examine.sign(root, Vector3(2.4, 1.0, 2.4), label.get_slice(":", 0).strip_edges(), label if label.contains(":") else "%s.\n\nUn letrero de madera, escrito a mano." % label)
 	Decor.landmark(self, pos, {"terminal": "una terminal (punto de recarga del Ancla)", "antenna": "una antena con una luz roja: %s" % label,
 		"wreck": "restos de una nave: %s" % label, "crater": "un cráter: %s" % label, "camp": "un campamento: %s" % label,
 		"ruins": "unas ruinas: %s" % label, "monolith": "una piedra alta: %s" % label}.get(kind, "un mojón de piedras: %s" % label), "poi")
@@ -395,7 +396,10 @@ func _show_place() -> void:
 # --- Interacción ----------------------------------------------------------------------
 
 func navigation_area() -> AABB:
-	return AABB(Vector3(-_limit, -40, -_limit), Vector3(_limit * 2.0, 140, _limit * 2.0))
+	# El centro, donde están el asentamiento y la gente (el terreno sigue sin fin, pero aquí es
+	# donde caminan los PNJ; antes el área era infinita y la malla no se llegaba a hacer)
+	var r := minf(_limit, 85.0)
+	return AABB(Vector3(-r, -40, -r), Vector3(r * 2.0, 140, r * 2.0))
 
 
 func ground_at(x: float, z: float) -> float:
@@ -467,6 +471,8 @@ func _bring_followers() -> void:
 ## Cada edificio de un asentamiento tiene puerta; el interior depende de la época.
 func _add_doors() -> void:
 	var era: String = _def.get("era", "present")
+	if str(_def.get("kind", "")) == "planet_surface":
+		era = "deep_future" if era == "deep_future" else "far_future"  # el puesto avanzado se construye así
 	var futuristic := era in ["near_future", "far_future", "deep_future"]
 	var i := 0
 	var count: int = _extras.buildings.filter(func(b): return is_instance_valid(b)).size()
@@ -477,6 +483,12 @@ func _add_doors() -> void:
 		if not is_instance_valid(b):
 			continue
 		var size: Vector3 = b.get_meta("size", Vector3(6, 4, 6))
+		var style := str(b.get_meta("style", "model"))
+		var floors := 1
+		match style:
+			"model": floors = AssetLibrary.floors_of(str(b.get_meta("model_name", "")), size.y)
+			"tower", "spire": floors = clampi(int(size.y / 3.6), 1, 4)
+			"house", "factory": floors = 2 if size.y > 7.0 else 1
 		var front: Vector3 = b.global_transform.basis.z.normalized()
 		var pos: Vector3 = b.position + front * (size.z / 2.0 + 0.6)
 		pos.y = _height_at.call(pos.x, pos.z)
@@ -486,7 +498,7 @@ func _add_doors() -> void:
 			var label := Shops.label(kind, era)
 			_interiors.add_door("edificio_%d" % i, pos, b.rotation.y, kind, int(_def.get("seed", 1)) * 100 + i, label)
 			_interiors.set_building("edificio_%d" % i, b.global_position, size, b.rotation.y)
-			_interiors.set_door_option("edificio_%d" % i, "floors", 2 if size.y > 7.0 else 1)
+			_interiors.set_door_option("edificio_%d" % i, "floors", floors)
 			var sign := Label3D.new()
 			sign.text = label.split(" ", false, 1)[-1].capitalize()
 			sign.font_size = 56
@@ -497,10 +509,11 @@ func _add_doors() -> void:
 			Decor.fade_label(sign)
 			add_child(sign)
 			continue
-		_interiors.add_door("edificio_%d" % i, pos, b.rotation.y, "scifi" if futuristic else "house", int(_def.get("seed", 1)) * 100 + i,
-			"un edificio" if futuristic else "una casa")
+		var inner := "dome" if style == "dome" else ("scifi" if futuristic or style in ["tower", "spire"] else "house")
+		_interiors.add_door("edificio_%d" % i, pos, b.rotation.y, inner, int(_def.get("seed", 1)) * 100 + i,
+			{"dome": "una cúpula", "scifi": "un edificio", "house": "una casa"}[inner])
 		_interiors.set_building("edificio_%d" % i, b.global_position, size, b.rotation.y)
-		_interiors.set_door_option("edificio_%d" % i, "floors", 2 if size.y > 7.0 else 1)
+		_interiors.set_door_option("edificio_%d" % i, "floors", floors)
 
 
 func _era_label(era: String) -> String:

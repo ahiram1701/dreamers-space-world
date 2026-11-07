@@ -20,6 +20,7 @@ const ROOMS := {
 	"lighthouse": {"size": Vector2(10, 10), "wall": "#e8e2d4", "floor": "#7a7468", "name": "Faro"},
 	"house": {"size": Vector2(10, 8), "wall": "#e4d8c0", "floor": "#7d5f42", "name": "Casa"},
 	"scifi": {"size": Vector2(12, 10), "wall": "#4a5568", "floor": "#2d3340", "name": "Módulo"},
+	"dome": {"size": Vector2(11, 11), "wall": "#d6dee6", "floor": "#3b4350", "name": "Cúpula"},
 	"shop": {"size": Vector2(12, 9), "wall": "#efe3c8", "floor": "#9c7b56", "name": "Tienda"},
 	"workshop": {"size": Vector2(12, 10), "wall": "#a39a8c", "floor": "#55524d", "name": "Taller"},
 	"office": {"size": Vector2(11, 9), "wall": "#dfe4e8", "floor": "#6f6a64", "name": "Oficina"},
@@ -59,13 +60,18 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3, opts
 	var wall := Color(room.wall).lerp(Color(["#f0e6d2", "#d8e4e8", "#e8d4c8", "#dfe6d0"][rng.randi() % 4]), 0.3 if kind == "house" else 0.0)
 	# Edificios de dos plantas por fuera (casas, tiendas, la estación…): también por dentro, con
 	# escalera de verdad hasta arriba. El faro tiene la suya (de caracol, hasta la linterna).
-	var floors := clampi(int(opts.get("floors", 1)), 1, 2) if kind != "lighthouse" else 1
+	var floors := clampi(int(opts.get("floors", 1)), 1, 4) if not (kind in ["lighthouse", "dome"]) else 1
 	var hole := Rect2(-2.2 - 2.35, -2.4 - 2.35, 4.7, 4.7) if kind == "lighthouse" else Rect2()
-	_shell(root, w, d, wall, Color(room.floor), kind == "scifi", floors, hole)
+	if kind == "dome":
+		_dome_shell(root, w / 2.0, wall, Color(room.floor))
+	else:
+		_shell(root, w, d, wall, Color(room.floor), kind == "scifi", floors, hole)
 	if kind in ["house", "home"]:
 		_home_rooms(root, w, d, wall, floors)
 	elif floors > 1:
-		_stairs_up(root, w, d)
+		_stairs_up(root, w, d, 0)
+	for f in range(1, floors - 1):  # tercera planta y más: otro tramo, en la pared de enfrente
+		_stairs_up(root, w, d, f)
 
 	var out := {"root": root, "spawn": origin + Vector3(0, 0.1, d / 2.0 - 2.4), "exit": origin + Vector3(0, 0.1, d / 2.0 - 0.4),
 		"npc_spots": [], "seats": [], "beds": [], "uses": [], "sofa": [], "table": [], "kitchen": []}
@@ -85,21 +91,21 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3, opts
 			_put(root, "Bathroom_Sink", Vector3(w / 2 - 0.45, 0, -d / 2 + 2.0), -PI / 2)
 			out.npc_spots = [origin + Vector3(0.8, 0, 0.2)]
 		"cafe":
-			for i in 4:  # barra
-				_put(root, "Kitchen_2Drawers", Vector3(-3.0 + i * 0.75, 0, -d / 2 + 2.2), PI)
-			_use_at(root, Vector3(-1.9, 0, -d / 2 + 2.6), out, "order", "Pedir en la barra")
+			for i in 4:  # barra (con un paso ancho detrás para quien atiende, y se entra por la derecha)
+				_put(root, "Kitchen_2Drawers", Vector3(-3.0 + i * 0.75, 0, -d / 2 + 2.6), PI)
+			_use_at(root, Vector3(-1.9, 0, -d / 2 + 3.1), out, "order", "Pedir en la barra")
 			_put(root, "Kitchen_Oven", Vector3(-3.4, 0, -d / 2 + 0.5), 0.0)
 			_put(root, "Kitchen_Fridge", Vector3(-1.4, 0, -d / 2 + 0.5), 0.0)
 			_put(root, "Shelf_Small1", Vector3(0.4, 1.3, -d / 2 + 0.25), 0.0)
 			for i in 4:
-				_seat(root, "Stool", Vector3(-3.0 + i * 0.75, 0, -d / 2 + 3.1), 0.0, out, "table")
+				_seat(root, "Stool", Vector3(-3.0 + i * 0.75, 0, -d / 2 + 3.5), 0.0, out, "table")
 			for t in [Vector3(3.0, 0, -1.5), Vector3(4.5, 0, 1.5), Vector3(1.5, 0, 2.0)]:
 				_put(root, "Table_RoundSmall", t, 0.0)
 				_seat(root, "Chair_2", t + Vector3(-0.75, 0, 0), PI / 2, out, "table")
 				_seat(root, "Chair_2", t + Vector3(0.75, 0, 0), -PI / 2, out, "table")
 			_put(root, "Houseplant_3", Vector3(w / 2 - 0.6, 0, -d / 2 + 0.6), 0.0)
 			_put(root, "Houseplant_5", Vector3(-w / 2 + 0.6, 0, d / 2 - 1.2), 0.0)
-			out.npc_spots = [origin + Vector3(-2.0, 0, -d / 2 + 1.3), origin + Vector3(3.0, 0, 0.5)]
+			out.npc_spots = [origin + Vector3(-2.0, 0, -d / 2 + 1.55), origin + Vector3(3.0, 0, 0.5)]
 		"station":
 			for i in 5:  # bancos de la sala de espera
 				_seat(root, "Couch_Small1", Vector3(-6.0 + i * 1.6, 0, 1.6), PI, out, "sofa")
@@ -111,7 +117,8 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3, opts
 			for i in 3:
 				var radio := AssetLibrary.instance("survival_pack", "Radio")
 				if radio:
-					AssetLibrary.place(root, radio, Vector3(-4.6 + i * 0.6, 0.56, -d / 2 + 1.3), 0.32, rng.randf_range(-0.4, 0.4), false)
+					var rp := AssetLibrary.place(root, radio, Vector3(-4.6 + i * 0.6, 0.56, -d / 2 + 1.3), 0.32, rng.randf_range(-0.4, 0.4), false)
+					Examine.takeable(rp, "Radio vieja", "Una radio de onda corta del taller de Samir. Aún capta algo.", "signal")
 			_put(root, "Light_Desk", Vector3(-3.2, 0.56, -d / 2 + 1.2), 0.0)
 			_put(root, "Trashcan_Large", Vector3(w / 2 - 0.6, 0, d / 2 - 1.5), 0.0)
 			out.npc_spots = [origin + Vector3(-2.4, 0, -d / 2 + 2.6), origin + Vector3(4.0, 0, 0)]  # junto a su mesa, no encima de la silla
@@ -156,6 +163,25 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3, opts
 			_put(root, "Bed_Single", Vector3(0.6, 0, -d / 2 + 1.3), 0.0, out.beds)  # Marina vive aquí
 			_put(root, "Bookshelf", Vector3(w / 2 - 0.4, 0, 0.6), -PI / 2)
 			out.npc_spots = [origin + Vector3(3.0, 0, -1.0)]
+		"dome":  # una cúpula habitada: literas, una terminal, cocina pequeña, mesa y cajas
+			var r := w / 2.0
+			out.spawn = origin + Vector3(0, 0.1, r - 2.0)
+			out.exit = origin + Vector3(0, 0.1, r - 0.5)
+			_put(root, "Bed_Bunk", Vector3(-2.2, 0, -r + 1.6), 0.0, out.beds)
+			_put(root, "Bed_Bunk", Vector3(2.2, 0, -r + 1.6), 0.0, out.beds)
+			var term := AssetLibrary.instance("modular_sci_fi", "Props_Computer")
+			if term:
+				AssetLibrary.place(root, term, Vector3(-r + 1.4, 0, 0.5), 0.9, PI / 2, true)
+			_use(root, "Kitchen_Fridge", Vector3(r - 1.2, 0, -0.6), -PI / 2, out, "eat", "Comer algo de la nevera")
+			_use(root, "Kitchen_Sink", Vector3(r - 1.1, 0, 0.5), -PI / 2, out, "drink", "Beber agua")
+			_put(root, "Table_RoundSmall", Vector3(0.0, 0, 0.0), 0.0)
+			_seat(root, "Chair_3", Vector3(-0.75, 0, 0), PI / 2, out, "table")
+			_seat(root, "Chair_3", Vector3(0.75, 0, 0), -PI / 2, out, "table")
+			for i in 3:
+				var crate := AssetLibrary.instance("modular_sci_fi", ["Props_Crate", "Props_CrateLong", "Props_Vessel"][i])
+				if crate:
+					AssetLibrary.place(root, crate, Vector3(-r + 2.0 + i * 0.9, 0, r - 2.6), 0.9, rng.randf() * TAU, true)
+			out.npc_spots = [origin + Vector3(0, 0, -1.2)]
 		"scifi":
 			var props := ["Props_Computer", "Props_ComputerSmall", "Props_Shelf", "Props_Capsule", "Props_Crate", "Props_Pod", "Props_Vessel"]
 			for i in 8:
@@ -298,14 +324,31 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3, opts
 				{"pos": origin + Vector3(w / 2 - 1.5, 0, 0.7), "face": origin + Vector3(w / 2, 0, 0.7)}]
 			out.npc_spots = [origin + Vector3(0.8, 0, 0.2), origin + Vector3(-1.0, 0, 1.6), origin + Vector3(3.4, 0, 0.0)]
 	if floors > 1 and not (kind in ["house", "home"]):
-		_upper_floor(root, w, d, kind, out, rng)
+		_upper_floor(root, w, d, kind, out, rng, HEIGHT)
+	for f in range(2, floors):  # plantas de más arriba: más cuartos (o almacén, u oficinas)
+		_upper_floor(root, w, d, "house" if kind in ["house", "home"] else kind, out, rng, HEIGHT * f)
+	# Balcón: una puerta acristalada en la fachada de la planta de arriba; sales a él
+	if bool(opts.get("balcony", false)) and floors > 1:
+		var by := HEIGHT
+		var glass := PropsBuilder._box(root, Vector3(0, by + 1.05, d / 2 - 0.12), Vector3(1.1, 2.1, 0.05), Color("#9fc8e8"), false)
+		glass.material_override.emission_enabled = true
+		glass.material_override.emission = Color("#cfe6ff")
+		glass.material_override.emission_energy_multiplier = 0.5
+		PropsBuilder._box(root, Vector3(0, by + 2.15, d / 2 - 0.12), Vector3(1.3, 0.1, 0.08), Color("#5b4636"), false)
+		_use_at(root, Vector3(0, by, d / 2 - 0.7), out, "balcony", "Salir al balcón")
+		out["balcony_in"] = origin + Vector3(0, by + 0.1, d / 2 - 1.3)
 	return out
 
 
 ## La planta de arriba de un local: más mesas en un café o una fonda; la oficina en la estación;
 ## el almacén (estantes y cajas) en las tiendas y talleres.
-static func _upper_floor(root: Node3D, w: float, d: float, kind: String, out: Dictionary, rng: RandomNumberGenerator) -> void:
-	var y := HEIGHT
+static func _upper_floor(root: Node3D, w: float, d: float, kind: String, out: Dictionary, rng: RandomNumberGenerator, y: float = HEIGHT) -> void:
+	if kind in ["house", "home"]:  # más recámaras
+		_put(root, "Bed_Single", Vector3(w / 2 - 1.2, y, -d / 2 + 1.3), 0.0, out.beds)
+		_put(root, "NightStand_1", Vector3(w / 2 - 2.4, y, -d / 2 + 0.5), 0.0)
+		_put(root, ["Drawer_5", "Bookshelf"][rng.randi() % 2], Vector3(1.2, y, -d / 2 + 0.45), 0.0)
+		_put(root, "Carpet_%s" % ["1", "2", "Round"][rng.randi() % 3], Vector3(1.0, y, 0.0), 0.0)
+		return
 	if kind in ["cafe", "restaurant"]:
 		for t in [Vector3(1.6, y, -d / 2 + 2.0), Vector3(w / 2 - 1.8, y, 0.4)]:
 			_put(root, "Table_RoundSmall", t, 0.0)
@@ -325,6 +368,66 @@ static func _upper_floor(root: Node3D, w: float, d: float, kind: String, out: Di
 
 
 ## Suelo, paredes, techo, ventanas y luz. La pared de delante tiene la puerta (hacia +Z).
+## Por dentro de una cúpula: suelo redondo, pared curva (en tramos) con el hueco de la puerta,
+## la bóveda por encima y una luz en lo alto.
+static func _dome_shell(root: Node3D, r: float, wall: Color, floor_color: Color) -> void:
+	_floor_disc(root, r, floor_color)
+	var segs := 20
+	for i in segs:
+		var a := TAU * (i + 0.5) / segs
+		var mid := Vector3(sin(a), 0, cos(a)) * r
+		if absf(angle_difference(a, 0.0)) < TAU / segs:  # el hueco de la puerta (hacia +z)
+			continue
+		var seg := PropsBuilder._box(root, mid + Vector3(0, 1.6, 0), Vector3(2.0 * r * sin(PI / segs) + 0.05, 3.2, 0.25), wall, true)
+		seg.rotation.y = a
+	var vault := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = r
+	sm.height = r * 2.0
+	sm.is_hemisphere = true
+	vault.mesh = sm
+	var vm := StandardMaterial3D.new()
+	vm.albedo_color = wall.lightened(0.05)
+	vm.cull_mode = BaseMaterial3D.CULL_FRONT  # se ve desde dentro
+	vault.material_override = vm
+	vault.position.y = 3.0
+	vault.scale = Vector3(1, 0.45, 1)
+	root.add_child(vault)
+	var outside := PropsBuilder._box(root, Vector3(0, 1.2, r + 0.05), Vector3(1.4, 2.4, 0.05), Color("#ffe9c4"), true)
+	outside.material_override.emission_enabled = true
+	outside.material_override.emission = Color("#fff1d6")
+	outside.material_override.emission_energy_multiplier = 0.6
+	var light := OmniLight3D.new()
+	light.light_color = Color("#e8f2ff")
+	light.omni_range = r * 2.2
+	light.light_energy = 1.4
+	light.position = Vector3(0, 4.0, 0)
+	root.add_child(light)
+
+
+static func _floor_disc(root: Node3D, r: float, c: Color) -> void:
+	var body := StaticBody3D.new()
+	body.collision_layer = Layers.WORLD
+	var cs := CollisionShape3D.new()
+	var cyl := CylinderShape3D.new()
+	cyl.radius = r + 0.3
+	cyl.height = 0.2
+	cs.shape = cyl
+	body.add_child(cs)
+	var mi := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = r + 0.3
+	cm.bottom_radius = r + 0.3
+	cm.height = 0.2
+	mi.mesh = cm
+	var m := StandardMaterial3D.new()
+	m.albedo_color = c
+	mi.material_override = m
+	body.add_child(mi)
+	body.position.y = -0.1
+	root.add_child(body)
+
+
 static func _shell(root: Node3D, w: float, d: float, wall: Color, floor_color: Color, scifi: bool, floors: int = 1, hole: Rect2 = Rect2()) -> void:
 	var top := HEIGHT * floors
 	PropsBuilder._box(root, Vector3(0, -0.1, 0), Vector3(w, 0.2, d), floor_color, true)
@@ -419,8 +522,10 @@ static func _home_rooms(root: Node3D, w: float, d: float, wall: Color, floors: i
 
 ## Escalera a la planta de arriba: de delante (junto a la entrada) hacia el fondo, pegada a la
 ## pared izquierda; el suelo de arriba con su hueco y barandilla.
-static func _stairs_up(root: Node3D, w: float, d: float) -> void:
-	var x := -w / 2 + 0.75
+static func _stairs_up(root: Node3D, w: float, d: float, level: int = 0) -> void:
+	var side := -1.0 if level % 2 == 0 else 1.0   # cada tramo en la pared de enfrente del anterior
+	var x := side * (w / 2 - 0.75)
+	var y0 := HEIGHT * level
 	var z0 := d / 2 - 0.7     # abajo
 	var run := 4.2
 	var z1 := z0 - run        # arriba
@@ -431,18 +536,20 @@ static func _stairs_up(root: Node3D, w: float, d: float) -> void:
 	box.size = Vector3(1.3, 0.12, slope)
 	shape.shape = box
 	ramp.add_child(shape)
-	ramp.position = Vector3(x, HEIGHT / 2.0, (z0 + z1) / 2.0)
+	ramp.position = Vector3(x, y0 + HEIGHT / 2.0, (z0 + z1) / 2.0)
 	ramp.rotation.x = atan2(HEIGHT, run)  # sube hacia el fondo (-z)
 	root.add_child(ramp)
 	var steps := 14
 	for i in steps:  # peldaños que se ven (la rampa invisible es la que se pisa)
 		var t := (i + 0.5) / steps
-		PropsBuilder._box(root, Vector3(x, HEIGHT * t - 0.1, lerpf(z0, z1, t)), Vector3(1.3, 0.2, run / steps + 0.02), Color("#7a5a3c"), false)
-	# Suelo de arriba con el hueco de la escalera
-	var hole_x := -w / 2 + 1.5
-	PropsBuilder._box(root, Vector3((hole_x + w / 2) / 2.0, HEIGHT, 0), Vector3(w / 2 - hole_x, 0.2, d), Color("#7d5f42"), true)
-	PropsBuilder._box(root, Vector3((-w / 2 + hole_x) / 2.0, HEIGHT, (-d / 2 + z1) / 2.0), Vector3(hole_x + w / 2, 0.2, z1 + d / 2), Color("#7d5f42"), true)
-	PropsBuilder._box(root, Vector3(hole_x, HEIGHT + 0.5, (z1 + d / 2) / 2.0), Vector3(0.06, 1.0, d / 2 - z1), Color("#5b4636"), true)  # barandilla
+		PropsBuilder._box(root, Vector3(x, y0 + HEIGHT * t - 0.1, lerpf(z0, z1, t)), Vector3(1.3, 0.2, run / steps + 0.02), Color("#7a5a3c"), false)
+	# Suelo de arriba con el hueco de la escalera (en el lado de este tramo)
+	var top := y0 + HEIGHT
+	var hole_x := side * (w / 2 - 1.5)
+	var inner_w := w / 2 - absf(hole_x)  # del hueco a la pared de este lado
+	PropsBuilder._box(root, Vector3(-side * (w / 2 - (w - inner_w) / 2.0) , top, 0), Vector3(w - inner_w, 0.2, d), Color("#7d5f42"), true)
+	PropsBuilder._box(root, Vector3(side * (w / 2 - inner_w / 2.0), top, (-d / 2 + z1) / 2.0), Vector3(inner_w, 0.2, z1 + d / 2), Color("#7d5f42"), true)
+	PropsBuilder._box(root, Vector3(hole_x, top + 0.5, (z1 + d / 2) / 2.0), Vector3(0.06, 1.0, d / 2 - z1), Color("#5b4636"), true)  # barandilla
 
 
 ## La planta baja que se vive: sofá, mesa con sillas, alfombra y algo de decoración.

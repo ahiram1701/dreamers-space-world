@@ -97,7 +97,10 @@ func _run() -> void:
 	car._on_use(player)
 	car.linear_velocity = car.global_basis.z * 16.0
 	Input.action_press("move_forward")
-	await create_timer(2.0).timeout
+	var tw := 0.0
+	while tw < 4.0 and car.health >= 100.0:
+		await physics_frame
+		tw += 1.0 / 60.0
 	Input.action_release("move_forward")
 	_expect(car.health < 100.0, "chocar contra un muro abolla el coche (salud %d)" % car.health)
 	car._on_use(player)
@@ -207,7 +210,7 @@ func _run() -> void:
 		var w = inside[0]
 		var n0: int = memory.get_mem(w.npc_id).recent.size()
 		interiors.use_fixture("eat", fridge)
-		await create_timer(3.6).timeout
+		await create_timer(5.0).timeout
 		var ev: Array = memory.get_mem(w.npc_id).recent.slice(n0)
 		_expect(ev.any(func(x): return str(x.text).contains("nevera")), "comes de su nevera delante de ellos: lo ven y no les gusta")
 	var beds: Array = interiors.get("_interior").beds

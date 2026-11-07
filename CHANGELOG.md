@@ -3,6 +3,52 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.9.0] - 2026-11-07
+
+### Añadido
+- **Casi todo se puede usar:**
+  - Los letreros se leen enteros (<kbd>E</kbd> «Leer») y quedan en el diario. Antes el texto de los planetas salía cortado.
+  - Lo que hay por el mundo se puede examinar (<kbd>E</kbd> «Examinar»): la IA lo describe en un par de frases coherentes con el sitio.
+  - Las cosas pequeñas se pueden tomar (las radios del taller de Samir) y no vuelven a aparecer.
+- **La nevera se abre** al comer de ella: se ve la puerta girar y la luz de dentro.
+- **Daño por caída:**
+  - Desde unos 4 m duele. De muy alto te quedas tirado un momento.
+  - Antes del Despertar no hay barra de salud: la caída te deja molido.
+- **La cafetería:**
+  - En la carta se pueden pedir varias cosas; «Listo» y te las traen juntas.
+  - Sentado a la mesa puedes llamar a la mesera o al mesero (<kbd>E</kbd>).
+  - La bebida llega en vaso o taza y la comida en plato.
+- **Modo para gráficas antiguas:** la primera vez que arranca en una tarjeta antigua (NVIDIA NVS, Intel HD…), el juego elige la calidad baja: sin resplandor, menos hierba, menos naves y menos polvo en el espacio. Se cambia en Ajustes.
+
+### Cambiado
+- **Los edificios son por dentro lo que parecen por fuera:**
+  - Tantas plantas como tiene el modelo, hasta cuatro, con una escalera por planta.
+  - Desde los edificios con balcón se sale al balcón (y se vuelve a entrar).
+  - En otros planetas, las cúpulas tienen entrada y puerta y, por dentro, son una cúpula de una planta con literas, cocina pequeña y una terminal (antes parecían iglús sin puerta, con una casa del pueblo de dos plantas dentro).
+  - Todos los edificios de los planetas tienen su puerta visible en la fachada.
+- **Bici y moto:**
+  - Se pedalea de verdad y la moto se conduce sentado como en una moto. Antes aparecía un remo en la mano: el gesto se reiniciaba en cada fotograma.
+  - Más agarre, tracción atrás, giro más suave e inclinación en las curvas. No se caen de lado.
+- **Restos de los choques según el vehículo:** una moto suelta un retrovisor, un faro o un trozo de carenado, nunca piezas de coche; una bici, como mucho la cadena.
+- **Escalones:** se suben andando, sin saltar.
+- **Los PNJ caminan mejor:**
+  - Apuntan a sitios a los que se llega, pasan por huecos más estrechos y ya no saltan encima de muebles dentro de las casas.
+  - Se apartan entre ellos y de ti.
+  - En los planetas también buscan camino.
+- **«Te llevo con unas vecinas»:** quien te guía ya puede llevarte con personas, no solo a sitios. Y si lo dice, lo hace.
+- **El espacio:**
+  - El piloto automático ya no se corta con un roce del ratón: se toma el mando con W/S, X o G. Si se acaba el combustible, se apaga y avisa.
+  - Esquiva lo que tenga delante.
+  - <kbd>Z</kbd> dice qué hace: la asistencia frena sola la nave cuando sueltas los mandos.
+
+### Corregido
+- **La mesera se atoraba encima de la barra.** El paso de detrás era demasiado estrecho para la malla de navegación; ahora es más ancho y nadie se sube a los muebles.
+- **El juego se podía cerrar viajando por el espacio:**
+  - Las lunas y la estación ya no mueven cuerpos físicos en cada fotograma.
+  - Las naves de tráfico no fallan al orientarse.
+  - Los choques a crucero se calculan en tramos cortos.
+  - Además, el modo para gráficas antiguas evita el cierre por el controlador de video.
+
 ## [0.8.0] - 2026-11-07
 
 ### Corregido

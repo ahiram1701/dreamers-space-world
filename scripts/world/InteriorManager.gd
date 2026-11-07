@@ -329,6 +329,50 @@ func leave_to(pos: Vector3, look: Vector3) -> void:
 
 
 ## Entrar y aparecer en un punto del interior (bajando por la trampilla del faro).
+## Salir al balcón de un edificio: sobre una losa delante de la fachada, a la altura de la planta
+## de arriba (y, para volver, «Entrar»).
+var _balconies := {}
+
+func _go_balcony(id: String) -> void:
+	var b: Dictionary = _doors.get(id, {}).get("building", {})
+	if b.is_empty():
+		message.emit("Por aquí no se sale.")
+		return
+	var size: Vector3 = b.size
+	var floors := maxi(int(_doors[id].get("opts", {}).get("floors", 2)), 2)
+	var front := Vector3(sin(float(b.yaw)), 0, cos(float(b.yaw)))
+	var base: Vector3 = b.base
+	var spot := base + front * (size.z / 2.0 + 0.55) + Vector3(0, size.y / floors + 0.05, 0)
+	if not _balconies.has(id):
+		var slab := StaticBody3D.new()
+		slab.collision_layer = Layers.WORLD
+		var cs := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = Vector3(2.8, 0.15, 1.3)
+		cs.shape = box
+		slab.add_child(cs)
+		get_parent().add_child(slab)
+		slab.global_position = spot - Vector3(0, 0.08, 0)
+		slab.rotation.y = float(b.yaw)
+		for sx in [-1.0, 1.0]:  # barandilla a los lados y delante (para no caerse al salir)
+			var rail := CollisionShape3D.new()
+			var rb := BoxShape3D.new()
+			rb.size = Vector3(0.08, 1.0, 1.3)
+			rail.shape = rb
+			rail.position = Vector3(sx * 1.4, 0.55, 0)
+			slab.add_child(rail)
+		var fr := CollisionShape3D.new()
+		var fb := BoxShape3D.new()
+		fb.size = Vector3(2.8, 1.0, 0.08)
+		fr.shape = fb
+		fr.position = Vector3(0, 0.55, 0.62)
+		slab.add_child(fr)
+		Interactable.create(get_parent(), spot - front * 0.3 + Vector3(0, 1.0, 0), 1.2, "Entrar", func(_p): enter_at(id, "balcony_in"))
+		Decor.landmark(get_parent(), spot, "el balcón de %s" % _doors[id].label, "balcony")
+		_balconies[id] = slab
+	await leave_to(spot + Vector3(0, 0.1, 0), front)
+
+
 func enter_at(id: String, where: String) -> void:
 	await enter(id, true)
 	if is_inside() and _interior.has(where):
@@ -376,6 +420,45 @@ func sit(seat: Node3D) -> void:
 var sleep_check: Callable
 
 
+## La puerta de un mueble (la nevera): una hoja con bisagra que gira, con luz dentro al abrir.
+## open=false cierra (y quita) la que se abrió.
+func _swing_door(node: Node3D, open: bool, door: Node3D = null) -> Node3D:
+	if not open:
+		if is_instance_valid(door):
+			var tc := create_tween()
+			tc.tween_property(door, "rotation:y", 0.0, 0.35)
+			tc.tween_callback(door.queue_free)
+			Sfx.at(self, "knock", door.global_position)
+		return null
+	var holder: Node3D = node.get_parent() if node is Interactable else node
+	var size: Vector3 = holder.get_meta("size", Vector3(0.7, 1.8, 0.7))
+	var front := holder.global_basis.z.normalized()
+	var right := front.cross(Vector3.UP).normalized()
+	var hinge := Node3D.new()
+	get_parent().add_child(hinge)
+	hinge.global_position = holder.global_position + front * (size.z / 2.0 + 0.03) - right * (size.x / 2.0 - 0.02)
+	hinge.global_rotation.y = holder.global_rotation.y
+	var leaf := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(size.x * 0.96, size.y * 0.95, 0.05)
+	leaf.mesh = bm
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color("#e9ecef")
+	leaf.material_override = m
+	leaf.position = Vector3(size.x * 0.48, size.y * 0.5, 0)
+	hinge.add_child(leaf)
+	var glow := OmniLight3D.new()
+	glow.light_color = Color("#e8f6ff")
+	glow.omni_range = 1.6
+	glow.light_energy = 0.9
+	glow.position = Vector3(size.x * 0.5, size.y * 0.6, -0.3)
+	hinge.add_child(glow)
+	var t := create_tween()
+	t.tween_property(hinge, "rotation:y", hinge.rotation.y - 1.8, 0.4)
+	Sfx.at(self, "knock", hinge.global_position)
+	return hinge
+
+
 ## Comer de la nevera, beber del grifo, ducharse: el cuerpo lo nota y pasan unos minutos.
 func use_fixture(what: String, node: Node3D) -> void:
 	if _busy:
@@ -384,8 +467,14 @@ func use_fixture(what: String, node: Node3D) -> void:
 	player.face_towards(node.global_position)
 	match what:
 		"eat":
+			# Abres la nevera (se ve la puerta girar y la luz de dentro), coges algo y la cierras
+			player.play_gesture("open", 0.8)
+			var door := _swing_door(node, true)
+			await get_tree().create_timer(0.9).timeout
 			player.play_gesture("eat", 3.0)
-			await get_tree().create_timer(3.0).timeout
+			await get_tree().create_timer(1.2).timeout
+			_swing_door(node, false, door)
+			await get_tree().create_timer(1.8).timeout
 			Body.change("hunger", 45.0)
 			WorldClock.advance(15)
 			message.emit("Te preparas algo rápido con lo que hay en la nevera.")
@@ -404,6 +493,10 @@ func use_fixture(what: String, node: Node3D) -> void:
 		"climb_up":
 			_busy = false
 			climb.emit("up", _current)
+			return
+		"balcony":
+			_busy = false
+			_go_balcony(_current)
 			return
 		"shower":
 			await _fade_to(1.0)

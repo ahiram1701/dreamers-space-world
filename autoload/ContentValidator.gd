@@ -85,7 +85,7 @@ const SPECS := {
 		"gravity": {"t": "float", "min": 0.1, "max": 3.0, "default": 1.0},
 		"seed": {"t": "int", "min": 0, "max": 2147483647, "default": 7},
 		"sky_color": {"t": "color", "default": "#7090c0"},
-		"points_of_interest": {"t": "array", "min": 1, "max": 6, "lenient": true, "items": {"t": "string", "min": 2, "max": 60}},
+		"points_of_interest": {"t": "array", "min": 1, "max": 6, "lenient": true, "items": {"t": "string", "min": 2, "max": 200}},
 		"tags": {"t": "array", "min": 0, "max": 6, "opt": true, "lenient": true, "items": {"t": "string", "min": 2, "max": 24}},
 	},
 	"item": {

@@ -32,7 +32,8 @@ var _heat_t := 0.0
 var _moons: Array = []        # [{node, center, r, speed, angle}]
 var _traffic: Array = []      # [{node, from, to, t, speed}]
 var _dust: MultiMeshInstance3D
-const DUST := 260
+var _dust_pos := PackedVector3Array()
+var DUST := 260
 const DUST_BOX := 160.0
 const MOUSE := 0.0022
 const SUN_RADIUS := 2200.0
@@ -49,6 +50,10 @@ func _ready() -> void:
 	_spawn_ship()
 	_add_traffic()
 	_add_dust()
+	ship.autopilot_stopped.connect(func(why): toast("Piloto automático desactivado: %s." % why))
+	if not ("space_assist" in Settings.seen_hints):
+		Settings.seen_hints.append("space_assist")
+		toast.call_deferred("Z: asistencia de vuelo (frena sola la nave al soltar los mandos). G: piloto automático al destino. V: cabina.", 8.0)
 	_ui()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_target = maxi(system.planets.find(StarSystem.home_planet(system)), 0)
@@ -66,7 +71,7 @@ func _environment() -> void:
 	env.ambient_light_color = Color("#20242e")
 	env.ambient_light_energy = 0.6
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.glow_enabled = true
+	env.glow_enabled = Settings.graphics_quality >= 1
 	env.glow_intensity = 0.8
 	env.glow_hdr_threshold = 1.2
 	var we := WorldEnvironment.new()
@@ -185,7 +190,7 @@ func _station(root: Node3D, r: float) -> void:
 		l.material_override = lm
 		l.position = Vector3(cos(k * TAU / 8.0), 0, sin(k * TAU / 8.0)) * r * 0.9
 		root.add_child(l)
-	root.set_meta("spin", 0.05)
+	root.set_meta("spin", 0.0)  # (girar su cuerpo trimesh cada frame era frágil)
 	# Sólida con su forma (el anillo, el eje y los radios): se puede pasar por los huecos
 	var body := StaticBody3D.new()
 	body.collision_layer = Layers.WORLD
@@ -368,8 +373,8 @@ func _add_moons() -> void:
 			m.roughness = 1.0
 			mi.material_override = m
 			node.add_child(mi)
-			_solid_sphere(node, r)
-			_moons.append({"node": node, "center": StarSystem.position_of(p), "dist": float(p.radius) * (2.4 + i * 1.3), "speed": 0.01 + 0.006 * i, "angle": float(h % 628) / 100.0 + i * 2.0})
+			# (sin cuerpo físico: mover uno estático cada frame era frágil; se choca con la cuenta)
+			_moons.append({"node": node, "r": r, "center": StarSystem.position_of(p), "dist": float(p.radius) * (2.4 + i * 1.3), "speed": 0.01 + 0.006 * i, "angle": float(h % 628) / 100.0 + i * 2.0})
 
 
 ## Otras naves que van y vienen entre la estación y los planetas (el sistema está vivo).
@@ -378,7 +383,7 @@ func _add_traffic() -> void:
 	var stops: Array = system.planets.map(func(p): return StarSystem.position_of(p) + Vector3(0, float(p.radius) * 1.3, 0))
 	if stops.size() < 2:
 		return
-	for i in 4:
+	for i in (4 if Settings.graphics_quality >= 1 else 2):
 		var model := AssetLibrary.instance(Ship.MODEL_DIR, models[i % models.size()])
 		if model == null:
 			continue
@@ -400,6 +405,7 @@ func _add_traffic() -> void:
 
 ## Polvo y partículas a tu alrededor: al moverte pasan de largo (se nota la velocidad).
 func _add_dust() -> void:
+	DUST = 260 if Settings.graphics_quality >= 1 else 120
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	var q := BoxMesh.new()
@@ -418,8 +424,9 @@ func _add_dust() -> void:
 	add_child(_dust)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 99
+	_dust_pos.resize(DUST)
 	for i in DUST:
-		_dust.set_meta("p%d" % i, Vector3(rng.randf(), rng.randf(), rng.randf()) * DUST_BOX)
+		_dust_pos[i] = Vector3(rng.randf(), rng.randf(), rng.randf()) * DUST_BOX
 
 
 func _update_world(delta: float) -> void:
@@ -437,8 +444,9 @@ func _update_world(delta: float) -> void:
 		var to: Vector3 = tr.to
 		var p := from.lerp(to, smoothstep(0.0, 1.0, float(tr.t))) + Vector3(0, sin(float(tr.t) * PI) * 1500.0, 0)
 		var n := tr.node as Node3D
-		if n.global_position.distance_to(p) > 0.5:
-			n.look_at(p + (p - n.global_position), Vector3.UP)
+		var dir := p - n.global_position
+		if dir.length() > 0.5 and absf(dir.normalized().dot(Vector3.UP)) < 0.97:  # (si no, look_at falla)
+			n.look_at(p + dir, Vector3.UP)
 			n.rotate_object_local(Vector3.UP, PI)
 		n.global_position = p
 	# Polvo: cada mota vive en una caja que va con la nave (se recoloca al salirse)
@@ -450,13 +458,15 @@ func _update_world(delta: float) -> void:
 		var up := Vector3.UP if absf(look.y) < 0.95 else Vector3.RIGHT
 		var basis := Basis.looking_at(look, up).scaled(Vector3(1, 1, stretch))
 		for i in DUST:
-			var p0: Vector3 = _dust.get_meta("p%d" % i)
+			var p0: Vector3 = _dust_pos[i]
 			var lp := Vector3(fposmod(p0.x - c.x, DUST_BOX), fposmod(p0.y - c.y, DUST_BOX), fposmod(p0.z - c.z, DUST_BOX)) - Vector3.ONE * DUST_BOX / 2.0
 			_dust.multimesh.set_instance_transform(i, Transform3D(basis, c + lp))
 		(_dust.material_override as StandardMaterial3D).albedo_color.a = clampf(v.length() / 200.0, 0.15, 0.6)
 
 
 func toast(text: String, seconds: float = 4.0) -> void:
+	if _toast == null:
+		return
 	_toast.text = text
 	_toast_t = seconds
 
@@ -547,6 +557,17 @@ func _physics_process(delta: float) -> void:
 		if off.length() < min_d:
 			ship.global_position = c + (off.normalized() if off.length() > 0.01 else Vector3.UP) * min_d
 			ship.velocity = ship.velocity.slide(off.normalized()) * 0.3
+	for mo in _moons:  # las lunas también son sólidas
+		var mc: Vector3 = (mo.node as Node3D).global_position
+		var md := float(mo.r) + ship.length * 0.6 + 2.0
+		var mo_off := ship.global_position - mc
+		if mo_off.length() < md:
+			var into := -ship.velocity.dot(mo_off.normalized())
+			ship.global_position = mc + mo_off.normalized() * md
+			ship.velocity = ship.velocity.slide(mo_off.normalized()) * 0.3
+			if into > 20.0:
+				ship.hull = maxf(ship.hull - minf(into * 0.3, Ship.MAX_HIT), 0.0)
+				on_ship_hit(into)
 	var sd := ship.global_position.length()
 	if sd < SUN_RADIUS + ship.length + 2.0:
 		ship.global_position = ship.global_position.normalized() * (SUN_RADIUS + ship.length + 2.0)
@@ -565,8 +586,10 @@ func _process(delta: float) -> void:
 	if _toast_t > 0.0:
 		_toast_t -= delta
 		_toast.modulate.a = clampf(_toast_t, 0.0, 1.0)
-	for b in _bodies:
-		(b.node as Node3D).rotate_y(float(b.node.get_meta("spin", 0.0)) * delta)
+	for b in _bodies:  # giran los planetas a la vista (el cuerpo que choca es una esfera: no hace falta moverlo)
+		for c in (b.node as Node3D).get_children():
+			if c is MeshInstance3D:
+				(c as MeshInstance3D).rotate_y(float(b.node.get_meta("spin", 0.0)) * delta)
 	if ship == null:
 		return
 	# Cámara detrás de la nave
@@ -595,7 +618,7 @@ func _process(delta: float) -> void:
 		pax.append(str(WorldDB.get_entity("npc", str(id)).get("name", "?")).split(" ")[0])
 	_hud.text = "%s · %s · combustible %d%% · casco %d%%%s%s\nCerca: %s a %s\nDestino: %s a %s%s%s" % [ship.display_name, _speed_text(ship.speed()), int(ship.fuel * 100.0),
 		int(ship.hull), "" if ship.assist else " · asistencia APAGADA", " · ¡PROXIMIDAD!" if ship.proximity else "", best.get("name", "?"), _dist_text(maxf(best_d, 0.0)), tgt.name, _dist_text(tdist),
-		"  · PILOTO AUTOMÁTICO" if ship.autopilot else ("  (G: piloto automático · Shift: crucero)" if tdist > 20000.0 and ship.speed() < 1000.0 else ""),
+		"  · PILOTO AUTOMÁTICO (G o W/S para tomar el mando)" if ship.autopilot else ("  (G: piloto automático · Shift: crucero)" if tdist > 20000.0 and ship.speed() < 1000.0 else ""),
 		("\nA bordo: " + ", ".join(pax)) if not pax.is_empty() else ""]
 	_update_marker(tpos, str(tgt.name), tdist)
 	_place_rock_bodies(delta)
@@ -648,6 +671,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_target = (_target + 1) % system.planets.size()
 	elif event.is_action_pressed("flight_assist") and ship:
 		ship.assist = not ship.assist
+		toast("Asistencia de vuelo %s: %s" % ["ENCENDIDA" if ship.assist else "APAGADA",
+			"al soltar los mandos, la nave frena sola" if ship.assist else "la nave sigue a la deriva con su inercia (como en el espacio real)"])
 	elif event.is_action_pressed("interact") and not _near.is_empty() and StarSystem.can_land(_near) and not _landing:
 		_land(str(_near.name))
 	elif event.is_action_pressed("pause"):
