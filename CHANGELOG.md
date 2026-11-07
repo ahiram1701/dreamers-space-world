@@ -3,6 +3,13 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.7.2] - 2026-11-07
+
+La v0.7.1 no llegó a publicarse con instalador: esta versión la incluye entera, con un arreglo.
+
+### Corregido
+- El terreno sin fin creaba la malla de cada trozo en un hilo de trabajo. Si la escena se cerraba mientras se generaba, podía dar errores y dejar memoria sin liberar. Ahora el hilo solo calcula los datos y la malla se crea en el hilo principal.
+
 ## [0.7.1] - 2026-11-06
 
 ### Añadido

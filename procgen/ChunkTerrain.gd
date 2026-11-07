@@ -191,8 +191,8 @@ func _make(k: Vector2i, step: float, near: bool) -> Dictionary:
 					st.set_color(col)
 					st.add_vertex(v)
 	st.generate_normals()
-	var mesh := st.commit()
-	var out := {"mesh": mesh, "near": near, "heights": heights, "n": n, "step": step, "x0": x0, "z0": z0, "props": []}
+	# Solo los datos: la malla (un recurso del servidor de render) se crea en el hilo principal
+	var out := {"arrays": st.commit_to_arrays(), "near": near, "heights": heights, "n": n, "step": step, "x0": x0, "z0": z0, "props": []}
 	if near and prop_fn.is_valid():
 		var rng := RandomNumberGenerator.new()
 		rng.seed = hash(Vector2i(k.x, k.y))
@@ -218,8 +218,10 @@ func _install(k: Vector2i, data: Dictionary) -> void:
 	root.collision_layer = Layers.WORLD
 	root.collision_mask = 0
 	root.add_to_group("terrain")
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, data.arrays)
 	var mi := MeshInstance3D.new()
-	mi.mesh = data.mesh
+	mi.mesh = mesh
 	mi.material_override = material
 	root.add_child(mi)
 	if data.near:
