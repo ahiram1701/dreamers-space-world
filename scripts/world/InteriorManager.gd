@@ -7,6 +7,14 @@ extends Node3D
 signal entered(kind: String, door_id: String)
 signal exited(kind: String, door_id: String)
 signal message(text: String)
+## Subir o bajar por una escalera que lleva fuera del interior (la del faro, a la linterna).
+signal climb(direction: String, door_id: String)
+## Usaste algo de la casa (comer de la nevera, beber, ducharte): para que la escena decida si es de otro.
+signal fixture_used(what: String, door_id: String)
+## Te sentaste (en una cafetería, viene el mesero).
+signal sat_down(seat: Node3D)
+## Dormiste en una cama de este interior (la escena decide de quién es y qué pasa).
+signal slept(door_id: String, bed: Node3D, minutes: float, woken_by: String)
 ## Algo de dentro que abre un panel en la escena (armario, tienda de ropa, peluquería).
 signal wants(what: String)
 ## Justo antes de construir el interior (para decidir cuánta gente vive ahí, etc.).
@@ -299,6 +307,35 @@ func enter(id: String, through: bool = false) -> void:
 	_busy = false
 
 
+## Salir a otro sitio que no es la puerta (arriba de una escalera: el balcón del faro).
+func leave_to(pos: Vector3, look: Vector3) -> void:
+	if _busy or not is_inside():
+		return
+	_busy = true
+	await _fade_to(1.0)
+	var id := _current
+	var door: Dictionary = _doors[id]
+	_current = ""
+	invited.erase(id)
+	_clear_interior()
+	player.velocity = Vector3.ZERO
+	player.stop_gesture()
+	player.global_position = pos
+	player.look_direction(look)
+	exited.emit(door.kind, id)
+	refresh_prompt(id)
+	await _fade_to(0.0)
+	_busy = false
+
+
+## Entrar y aparecer en un punto del interior (bajando por la trampilla del faro).
+func enter_at(id: String, where: String) -> void:
+	await enter(id, true)
+	if is_inside() and _interior.has(where):
+		player.global_position = _interior[where]
+		player.velocity = Vector3.ZERO
+
+
 func leave() -> void:
 	if _busy or not is_inside():
 		return
@@ -331,6 +368,12 @@ func sit(seat: Node3D) -> void:
 	player.clear_look()
 	player.hold_position = true
 	player.play_gesture("sit")
+	sat_down.emit(seat)
+
+
+## Quien decide si alguien te despierta antes (el dueño de la cama que llega a acostarse):
+## Callable(door_id, bed, minutes) -> {"minutes": float, "by": npc_id}. Lo pone la escena.
+var sleep_check: Callable
 
 
 ## Comer de la nevera, beber del grifo, ducharse: el cuerpo lo nota y pasan unos minutos.
@@ -346,15 +389,21 @@ func use_fixture(what: String, node: Node3D) -> void:
 			Body.change("hunger", 45.0)
 			WorldClock.advance(15)
 			message.emit("Te preparas algo rápido con lo que hay en la nevera.")
+			fixture_used.emit(what, _current)
 		"drink":
 			player.play_gesture("drink", 2.5)
 			await get_tree().create_timer(2.5).timeout
 			Body.change("thirst", 60.0)
 			WorldClock.advance(2)
 			message.emit("Bebes agua fresca del grifo.")
+			fixture_used.emit(what, _current)
 		"wardrobe", "clothes_shop", "haircut", "shop_buy", "order":
 			_busy = false
 			wants.emit(what)
+			return
+		"climb_up":
+			_busy = false
+			climb.emit("up", _current)
 			return
 		"shower":
 			await _fade_to(1.0)
@@ -363,12 +412,24 @@ func use_fixture(what: String, node: Node3D) -> void:
 			await get_tree().create_timer(0.6).timeout
 			await _fade_to(0.0)
 			message.emit("Una ducha caliente. Te sientes otra persona.")
+			fixture_used.emit(what, _current)
 	_busy = false
 
 
 ## Dormir en una cama hasta la mañana (o una siesta de 3 h si ya es casi de día).
 func sleep(bed: Node3D) -> void:
-	await rest(maxf(fposmod(8.0 - WorldClock.hour(), 24.0) * 60.0, 180.0), bed, true)
+	var minutes := maxf(fposmod(8.0 - WorldClock.hour(), 24.0) * 60.0, 180.0)
+	var by := ""
+	if sleep_check.is_valid() and is_inside():
+		var r: Dictionary = sleep_check.call(_current, bed, minutes)
+		if r.has("refuse"):
+			message.emit(str(r.refuse))
+			return
+		minutes = float(r.get("minutes", minutes))
+		by = str(r.get("by", ""))
+	var door := _current
+	await rest(minutes, bed, true)
+	slept.emit(door, bed, minutes, by)
 
 
 ## Dormir o esperar `minutes`: en una cama se descansa del todo (8 h = descanso lleno); en el

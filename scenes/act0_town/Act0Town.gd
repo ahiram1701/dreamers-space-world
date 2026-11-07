@@ -102,8 +102,9 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
-	if _player.position.y < -30.0 and not _interiors.is_inside():  # cayó fuera del mapa
-		_player.position = SPAWN
+	if _player.position.y < -30.0 and not _interiors.is_inside():  # (no debería: el mundo no tiene borde)
+		var safe := _player.last_safe_position()
+		_player.position = safe + Vector3(0, 0.5, 0) if safe != Vector3.INF and safe.y > -20.0 else SPAWN
 		_player.velocity = Vector3.ZERO
 	_process_common()
 	if _awakening != null:
@@ -308,7 +309,12 @@ func _follow_one(id: String, teleport: bool) -> void:
 				npc.settle(spot.pos, spot.face, "sleep", "durmiendo")
 			elif npc.activity != act[0] or not npc.is_settled():
 				npc.stop()
-				var p := _interiors.npc_spot(_npcs.keys().find(id))
+				if _interiors.current_kind() == "cafe" and id != "npc_teo":  # de cliente: en una mesa
+					var seat := _interiors.activity_spot("table", 2 + _npcs.keys().find(id))
+					if not seat.is_empty():
+						npc.settle(seat.pos, seat.face, "sit_eat" if act[1] in ["drink", "eat"] else "sit", act[0])
+						return
+				var p := _interiors.npc_spot(0 if _interiors.current_kind() == "cafe" else _npcs.keys().find(id))  # Teo, tras la barra
 				npc.settle(p + Vector3(0, 0.1, 0), p + Vector3(0, 0, 1), act[1], act[0])
 			return
 		if night:  # de noche se va a dormir: camina hasta su puerta y entra
@@ -373,7 +379,35 @@ func _build_environment() -> void:
 
 ## Altura del suelo: el pueblo es llano, la playa baja hacia el mar, el faro está sobre un
 ## pequeño promontorio y hay colinas suaves lejos de las calles.
+## El terreno hecho a mano (el pueblo y su costa). Fuera de él sigue el mundo sin fin (ChunkTerrain).
+const CORE := Rect2(-110, -130, 300, 260)
+var _wild: FastNoiseLite
+
+
 func _ground_height(x: float, z: float) -> float:
+	var h := _town_height(x, z)
+	var out := Vector2(maxf(maxf(CORE.position.x - x, x - CORE.end.x), 0.0), maxf(maxf(CORE.position.y - z, z - CORE.end.y), 0.0)).length()
+	if out <= 0.0:
+		return h
+	return lerpf(h, _wild_height(x, z), smoothstep(0.0, 60.0, out))
+
+
+## Más allá del pueblo: colinas y, lejos, montañas tierra adentro (oeste); al este, mar abierto
+## con alguna isla.
+func _wild_height(x: float, z: float) -> float:
+	if _wild == null:
+		_wild = FastNoiseLite.new()
+		_wild.seed = TOWN_SEED + 99
+		_wild.frequency = 0.003
+		_wild.fractal_octaves = 4
+	var m := _wild.get_noise_2d(x, z)
+	var d := Vector2(x - 40.0, z).length()
+	var land := 0.8 + (_noise.get_noise_2d(x, z) * 0.5 + 0.5) * 3.0 + maxf(m, -0.2) * 40.0 * smoothstep(180.0, 700.0, d)
+	var sea := -5.7 + maxf(m - 0.3, 0.0) * 45.0   # islas donde el ruido sube
+	return lerpf(land, sea, smoothstep(30.0, 110.0, x))
+
+
+func _town_height(x: float, z: float) -> float:
 	var h := 0.0
 	if x > 28.0:
 		h = -smoothstep(28.0, 58.0, x) * 1.7 - smoothstep(58.0, 95.0, x) * 4.0
@@ -399,6 +433,10 @@ func _ground_color(x: float, z: float, h: float) -> Color:
 	var dl := Vector2(x - LIGHTHOUSE_POS.x, z - LIGHTHOUSE_POS.z).length()
 	if dl < 9.0 and h > 0.2:
 		c = Color("#7a7468").lerp(grass, smoothstep(5.0, 9.0, dl) * 0.5)
+	if x > 100.0 and h > 1.5:  # islas: verdes por arriba
+		c = c.lerp(grass, smoothstep(1.5, 3.5, h))
+	if h > 6.0:  # montañas: roca y, arriba, nieve
+		c = c.lerp(Color("#7c7466"), smoothstep(6.0, 14.0, h)).lerp(Color("#eef2f4"), smoothstep(22.0, 30.0, h))
 	return c
 
 
@@ -406,6 +444,7 @@ func _build_terrain() -> void:
 	_noise = FastNoiseLite.new()
 	_noise.seed = TOWN_SEED
 	_noise.frequency = 0.02
+	_wild_height(0.0, 0.0)  # (crea su ruido aquí: los trozos se hacen en hilos)
 	var x0 := -110.0
 	var z0 := -130.0
 	var step := 2.0
@@ -433,8 +472,28 @@ func _build_terrain() -> void:
 	var shape := CollisionShape3D.new()
 	shape.shape = mesh.create_trimesh_shape()
 	body.add_child(shape)
+	body.add_to_group("terrain")
 	add_child(body)
-	Decor.water(self, Vector3(165, WATER_Y, 0), Vector2(270, 300))  # empieza en x = 30, más allá de la arena seca
+	# Fuera del pueblo, el mundo sigue: terreno por trozos y el mar sin fin (va contigo)
+	var world := ChunkTerrain.new()
+	world.name = "MundoSinFin"
+	world.height_fn = _ground_height
+	world.color_fn = _ground_color
+	world.material = Decor.ground_material()
+	world.core = CORE
+	world.water_level = WATER_Y
+	world.prop_fn = func(x: float, _z: float, h: float, rng: RandomNumberGenerator) -> String:
+		if h < 0.4:
+			return ""
+		var r := rng.randf()
+		if x < 20.0:
+			return "tree" if r < 0.32 else ("plant" if r < 0.45 else ("rock" if r < 0.52 else ""))
+		return "tree" if r < 0.1 else ("rock" if r < 0.2 else "")  # islas: palmeras y rocas
+	var pine := ChunkTerrain.nature_placer("pine")
+	var palm := ChunkTerrain.nature_placer("ocean")
+	world.prop_builder = func(parent: Node3D, kind: String, pos: Vector3, rng: RandomNumberGenerator) -> void:
+		(pine if pos.x < 20.0 else palm).call(parent, kind, pos, rng)
+	add_child(world)
 
 	var rng := RandomNumberGenerator.new()
 	rng.seed = TOWN_SEED + 7
@@ -552,9 +611,8 @@ func _build_landmarks() -> void:
 	dome.material_override = _mat(Color("#b23a3a"))
 	dome.position = lp + Vector3(0, 21.7, 0)
 	add_child(dome)
-	var door := _box(lp + Vector3(-1.75, 1.3, 1.75), Vector3(0.2, 2.2, 1.2), Color("#4a3426"), false)
-	door.rotation.y = PI / 4
-	_interiors.add_door("faro", lp + Vector3(-2.7, 0, 2.7), -PI / 4, "lighthouse", 33, "el faro")
+	_lighthouse_door(lp)
+	_lighthouse_gallery(lp)
 	_beacon = OmniLight3D.new()
 	_beacon.light_color = Color("#fff3b0")
 	_beacon.omni_range = 34.0
@@ -650,6 +708,31 @@ func _launch_pad() -> void:
 		PropsBuilder._box(self, PAD + Vector3(cos(a) * 7.5, 0.17, sin(a) * 7.5), Vector3(1.2 if k % 2 else 14.0, 0.02, 14.0 if k % 2 else 1.2), Color("#d4a017"), false)
 	Decor.landmark(self, PAD, "plataforma de despegue (al oeste del pueblo)", "pad")
 	_label3d(PAD + Vector3(0, 6, -9), "Plataforma de despegue")
+	_upgrade_vehicles()
+
+
+## Mundos de antes de la v0.7.1: los coches y la lanzadera eran de piezas; ahora llevan modelo.
+func _upgrade_vehicles() -> void:
+	if WorldDB.get_state("vehicles_v2", false):
+		return
+	WorldDB.set_state("vehicles_v2", true)
+	for e in Creations.all_here():
+		if str(e.get("by", "")) != "world" or not str(e.get("model", "")).is_empty():
+			continue
+		if Vehicle.KIT.has(str(e.get("factory", ""))):
+			var f := Vehicle.factory(str(e.factory))
+			Creations.update(str(e.id), {"model": f.model, "parts": []})
+		elif str(e.get("name", "")) == "Lanzadera vieja":
+			var s := Ship.factory()
+			Creations.update(str(e.id), {"model": s.get("model", ""), "height": s.get("height", 3.0), "parts": s.parts})
+
+
+## Si llegas en nave, aterrizas en la plataforma (si está libre).
+func arrival_pad() -> Vector3:
+	for e in Creations.all_here():
+		if Vector3(float(e.pos[0]), 0, float(e.pos[2])).distance_to(PAD) < 9.0:
+			return Vector3.INF
+	return PAD + Vector3(0, 0.17, 0)
 
 
 ## Vehículos del pueblo (una vez por mundo): los de los vecinos, tu bici, la lancha del muelle y
@@ -660,17 +743,19 @@ func _place_vehicles() -> void:
 		return
 	WorldDB.set_state("town_vehicles", true)
 	# Junto a la acera, entre farolas y fuera de los carriles del tráfico (Traffic.LANES)
+	WorldDB.set_state("vehicles_v2", true)
 	var cars := [["sedan", Vector3(-7.6, 0, -32), PI, "npc_teo"], ["pickup", Vector3(-31, 0, 18), PI / 2, "npc_samir"],
 		["van", Vector3(-2.4, 0, -14), 0.0, "vecino"], ["moto", Vector3(-2.6, 0, 18), 0.0, "vecino"],
-		["sedan", Vector3(-7.6, 0, 32), PI, "vecino"], ["bike", Vector3(-12.5, 0, -1), PI / 2, "player"]]
+		["taxi", Vector3(-7.6, 0, 32), PI, "vecino"], ["suv", Vector3(-2.4, 0, -46), 0.0, "vecino"],
+		["hatchback", Vector3(-7.6, 0, 50), PI, "vecino"], ["bike", Vector3(-12.5, 0, -1), PI / 2, "player"]]
 	for c in cars:
 		var at: Vector3 = c[1]
 		at.y = _ground_height(at.x, at.z) + 0.1
 		Vehicle.place_factory(self, c[0], at, c[2], c[3])
 	Vehicle.place_factory(self, "speedboat", Vector3(42, WATER_Y, 12), PI / 2, "npc_marina", "#2c5d8f")
 	var ship := Ship.factory()
-	var e := Creations.add({"name": "Lanzadera vieja", "parts": ship.parts, "behaviors": ship.behaviors,
-		"pos": [PAD.x, 0.17, PAD.z], "yaw": PI / 4, "fuel": 0.6, "owner": "", "by": "world"})
+	var e := Creations.add({"name": "Lanzadera vieja", "parts": ship.parts, "behaviors": ship.behaviors, "model": ship.get("model", ""),
+		"height": ship.get("height", 3.0), "pos": [PAD.x, 0.17, PAD.z], "yaw": PI / 4, "fuel": 0.6, "owner": "", "by": "world"})
 	if not e.is_empty():
 		Creations.build(self, e)
 
@@ -766,6 +851,63 @@ func _update_windows() -> void:
 
 # --- Helpers de primitivas ------------------------------------------------------------
 
+## La puerta del faro: una puerta de verdad (hoja de madera con su pomo) en un marco de piedra,
+## arriba del zócalo, y unos escalones para llegar a ella.
+func _lighthouse_door(lp: Vector3) -> void:
+	var out := Vector3(-1, 0, 1).normalized()
+	var yaw := atan2(out.x, out.z)
+	var plinth_top := 1.2
+	var door_at := lp + out * 2.32 + Vector3(0, plinth_top, 0)
+	var model := AssetLibrary.instance("house_interior_pack", "Door_4")
+	if model:
+		AssetLibrary.place(self, model, door_at, 2.25, yaw, true)
+	else:
+		_box(door_at + Vector3(0, 1.1, 0), Vector3(1.1, 2.2, 0.12), Color("#4a3426"), false).rotation.y = yaw
+	var stone := Color("#b9b2a4")
+	for side in [-1.0, 1.0]:  # jambas y dintel de piedra
+		var jamb := _box(door_at + out.cross(Vector3.UP) * side * 0.72 + Vector3(0, 1.2, 0) + out * 0.08, Vector3(0.28, 2.5, 0.3), stone, false)
+		jamb.rotation.y = yaw
+	var lintel := _box(door_at + Vector3(0, 2.55, 0) + out * 0.08, Vector3(1.75, 0.3, 0.32), stone, false)
+	lintel.rotation.y = yaw
+	for k in 4:  # escalones hasta el zócalo
+		var step := _box(lp + out * (3.75 + k * 0.38) + Vector3(0, (plinth_top - k * 0.3) / 2.0, 0), Vector3(1.8, plinth_top - k * 0.3, 0.38), Color("#8a8478"))
+		step.rotation.y = yaw
+	_interiors.add_door("faro", lp + out * 3.0 + Vector3(0, plinth_top, 0), yaw, "lighthouse", 33, "el faro")
+
+
+## El balcón de la linterna (a 19 m): se puede salir a él por la escalera de dentro. Barandilla
+## alrededor y una trampilla para bajar.
+var _gallery_spot := Vector3.INF
+
+
+func _lighthouse_gallery(lp: Vector3) -> void:
+	var floor_y := lp.y + 19.5
+	for k in 16:  # barandilla
+		var a := TAU * k / 16.0
+		var post := _box(Vector3(lp.x + cos(a) * 2.32, floor_y + 0.5, lp.z + sin(a) * 2.32), Vector3(0.06, 1.0, 0.95), Color("#2d3238"))
+		post.rotation.y = -a
+	var ring := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = 2.28
+	tm.outer_radius = 2.36
+	ring.mesh = tm
+	ring.material_override = _mat(Color("#2d3238"))
+	ring.position = Vector3(lp.x, floor_y + 1.0, lp.z)
+	add_child(ring)
+	var out := Vector3(-1, 0, 1).normalized()
+	_gallery_spot = Vector3(lp.x, floor_y + 0.1, lp.z) + out * 1.8
+	PropsBuilder._box(self, _gallery_spot + Vector3(0, -0.07, 0) - out * 0.15, Vector3(0.7, 0.04, 0.7), Color("#5a4632"), false)
+	Interactable.create(self, _gallery_spot - out * 0.15 + Vector3(0, 0.9, 0), 1.2, "Bajar por la escalera", func(_p): _climb_down())
+	Decor.landmark(self, _gallery_spot, "el balcón de la linterna del faro, a 19 m sobre el mar", "gallery")
+	_interiors.climb.connect(func(dir, door):
+		if dir == "up" and door == "faro":
+			_interiors.leave_to(_gallery_spot + out * 0.1 + Vector3(0, 0.2, 0), out))
+
+
+func _climb_down() -> void:
+	await _interiors.enter_at("faro", "hatch")
+
+
 func _box(pos: Vector3, size: Vector3, color: Color, collide: bool = true) -> MeshInstance3D:
 	var mesh := MeshInstance3D.new()
 	mesh.mesh = BoxMesh.new()
@@ -828,6 +970,9 @@ func _label3d(pos: Vector3, text: String) -> void:
 	l.pixel_size = 0.01
 	l.position = pos
 	Decor.fade_label(l)
+	# De muy cerca no se ve (si no, al pasar la cámara por él tapaba media pantalla)
+	l.visibility_range_begin = 7.0
+	l.visibility_range_begin_margin = 1.5
 	add_child(l)
 
 

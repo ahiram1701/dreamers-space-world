@@ -9,6 +9,9 @@ const KEYS := {
 	"inventory": [KEY_I], "anchor": [KEY_T], "pause": [KEY_ESCAPE], "phone": [KEY_C], "fullscreen": [KEY_F11],
 	"choice_1": [KEY_1], "choice_2": [KEY_2], "choice_3": [KEY_3], "choice_4": [KEY_4],
 	"descend": [KEY_CTRL, KEY_Q],   # en una nave: bajar (subir es "jump")
+	"horn": [KEY_H],                # en un vehículo: claxon
+	"next_target": [KEY_TAB],       # en el espacio: cambiar de destino
+	"flight_assist": [KEY_Z],       # en el espacio: amortiguar la inercia o no
 }
 const BUTTONS := {
 	"jump": [JOY_BUTTON_A], "interact": [JOY_BUTTON_X], "act": [JOY_BUTTON_Y],
@@ -20,6 +23,7 @@ const AXES := {
 	"move_left": [JOY_AXIS_LEFT_X, -1.0], "move_right": [JOY_AXIS_LEFT_X, 1.0],
 	"look_up": [JOY_AXIS_RIGHT_Y, -1.0], "look_down": [JOY_AXIS_RIGHT_Y, 1.0],
 	"look_left": [JOY_AXIS_RIGHT_X, -1.0], "look_right": [JOY_AXIS_RIGHT_X, 1.0],
+	"accelerate": [JOY_AXIS_TRIGGER_RIGHT, 1.0], "brake": [JOY_AXIS_TRIGGER_LEFT, 1.0],
 }
 
 
@@ -84,3 +88,12 @@ func move_vector() -> Vector2:
 ## Giro de cámara con el stick derecho (por segundo).
 func look_vector() -> Vector2:
 	return Input.get_vector("look_left", "look_right", "look_up", "look_down")
+
+
+## Conducir: x = volante (-1 izquierda … 1 derecha), y = acelerador (1) o freno/marcha atrás (-1).
+## Con mando, además de la palanca, los gatillos (derecho acelera, izquierdo frena).
+func drive_vector() -> Vector2:
+	var mv := move_vector()
+	var gas := maxf(-mv.y, Input.get_action_strength("accelerate"))
+	var back := maxf(mv.y, Input.get_action_strength("brake"))
+	return Vector2(mv.x, clampf(gas - back, -1.0, 1.0))

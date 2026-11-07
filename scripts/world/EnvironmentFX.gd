@@ -185,7 +185,7 @@ func _apply_quality() -> void:
 	env.glow_enabled = true
 	env.glow_intensity = 0.6
 	env.glow_bloom = 0.0  # solo brilla lo que emite luz (no los textos blancos de noche)
-	env.glow_hdr_threshold = 1.1
+	env.glow_hdr_threshold = 1.35  # (más alto: de día, la espuma y los faros no hacen manchas blancas)
 	env.ssao_enabled = q >= 1
 	env.ssao_radius = 1.2
 	env.ssao_intensity = 1.6

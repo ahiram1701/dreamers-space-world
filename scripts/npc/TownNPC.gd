@@ -55,6 +55,12 @@ var _present := true
 var _shape: CollisionShape3D
 var _settled := false      # quieto en un mueble (dormido, sentado, cocinando)
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
+var _riding: Node3D = null    # va de pasajero en un vehículo
+var _ride_seat := 0
+var _knocked := 0.0           # segundos que le quedan en el suelo tras un golpe
+var _limp := 0.0              # segundos que le quedan cojeando
+## Lo que lleva en la mano ahora mismo ("" = nada): nombre para la IA ("una escoba").
+var held := ""
 
 
 func setup(entity: Dictionary) -> void:
@@ -358,9 +364,32 @@ func is_paused() -> bool:
 	return _paused_target != Vector3.INF
 
 
+## Lo que se lleva en la mano según lo que hace: [palabras, modelo, cómo se llama, largo, agarre].
+const HELD_BY_ACTIVITY := [
+	[["barr"], "proc:broom", "una escoba", 1.3, 0.55],
+	[["limpi", "trapo", "seca ", "secando"], "proc:rag", "un trapo", 0.2, 0.5],
+	[["tomando café", "tomando un café", "bebiendo café", "con su café", "tomando té"], "proc:cup", "una taza de café", 0.1, 0.5],
+	[["leyendo", "lee "], "proc:book", "un libro", 0.22, 0.4],
+	[["sirviendo", "atendiendo las mesas", "lleva una bandeja"], "proc:tray", "una bandeja", 0.4, 0.5],
+	[["al teléfono", "hablando por teléfono", "mirando el celular", "con el celular"], "survival_pack/Phone", "el celular", 0.14, 0.5],
+]
+
+
 func set_activity(text: String, gesture: String) -> void:
 	activity = text
 	activity_gesture = gesture
+	# Lo que dice que hace se ve: si barre, lleva una escoba; si no hace nada con las manos, nada
+	var low := text.to_lower()
+	var want: Array = []
+	for h in HELD_BY_ACTIVITY:
+		if h[0].any(func(w): return low.contains(w)):
+			want = h
+			break
+	if want.is_empty():
+		if not held.is_empty():
+			hold("", "")
+	elif held != str(want[2]):
+		hold(str(want[1]), str(want[2]), float(want[3]), float(want[4]))
 
 
 func is_idle() -> bool:
@@ -400,6 +429,30 @@ func _process(delta: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if _riding != null:
+		if not is_instance_valid(_riding):
+			_riding = null
+		else:
+			velocity = Vector3.ZERO
+			global_position = _riding.call("seat_position", _ride_seat)
+			_body.global_rotation.y = _riding.global_rotation.y
+			if _rig:
+				_rig.speed = 0.0
+				_rig.airborne = false
+			return
+	if _knocked > 0.0:  # en el suelo: el golpe le arrastra y frena con el roce
+		_knocked -= delta
+		if not is_on_floor():
+			velocity.y -= _gravity * delta
+		else:
+			velocity.x = move_toward(velocity.x, 0, 9.0 * delta)
+			velocity.z = move_toward(velocity.z, 0, 9.0 * delta)
+		move_and_slide()
+		if _knocked <= 0.0:
+			_get_up()
+		return
+	if _limp > 0.0:
+		_limp -= delta
 	if not is_on_floor():
 		velocity.y -= _gravity * delta
 	var goal := Vector3.INF
@@ -432,6 +485,8 @@ func _physics_process(delta: float) -> void:
 		if _detour > 0.0:  # rodear: caminar en diagonal hasta dejar atrás el obstáculo
 			_detour -= delta
 			dir = dir.rotated(Vector3.UP, deg_to_rad(75.0) * _detour_side)
+		if _limp > 0.0:
+			speed = minf(speed, WALK_SPEED * 0.6)
 		velocity.x = dir.x * speed
 		velocity.z = dir.z * speed
 		_body.rotation.y = lerp_angle(_body.rotation.y, atan2(dir.x, dir.z), 8.0 * delta)
@@ -461,6 +516,80 @@ func _physics_process(delta: float) -> void:
 	if _rig:
 		_rig.speed = Vector2(velocity.x, velocity.z).length()
 		_rig.airborne = not is_on_floor() and velocity.y < -2.0
+
+
+# --- En un vehículo, atropellos y lo que lleva en la mano -------------------------------------
+
+## Se sube de pasajero (lo coloca el vehículo en su asiento cada frame).
+func ride(vehicle: Node3D, seat: int) -> void:
+	unsettle()
+	stop()
+	_riding = vehicle
+	_ride_seat = seat
+	if _shape:
+		_shape.set_deferred("disabled", true)
+	if _rig:
+		_rig.play("sit", 1.0e6)
+	set_activity("va en %s" % (vehicle.call("the_name") if vehicle.has_method("the_name") else "el coche"), "sit")
+
+
+func get_off(at: Vector3) -> void:
+	_riding = null
+	global_position = at
+	velocity = Vector3.ZERO
+	if _shape:
+		_shape.set_deferred("disabled", not _present)
+	if _rig:
+		_rig.stop_gesture()
+	set_activity("", "")
+
+
+func is_riding() -> bool:
+	return _riding != null and is_instance_valid(_riding)
+
+
+func riding_vehicle() -> Node3D:
+	return _riding if is_riding() else null
+
+
+## Le da un golpe fuerte (un coche): sale despedido, cae, se queda en el suelo unos segundos y se
+## levanta cojeando. `impact`: velocidad del golpe (m/s).
+func knock_down(push: Vector3, impact: float) -> void:
+	if _riding:
+		return
+	unsettle()
+	_follow = null
+	_target = Vector3.INF
+	talking = false
+	velocity = push
+	_knocked = clampf(2.5 + impact * 0.3, 3.0, 8.0)
+	_limp = clampf(impact * 8.0, 30.0, 240.0)
+	if _rig:
+		_rig.play("fallen", 1.0e6)
+	set_emotion("scared")
+
+
+func is_knocked() -> bool:
+	return _knocked > 0.0
+
+
+func _get_up() -> void:
+	if _rig:
+		_rig.stop_gesture()
+	set_emotion("angry" if _limp > 60.0 else "worried")
+	global_position.y += 0.15
+
+
+## Coge algo en la mano (de verdad: se ve). model "pack/Modelo"; name lo que es ("una escoba").
+func hold(model: String, name: String, length: float = 0.3, grip: float = 0.3) -> void:
+	held = name if not model.is_empty() else ""
+	if _rig:
+		_rig.set_held(model, length, grip)
+
+
+## Lo que lleva en la mano, para la IA ("lleva una escoba en la mano" o "no lleva nada en las manos").
+func held_desc() -> String:
+	return ("lleva %s en la mano" % held) if not held.is_empty() else "no lleva nada en las manos"
 
 
 func _on_body_entered(body: Node3D) -> void:

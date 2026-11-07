@@ -8,7 +8,7 @@ uniform vec4 deep_color : source_color = vec4(0.03, 0.17, 0.30, 1.0);
 uniform vec4 foam_color : source_color = vec4(0.92, 0.96, 1.0, 1.0);
 uniform float wave_height = 0.22;
 uniform float wave_speed = 0.8;
-uniform float foam_width = 1.4;
+uniform float foam_width = 0.45;  // solo una línea fina donde el agua toca la orilla
 uniform float clarity = 6.0;
 uniform sampler2D depth_tex : hint_depth_texture, filter_linear;
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
@@ -52,12 +52,14 @@ void fragment() {
 	// Lo que hay debajo se ve un poco en la orilla
 	vec3 under = textureLod(screen_tex, SCREEN_UV + NORMAL.xz * 0.01, 1.0).rgb;
 	col = mix(under * shallow_color.rgb * 1.4, col, clamp(deep * 1.6 + 0.35, 0.0, 1.0));
-	float foam = 1.0 - smoothstep(0.0, foam_width, water_depth);
-	foam += smoothstep(0.18, 0.35, crest) * 0.35;
+	// Espuma: una línea fina en la orilla y algo en las crestas. Antes (más ancha y casi blanca)
+	// en el agua poco profunda se veían manchas blancas grandes que brillaban como destellos.
+	float foam = (1.0 - smoothstep(0.0, foam_width, water_depth)) * 0.7;
+	foam += smoothstep(0.22, 0.38, crest) * 0.18;
 	// La espuma late con la posición EN EL MUNDO (antes usaba la de la cámara: al moverte, la orilla
 	// parpadeaba en blanco) y suave, sin llegar a blanco puro.
 	foam *= 0.75 + 0.25 * sin(TIME * 1.4 + world_pos.x * 0.7 + world_pos.z * 0.5);
-	ALBEDO = mix(col, foam_color.rgb * 0.85, clamp(foam, 0.0, 0.9));
+	ALBEDO = mix(col, foam_color.rgb * 0.72, clamp(foam, 0.0, 0.6));
 	// Algo menos espejo: los puntos de luz (farolas, luna) ya no saltan como destellos en cada ola
 	ROUGHNESS = 0.18;
 	METALLIC = 0.0;

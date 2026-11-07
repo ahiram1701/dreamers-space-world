@@ -27,42 +27,45 @@ static func palette(biome: String) -> Dictionary:
 	return BIOMES.get(biome, BIOMES["barren"])
 
 
-## Devuelve { node: StaticBody3D con malla y colisión, height_at: Callable(x, z) -> float }.
+## Devuelve { node: el terreno (ChunkTerrain: sin bordes, se genera a tu alrededor al moverte),
+## height_at: Callable(x, z) -> float }. El centro (SIZE) es llano donde apareces y es lo que se
+## decora a mano; más lejos el relieve crece hasta montañas.
 static func build(definition: Dictionary) -> Dictionary:
-	var pal := palette(definition.get("biome", "barren"))
+	var biome := str(definition.get("biome", "barren"))
+	var pal := palette(biome)
 	var noise := FastNoiseLite.new()
 	noise.seed = int(definition.get("seed", 1))
 	noise.frequency = 0.012
 	noise.fractal_octaves = 4
+	var big := FastNoiseLite.new()
+	big.seed = int(definition.get("seed", 1)) + 17
+	big.frequency = 0.0025
+	big.fractal_octaves = 3
 	var amp: float = pal.amp
+	var ocean := biome == "ocean"
 	var height_at := func(x: float, z: float) -> float:
-		var flat := smoothstep(FLAT_RADIUS * 0.5, FLAT_RADIUS * 2.0, Vector2(x, z).length())
-		return noise.get_noise_2d(x, z) * amp * flat
-
+		var d := Vector2(x, z).length()
+		var flat := smoothstep(FLAT_RADIUS * 0.5, FLAT_RADIUS * 2.0, d)
+		var h := noise.get_noise_2d(x, z) * amp * flat
+		# Lejos, montañas (o, en un mundo océano, islas y mar abierto)
+		var far := smoothstep(SIZE * 0.6, SIZE * 2.5, d)
+		var m := big.get_noise_2d(x, z)
+		if ocean:
+			h = lerpf(h, -6.0 + maxf(m - 0.25, 0.0) * 40.0, far)
+		else:
+			h += (m * 0.5 + 0.5) * amp * 4.0 * far
+		return h
 	var low := Color(pal.low)
 	var high := Color(pal.high)
-	var step := SIZE / RES
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for j in RES:
-		for i in RES:
-			var x0 := -SIZE / 2.0 + i * step
-			var z0 := -SIZE / 2.0 + j * step
-			var quad := [Vector2(x0, z0), Vector2(x0 + step, z0), Vector2(x0, z0 + step), Vector2(x0 + step, z0 + step)]
-			for k in [0, 1, 2, 2, 1, 3]:
-				var p: Vector2 = quad[k]
-				var h: float = height_at.call(p.x, p.y)
-				st.set_color(low.lerp(high, clampf(h / amp * 0.5 + 0.5, 0.0, 1.0)))
-				st.add_vertex(Vector3(p.x, h, p.y))
-	st.generate_normals()
-	var mesh := st.commit()
-
-	var body := StaticBody3D.new()
-	var mi := MeshInstance3D.new()
-	mi.mesh = mesh
-	mi.material_override = Decor.ground_material()
-	body.add_child(mi)
-	var shape := CollisionShape3D.new()
-	shape.shape = mesh.create_trimesh_shape()
-	body.add_child(shape)
-	return {"node": body, "height_at": height_at}
+	var t := ChunkTerrain.new()
+	t.name = "Terreno"
+	t.height_fn = height_at
+	t.color_fn = func(_x: float, _z: float, h: float) -> Color:
+		return low.lerp(high, clampf(h / (amp * 2.0) * 0.5 + 0.5, 0.0, 1.0))
+	t.material = Decor.ground_material()
+	t.props_exclude = Rect2(-SIZE / 2.0 - 4.0, -SIZE / 2.0 - 4.0, SIZE + 8.0, SIZE + 8.0)  # el centro lo decora PropsBuilder
+	t.prop_fn = ChunkTerrain.nature_chooser(biome)
+	t.prop_builder = ChunkTerrain.nature_placer(biome)
+	if ocean:
+		t.water_level = -0.45
+	return {"node": t, "height_at": height_at, "limit": INF, "chunked": true}

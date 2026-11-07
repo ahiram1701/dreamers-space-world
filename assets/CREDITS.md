@@ -1,6 +1,6 @@
 # Créditos de los modelos 3D
 
-Todos los modelos de `assets/models/` son de **[Quaternius](https://quaternius.com)** y se publican con licencia **[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)** (dominio público). Puedes usarlos sin pedir permiso. La atribución no es obligatoria, pero la incluimos como agradecimiento.
+Los modelos de `assets/models/` (salvo los coches, ver abajo) son de **[Quaternius](https://quaternius.com)** y se publican con licencia **[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)** (dominio público). Puedes usarlos sin pedir permiso. La atribución no es obligatoria, pero la incluimos como agradecimiento.
 
 Las copias en GLB se tomaron de [trebeljahr/quaternius-showcase](https://github.com/trebeljahr/quaternius-showcase) (`public/glb/`), que reúne los paquetes oficiales.
 
@@ -14,5 +14,10 @@ Las copias en GLB se tomaron de [trebeljahr/quaternius-showcase](https://github.
 | `modular_sci_fi/` | Modular Sci-Fi | Equipamiento de las estaciones espaciales |
 | `house_interior_pack/` | Ultimate House Interior | Muebles de los interiores |
 | `survival_pack/` | Survival Pack | Herramientas en la mano (hacha, pala, remo), balsa, hoguera, tienda, antorchas |
+| `spaceships_pack/` | Ultimate Spaceships (Bob, Dispatcher, Insurgent, Striker) | La lanzadera y los restos de naves de los planetas |
 
 La licencia "todos los derechos reservados" del proyecto ([LICENSE](../LICENSE)) cubre el código y el contenido propio, no estos modelos, que siguen siendo CC0.
+
+## Kenney
+
+Los coches de `assets/models/kenney_cars/` son del **[Car Kit](https://kenney.nl/assets/car-kit) de Kenney** ([www.kenney.nl](https://www.kenney.nl)), con licencia **[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)**. Se usan los GLB del paquete tal cual (con su textura `Textures/colormap.png`): coches del pueblo, del tráfico y de fábrica, y las piezas que saltan en los choques.

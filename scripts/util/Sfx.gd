@@ -19,6 +19,9 @@ const NOISES := {
 	"chop": [0.1, 38.0, 0.6, 200.0, -8.0],
 	"splash": [0.5, 7.0, 0.5, 0.0, -10.0],
 	"whoosh": [0.25, 10.0, 0.7, 0.0, -18.0],
+	"crash": [0.55, 7.0, 0.65, 55.0, 0.0],      # chapa contra algo duro
+	"thump": [0.18, 22.0, 0.2, 75.0, -4.0],     # un golpe contra un cuerpo
+	"scrape": [0.3, 12.0, 0.9, 0.0, -10.0],     # roce de metal
 }
 
 
@@ -40,6 +43,36 @@ static func knock(parent: Node) -> void:
 
 static func door(parent: Node) -> void:
 	_play(parent, "door")
+
+
+## Claxon de un coche: dos notas a la vez, con un poco de aspereza (se oye en 3D desde el coche).
+static func horn(parent: Node3D) -> void:
+	if not parent.is_inside_tree():
+		return
+	if not _cache.has("horn"):
+		var rate := 22050
+		var n := int(rate * 0.55)
+		var data := PackedByteArray()
+		data.resize(n * 2)
+		for i in n:
+			var t := float(i) / rate
+			var env := minf(t * 40.0, 1.0) * minf((0.55 - t) * 30.0, 1.0)
+			var s := (signf(sin(TAU * 392.0 * t)) * 0.5 + signf(sin(TAU * 494.0 * t)) * 0.5) * 0.35 + sin(TAU * 784.0 * t) * 0.15
+			data.encode_s16(i * 2, int(clampf(s * env, -1.0, 1.0) * 32000.0))
+		var w := AudioStreamWAV.new()
+		w.format = AudioStreamWAV.FORMAT_16_BITS
+		w.mix_rate = rate
+		w.data = data
+		_cache["horn"] = w
+	var p := AudioStreamPlayer3D.new()
+	p.stream = _cache["horn"]
+	p.volume_db = 2.0
+	p.unit_size = 10.0
+	p.max_distance = 90.0
+	parent.add_child(p)
+	p.position = Vector3(0, 0.8, 1.5)
+	p.finished.connect(p.queue_free)
+	p.play()
 
 
 ## Sonido del mundo en una posición (pasos, golpes, hacha…). `kind`: una clave de NOISES.

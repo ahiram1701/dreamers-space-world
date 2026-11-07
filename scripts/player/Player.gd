@@ -63,6 +63,9 @@ var _auto_check_t := 0.0
 var _auto_detour := 0.0
 var _auto_side := 1.0
 var _stuck_t := 0.0   # tiempo intentando moverse sin avanzar
+var _cam_vehicle: Node3D = null   # en el que va (la cámara no choca con él y le sigue por detrás)
+var _look_idle := 10.0            # segundos sin mover la cámara (al conducir vuelve detrás)
+var _safe_pos := Vector3.INF      # último sitio pisando suelo firme (si caes al vacío, vuelves aquí)
 
 
 func _ready() -> void:
@@ -120,6 +123,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _turn_camera(delta: Vector2) -> void:
+	_look_idle = 0.0
 	_yaw.rotate_y(-delta.x)
 	var dy := delta.y * (-1.0 if Settings.invert_y else 1.0)
 	_spring.rotation.x = clampf(_spring.rotation.x - dy, -1.3, 0.6 if _first_person else 0.4)
@@ -419,17 +423,23 @@ func _process(delta: float) -> void:
 		var look := Controls.look_vector()
 		if look != Vector2.ZERO:
 			_turn_camera(look * STICK_SENSITIVITY * delta * Settings.mouse_sensitivity)
+	_update_vehicle_camera(delta)
 	# Zoom suave; al mínimo, primera persona (la cabeza no tapa la vista: el cuerpo solo da sombra)
 	var want := _zoom_override if _zoom_override >= 0.0 else _zoom
+	if _cam_vehicle != null and _zoom_override < 0.0 and _cam_vehicle.has_method("camera_distance"):
+		want = maxf(_zoom, float(_cam_vehicle.call("camera_distance")))
 	_spring.spring_length = lerpf(_spring.spring_length, want, 1.0 - exp(-10.0 * delta))
 	var fp := want < FIRST_PERSON and _zoom_override < 0.0
 	if fp != _first_person:
 		_first_person = fp
 		_set_body_shadow_only(fp)
-	_yaw.position.y = lerpf(_yaw.position.y, 1.68 if _first_person else 1.6, 1.0 - exp(-10.0 * delta))
+	if _cam_vehicle == null:
+		_yaw.position.y = lerpf(_yaw.position.y, 1.68 if _first_person else 1.6, 1.0 - exp(-10.0 * delta))
 	_spring.position.x = lerpf(_spring.position.x, 0.0 if _first_person else SHOULDER * clampf(_spring.spring_length / 3.0, 0.0, 1.0), 1.0 - exp(-8.0 * delta))
 	if _cam.fov != Settings.fov:
 		_cam.fov = Settings.fov
+	if _cam_vehicle != null and _cam_vehicle.has_method("speed"):  # sensación de velocidad
+		_cam.fov = lerpf(_cam.fov, Settings.fov + clampf(absf(float(_cam_vehicle.call("speed"))) * 0.45, 0.0, 14.0), 1.0 - exp(-3.0 * delta))
 	if _shake_time > 0.0:
 		_shake_time -= delta
 		_cam.h_offset = randf_range(-_shake_strength, _shake_strength)
@@ -437,6 +447,29 @@ func _process(delta: float) -> void:
 	else:  # encuadre (bajar la cámara un poco en las conversaciones)
 		_cam.h_offset = 0.0
 		_cam.v_offset = lerpf(_cam.v_offset, _frame_v, 1.0 - exp(-6.0 * delta))
+
+
+## En un vehículo: la cámara no choca con él (si no, se metía dentro), va más alta y, si no la
+## mueves en 2 s, vuelve sola detrás, mirando hacia donde vas.
+func _update_vehicle_camera(delta: float) -> void:
+	var v: Node3D = riding if riding is VehicleBody3D or riding is CharacterBody3D else null
+	if v != _cam_vehicle:
+		if _cam_vehicle != null and is_instance_valid(_cam_vehicle) and _cam_vehicle is CollisionObject3D:
+			_spring.remove_excluded_object((_cam_vehicle as CollisionObject3D).get_rid())
+		_cam_vehicle = v
+		if v is CollisionObject3D:
+			_spring.add_excluded_object((v as CollisionObject3D).get_rid())
+		_look_idle = 10.0
+	_look_idle += delta
+	if _cam_vehicle == null or not is_instance_valid(_cam_vehicle):
+		_cam_vehicle = null
+		return
+	_yaw.position.y = lerpf(_yaw.position.y, 2.4, 1.0 - exp(-4.0 * delta))
+	var moving: bool = absf(float(_cam_vehicle.call("speed"))) > 1.5 if _cam_vehicle.has_method("speed") else false
+	if _look_idle > 2.0 and moving:
+		var behind := _cam_vehicle.global_rotation.y + PI   # la cámara mira hacia -z del muelle: detrás
+		_yaw.global_rotation.y = lerp_angle(_yaw.global_rotation.y, behind, 1.0 - exp(-2.5 * delta))
+		_spring.rotation.x = lerp_angle(_spring.rotation.x, -0.22, 1.0 - exp(-2.0 * delta))
 
 
 func _set_body_shadow_only(on: bool) -> void:
@@ -502,6 +535,8 @@ func _physics_process(delta: float) -> void:
 	var before := global_position
 	move_and_slide()
 	_check_stuck(dir, speed, before, delta)
+	if is_on_floor() and not swimming:
+		_safe_pos = global_position
 	if _rig:
 		_rig.speed = Vector2(velocity.x, velocity.z).length()
 		_rig.airborne = not is_on_floor() and not swimming and velocity.y > -12.0
@@ -534,3 +569,8 @@ func _mat(c: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = c
 	return m
+
+
+## Último sitio donde pisabas suelo firme (INF si aún no).
+func last_safe_position() -> Vector3:
+	return _safe_pos

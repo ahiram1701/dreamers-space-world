@@ -248,6 +248,7 @@ Reglas:
 - Las personas cercanas reaccionan de inmediato y de forma creíble según su carácter y su relación con el jugador (npc_react). Una conversación larga se tiene hablando con ellas (E), aquí solo su reacción inmediata.
 - Solo puedes usar lo que aparece en "COSAS Y PERSONAS CERCA", con su id exacto en "target", y lo que el jugador LLEVA ENCIMA (eso lo tiene a mano siempre, aunque no esté en la lista de cosas cercanas). Si lo que quiere hacer no está cerca, no ocurre: dilo en la narración.
 - TODO lo que narres que pasa de verdad necesita su paso. Si no hay paso, no pasa.
+- La gente está donde dice "LA GENTE DE CERCA" y lleva en las manos SOLO lo que dice ahí. No le pongas a nadie una escoba, un trapo, una taza ni nada que no lleve, ni la sitúes en otro sitio. Los vehículos que existen son los de "VEHÍCULOS CERCA"; nada más.
 
 "narration": resumen breve (1 a 3 frases, segunda persona).
 "steps": lista ordenada (máximo 8). Cada paso: "type", sus campos y "narration" (una frase corta de ese momento).
@@ -284,6 +285,57 @@ Ejemplo, "le pego a Teo" con Teo a 6 m: "steps": [{"type": "go_to", "target": "n
 Ejemplo, "talo el árbol de al lado" llevando un hacha: [{"type": "go_to", "target": "tree_12_-4"}, {"type": "play", "target": "chop", "narration": "Golpeas el tronco una y otra vez."}, {"type": "affect_nearby", "target": "tree_12_-4", "narration": "El árbol cruje y cae."}, {"type": "give_item", "item_name": "Troncos de pino", "item_description": "Cuatro troncos recién cortados."}], "minutes": 40"""
 
 
+## Lo que la escena sabe de la gente cercana ({name, held, place}) y de sus sitios: para quitar de
+## la narración lo que la IA se invente (una escoba que nadie lleva, alguien donde no está).
+var people_facts: Callable
+var place_names: Callable
+
+## Objetos de mano que la IA suele inventar: nombre -> palabras.
+const PROPS := {"escoba": ["escoba"], "trapo": ["trapo", "paño", "bayeta"], "taza": ["taza", "tazón"], "libro": ["libro"],
+	"bandeja": ["bandeja"], "celular": ["celular", "teléfono", "móvil"], "periódico": ["periódico"], "paraguas": ["paraguas"],
+	"cigarro": ["cigarro", "cigarrillo"], "llave inglesa": ["llave inglesa"], "martillo": ["martillo"], "destornillador": ["destornillador"],
+	"herramientas": ["caja de herramientas"], "caña": ["caña de pescar"], "red": ["red de pesca"], "botella": ["botella"], "vaso": ["vaso"],
+	"cubo": ["cubo", "balde", "cubeta"], "cesta": ["cesta", "canasta"], "bolsa": ["bolsa"], "linterna": ["linterna"], "guitarra": ["guitarra"],
+	"mapa": ["mapa"], "cuaderno": ["cuaderno", "libreta"], "pluma": ["pluma", "bolígrafo", "lápiz"], "radio": ["radio portátil"], "cuchillo": ["cuchillo"]}
+## Señales de que la frase dice que alguien lo tiene o lo usa.
+const HOLD_HINTS := ["con su ", "con una ", "con un ", "en la mano", "en las manos", "sostiene", "sujeta", "lleva ", "agarra", "aprieta",
+	"deja ", "apoya", "levanta", "guarda", "barre", "limpia con", "seca con", "hojea", "bebe de", "sorbe", "blande", "agita", "sacude", "se lleva", "saca "]
+
+
+## Quita de un texto las frases que contradicen lo que hay: una persona con un objeto que no lleva,
+## o en un sitio donde no está. people: [{name, held, place}]; places: nombres de sitios.
+## Devuelve {text, dropped: [frases]}.
+static func check_world_claims(text: String, people: Array, places: Array = []) -> Dictionary:
+	var kept := PackedStringArray()
+	var dropped := []
+	for sentence in _sentences(text):
+		var low := " " + sentence.to_lower() + " "
+		var bad := false
+		for p in people:
+			var nm := str(p.get("name", ""))
+			if nm.length() < 3 or not low.contains(nm):
+				continue
+			var held := str(p.get("held", ""))
+			for key in PROPS:
+				if held.contains(key):
+					continue
+				if PROPS[key].any(func(w): return low.contains(w)) and HOLD_HINTS.any(func(h): return low.contains(h)):
+					bad = true
+			var at := str(p.get("place", ""))
+			for pl in places:
+				var name := str(pl)
+				if name.length() < 4 or at.contains(name):
+					continue
+				for pre in [" en el ", " en la ", " está en ", " desde el ", " desde la "]:
+					if low.contains(pre + name + " ") or low.contains(pre + name + ","):
+						bad = true
+		if bad:
+			dropped.append(sentence)
+		else:
+			kept.append(sentence)
+	return {"text": " ".join(kept), "dropped": dropped}
+
+
 ## El jugador hace algo libre en el mundo (tecla F). La IA lo convierte en pasos (ir, gesto, usar,
 ## reacciones, cambios) que el ActionPerformer representa en orden. Aquí no se ejecuta nada.
 ## Devuelve { ok, narration, steps, minutes, error }.
@@ -305,6 +357,18 @@ func act(what: String, scene_context: String) -> Dictionary:
 		var again := await ContentGenerator.request_valid("world_action", messages)
 		if again.ok:
 			data = again.data
+	# Lo que contradice lo que hay (una escoba que nadie lleva, alguien donde no está) no se cuenta
+	if people_facts.is_valid():
+		var people: Array = people_facts.call()
+		var places: Array = place_names.call() if place_names.is_valid() else []
+		var c := check_world_claims(str(data.narration), people, places)
+		if not c.dropped.is_empty():
+			print_debug("[inventado] quitado de la narración: %s" % [c.dropped])
+			data["narration"] = c.text if not str(c.text).strip_edges().is_empty() else "Lo intentas."
+		for s in data.get("steps", []):
+			if s is Dictionary and s.has("narration"):
+				var cs := check_world_claims(str(s.narration), people, places)
+				s["narration"] = cs.text
 	var steps := plan_steps(data)
 	var passes_time := steps.any(func(s): return s.get("type", "") in ["sleep", "wait"])  # el paso ya mueve el reloj
 	return {"ok": true, "narration": data.narration, "steps": steps, "error": "",
@@ -598,6 +662,7 @@ const ACTIONS_GUIDE := """  Tipos de acción ("type") y sus campos:
   · quit_job: le despides (si es tu empleado y hay motivo).
   · take_item: aceptas algo que el jugador te ofrece y lleva encima. "target": nombre del objeto.
   · follow_player / stop_following: empiezas o dejas de acompañarle.
+  · ride_with_player: te subes con el jugador al vehículo en el que va (o al que hay a su lado), SOLO si en VEHÍCULOS CERCA hay uno con sitio. Te bajas con get_out. Si no hay ningún vehículo cerca, dilo: no lo inventes.
   · go_to: te vas a un sitio. "target": el lugar.
   · leave: te marchas de aquí (enojo, prisa, fin de la plática). "target": a dónde (opcional). Termina la conversación.
   · go_inside: entras en un edificio (tu casa, tu trabajo…). "target": el sitio; "amount": minutos que te quedas dentro (por defecto 60). Termina la conversación. Con refuse_contact además cierras por dentro.

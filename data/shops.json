@@ -52,7 +52,7 @@
 			]
 		},
 		"cafe": {
-			"label": "la cafetería", "sign": "Cafetería", "open": 7, "close": 22, "staff": [], "verb": "Pedir en la barra", "menu": true,
+			"label": "la cafetería", "sign": "Cafetería", "open": 7, "close": 22, "staff": ["mesera", "mesero"], "verb": "Pedir en la barra", "menu": true,
 			"items": [
 				{"name": "Café", "effect": "hydrate", "power": 15, "price": 3, "lore": "Un café americano recién hecho."},
 				{"name": "Pan dulce", "effect": "nourish", "power": 15, "price": 2, "lore": "Una concha de vainilla."},

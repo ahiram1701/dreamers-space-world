@@ -89,8 +89,9 @@ Si la IA no está disponible, el juego usa contenido de respaldo y **nunca se qu
 | ✅ | Modelos 3D CC0 animados, mar con olas, hierba con viento e iluminación con SSAO, glow y niebla |
 | ✅ | Menú de pausa, ajustes (IA, ratón, volumen, calidad gráfica, personaje) y gestión de partidas |
 | ✅ | **Agente creador**: con <kbd>F</kbd> («construyo un carrito», «pongo un farol que se encienda si llueve») la IA trabaja con herramientas —mira, busca entre 299 modelos, crea piezas, les da comportamientos y reglas, revisa y corrige— y lo creado se queda en tu mundo |
-| ✅ | **Vehículos**: coches, camioneta, furgoneta, moto, bici y lancha con física real, gasolina y dueño; tráfico por la calle; y lo que inventa la IA con ruedas y motor también se conduce |
-| ✅ | **Naves y espacio**: despega desde la plataforma, vuela por tu sistema solar (planetas, estación, asteroides) y aterriza en otros planetas |
+| ✅ | **Vehículos**: coches de verdad (Car Kit de Kenney), moto, bici y lancha con física real, marchas, gasolina, dueño, motor que suena, choques que abollan y atropellos con consecuencias; pasajeros; tráfico por la calle; y lo que inventa la IA con ruedas y motor también se conduce |
+| ✅ | **Mundo sin borde**: el terreno sigue por trozos a tu alrededor (colinas, montañas, mar con islas), en el pueblo y en los planetas |
+| ✅ | **Naves y espacio**: despega desde la plataforma, vuela por tu sistema solar (planetas, estación y asteroides sólidos) y aterriza en otros planetas, junto a tu nave |
 | ✅ | **Coherencia**: nombres y oficios que casan, el pueblo se conoce, ropa por prendas que cambia con el clima y que la IA conoce, y lo que un PNJ narra que hace, lo hace |
 
 ## 🚀 Jugar
@@ -126,7 +127,8 @@ Desde la **v0.2.0**, el juego comprueba al arrancar si hay una versión estable 
 | Saltar | <kbd>Espacio</kbd> |
 | Cámara / acercar y alejar | Ratón / rueda (al mínimo, primera persona) |
 | Hablar / recoger / entrar / sentarse / subir a una barca, un coche o una nave | <kbd>E</kbd> (lo que tienes delante, indicado abajo en pantalla) |
-| Conducir / pilotar | <kbd>W</kbd><kbd>S</kbd> avanzar y frenar, <kbd>A</kbd><kbd>D</kbd> girar; en una nave <kbd>Espacio</kbd> sube y <kbd>Ctrl</kbd>/<kbd>Q</kbd> baja, y en el espacio <kbd>Shift</kbd> es crucero |
+| Conducir | <kbd>W</kbd><kbd>S</kbd> acelerar y frenar (o los gatillos del mando), <kbd>A</kbd><kbd>D</kbd> volante, <kbd>Espacio</kbd> freno de mano, <kbd>H</kbd> claxon |
+| Pilotar una nave | Apuntas con el ratón; <kbd>W</kbd><kbd>S</kbd> empujar, <kbd>A</kbd><kbd>D</kbd> de lado (en el espacio, alabear), <kbd>Espacio</kbd> sube y <kbd>Ctrl</kbd>/<kbd>Q</kbd> baja, <kbd>Shift</kbd> potencia o crucero; en el espacio <kbd>Tab</kbd> elige destino y <kbd>Z</kbd> la asistencia de vuelo |
 | Elegir respuesta en un diálogo | <kbd>1</kbd>–<kbd>4</kbd> |
 | Hacer algo (acción libre) | <kbd>F</kbd> |
 | Ancla (saltar) | <kbd>T</kbd> |
@@ -204,6 +206,8 @@ godot --headless --path . -s tests/test_fixes066.gd    # compras completas, acot
 godot --headless --path . -s tests/test_coherence.gd   # nombres y oficios, el pueblo se conoce, ropa real, entorno, acciones que se hacen
 godot --headless --path . -s tests/test_agent.gd       # el agente creador: herramientas, errores que corrige, guardado
 godot --headless --path . -s tests/test_vehicles.gd    # coches, bici, tráfico, robo, nave, espacio y reglas
+godot --headless --path . -s tests/test_world_edges.gd # el mundo sin borde: terreno por trozos y mar sin fin
+godot --headless --path . -s tests/test_realism.gd     # atropellos, choques, pasajeros, mesero, cama ajena, faro, IA sin inventos
 bash tests/smoke.sh                                    # arranca las escenas y busca errores de script
 ```
 

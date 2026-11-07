@@ -19,7 +19,7 @@ const SPINE := ["Hips", "Abdomen", "Torso", "Chest", "Neck", "Head"]
 const BLEND := 0.25            # segundos para entrar o salir de un gesto
 ## Gestos que duran hasta que se paran (los demás son de un par de segundos).
 const LOOPING := ["chop", "hammer", "dig", "search", "fish", "dance", "sleep", "sit", "crouch", "row", "swim", "think", "cross_arms",
-	"kneel", "write", "read", "listen", "call", "hug", "wipe", "cook", "sit_eat", "sit_read"]
+	"kneel", "write", "read", "listen", "call", "hug", "wipe", "cook", "sit_eat", "sit_read", "fallen"]
 
 ## Cada vez que un pie toca el suelo al andar o correr (para el sonido de los pasos).
 signal footstep(running: bool)
@@ -364,6 +364,15 @@ func _gesture_pose(g: String, t: float) -> Dictionary:
 				var pull := sin(t * 2.2)
 				_both_arms(p, Vector3(55 + pull * 30, 0, 10), Vector3(35 - pull * 30, 0, 0))
 				p["Torso"] = Vector3(pull * 14, 0, 0)
+		"fallen":  # tirado en el suelo tras un golpe: brazos abiertos, una pierna doblada, se queja
+			p["_lie"] = 1.0
+			p["UpperArm.L"] = Vector3(10, 0, 60)
+			p["UpperArm.R"] = Vector3(-10, 0, 75)
+			p["LowerArm.R"] = Vector3(35 + sin(t * 3.0) * 6.0, 0, 0)
+			p["Head"] = Vector3(sin(t * 1.7) * 8.0, 25, 0)
+			p["UpperLeg.L"] = Vector3(35, 0, 8)
+			p["LowerLeg.L"] = Vector3(-60, 0, 0)
+			p["UpperLeg.R"] = Vector3(-5, 0, -10)
 		"sleep":
 			p["_lie"] = 1.0
 			p["UpperArm.L"] = Vector3(0, 0, 4)
@@ -696,8 +705,12 @@ func set_held(model: String, length: float = 0.24, grip: float = 0.3) -> void:
 		_held = null
 	if model.is_empty() or _model == null or _sk == null:
 		return
-	var parts := model.split("/")
-	var node := AssetLibrary.instance(parts[0], parts[1])
+	var node: Node3D = null
+	if model.begins_with("proc:"):
+		node = make_prop(model.substr(5))
+	else:
+		var parts := model.split("/")
+		node = AssetLibrary.instance(parts[0], parts[1]) if parts.size() == 2 else null
 	if node == null:
 		return
 	_held_shape = _shape_of(model, node)
@@ -706,6 +719,60 @@ func set_held(model: String, length: float = 0.24, grip: float = 0.3) -> void:
 	_held = node
 	_held.top_level = true
 	_model.add_child(_held)
+
+
+## Objetos de mano sin modelo en los paquetes (escoba, trapo, taza, libro, bandeja), hechos con
+## piezas. El eje largo (el mango) es Y.
+static func make_prop(kind: String) -> Node3D:
+	var root := Node3D.new()
+	var add := func(mesh: Mesh, color: String, at: Vector3, rot: Vector3 = Vector3.ZERO) -> void:
+		var mi := MeshInstance3D.new()
+		mi.mesh = mesh
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(color)
+		m.roughness = 0.8
+		mi.material_override = m
+		mi.position = at
+		mi.rotation_degrees = rot
+		root.add_child(mi)
+	match kind:
+		"broom":
+			var stick := CylinderMesh.new()
+			stick.top_radius = 0.014
+			stick.bottom_radius = 0.014
+			stick.height = 1.2
+			add.call(stick, "#8a6a44", Vector3(0, 0.6, 0))
+			var head := BoxMesh.new()
+			head.size = Vector3(0.28, 0.16, 0.06)
+			add.call(head, "#c9a86a", Vector3(0, -0.06, 0))
+		"rag":
+			var cloth := BoxMesh.new()
+			cloth.size = Vector3(0.12, 0.2, 0.025)
+			add.call(cloth, "#d9d2c3", Vector3(0, 0.1, 0), Vector3(0, 0, 8))
+		"cup":
+			var cup := CylinderMesh.new()
+			cup.top_radius = 0.045
+			cup.bottom_radius = 0.038
+			cup.height = 0.1
+			add.call(cup, "#efe9de", Vector3(0, 0.05, 0))
+			var coffee := CylinderMesh.new()
+			coffee.top_radius = 0.04
+			coffee.bottom_radius = 0.04
+			coffee.height = 0.005
+			add.call(coffee, "#4a2c17", Vector3(0, 0.097, 0))
+		"book":
+			var book := BoxMesh.new()
+			book.size = Vector3(0.15, 0.22, 0.035)
+			add.call(book, ["#7a2e2e", "#2e4a7a", "#2f5d3a"][randi() % 3], Vector3(0, 0.11, 0))
+		"tray":
+			var tray := CylinderMesh.new()
+			tray.top_radius = 0.2
+			tray.bottom_radius = 0.19
+			tray.height = 0.02
+			add.call(tray, "#9aa3ad", Vector3(0, 0.0, 0), Vector3(90, 0, 0))
+		_:
+			return null
+	return root
 
 
 ## Punta de lo que lleva en la mano (para la luz de la linterna): origen y hacia dónde apunta.

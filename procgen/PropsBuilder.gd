@@ -144,7 +144,7 @@ static func _nature(parent: Node3D, biome: String, height_at: Callable, rng: Ran
 				_model_at(parent, biome, 1, height_at, rng, avoid, rng.randf_range(0.5, 1.4), false)
 			for i in n / 3:
 				_model_at(parent, biome, 2, height_at, rng, avoid, rng.randf_range(0.6, 2.2), true)
-			if biome == "ocean":
+			if biome == "ocean" and not parent.get_tree().get_nodes_in_group("chunk_terrain").any(func(t): return t.water_level > -INF):
 				Decor.water(parent, Vector3(0, -0.45, 0), Vector2(TerrainBuilder.SIZE * 2, TerrainBuilder.SIZE * 2))
 		"desert", "barren", "volcanic":
 			for i in n:

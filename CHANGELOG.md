@@ -3,6 +3,58 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.7.1] - 2026-11-06
+
+### Añadido
+- **El mundo no tiene borde.** Ya no caes al vacío al llegar al final del mapa: el terreno se genera por trozos a tu alrededor mientras caminas, conduces o vuelas, y se suelta al alejarte.
+  - Más allá del pueblo hay colinas con pinos y, lejos tierra adentro, montañas con roca y nieve.
+  - Al este, el mar no se acaba y aparecen islas con palmeras.
+  - En los planetas pasa lo mismo: el relieve crece hasta montañas y, en los planetas océano, hay mar abierto con islas.
+- **Coches de verdad:** modelos del Car Kit de Kenney (CC0) con ruedas que giran, suspensión y volante.
+  - Sedán, camioneta, furgoneta, taxi y SUV en el pueblo; la IA puede usar también deportivo, compacto, patrulla, ambulancia, bomberos, camión de reparto, de la basura, tractor y coche de carreras.
+  - El tráfico de la calle usa los mismos modelos y frena ante cualquiera que tenga delante.
+- **Conducir se siente mejor:**
+  - Cámara de persecución que sigue al vehículo, no choca con él y da sensación de velocidad.
+  - Marchas automáticas, freno de mano (<kbd>Espacio</kbd>) para derrapar, volante que vuelve solo al centro y gatillos del mando para acelerar y frenar.
+  - Faros que se encienden de noche y con lluvia.
+- **Los vehículos suenan:** el motor se sintetiza en tiempo real y sube de vueltas al acelerar; ruido de neumáticos, derrape, claxon (<kbd>H</kbd>) y golpes según su fuerza. Las naves zumban como una turbina.
+- **Choques y atropellos con consecuencias:**
+  - Contra algo duro, el coche se abolla, echa humo y, muy dañado, deja de arrancar. Si el golpe es fuerte, saltan piezas.
+  - Si atropellas a alguien, sale despedido, cae, se queda en el suelo y se levanta cojeando. Lo recuerda y quien lo vea lo cuenta; un golpe muy fuerte lo manda unos días a la clínica.
+  - Con el claxon, la gente que tienes delante se aparta.
+- **Pasajeros:** quien te acompaña se sube contigo al coche y baja contigo. Puedes decirle a alguien «súbete al auto», y lo hace si hay un coche cerca con sitio.
+- **Naves de Quaternius (CC0):** la lanzadera vieja es ahora una nave de verdad.
+  - En un planeta se pilota apuntando con el ratón y tiene gravedad: sin combustible, cae.
+  - En el espacio, el ratón cabecea y gira, <kbd>A</kbd>/<kbd>D</kbd> alabean y <kbd>Z</kbd> enciende o apaga la asistencia de vuelo.
+  - <kbd>Tab</kbd> elige destino y una flecha en pantalla te lleva hasta él.
+- **Casas ajenas de verdad:**
+  - Se puede comer de la nevera, beber y ducharse. Si te invitaron, bien. Si te ven sin permiso, no les gusta y lo cuentan. Si no te ve nadie, al volver notan que falta comida, sin saber quién fue.
+  - Dormir en la cama de otro tiene consecuencias. Si su dueño llega a acostarse, te despierta y reacciona según cómo os llevéis. Si te vio alguien de la casa, se lo cuenta. Si no, encuentra la cama deshecha.
+- **Te atienden en la cafetería:** hay un mesero o mesera que viene a tu mesa cuando te sientas, te toma nota, va a la barra y te trae el pedido en una bandeja. Teo sigue detrás de la barra.
+- **El faro, rehecho:**
+  - Puerta de madera con marco de piedra y escalones para subir al zócalo.
+  - Dentro, la escalera de caracol tiene barandilla y sube por una trampilla hasta el balcón de la linterna, a 19 m sobre el mar, que antes no llevaba a ningún sitio.
+  - Marina tiene cocina.
+- **La gente lleva en la mano lo que usa:** si barre, una escoba; si limpia, un trapo; si lee, un libro; si toma café, una taza; si sirve, una bandeja.
+
+### Cambiado
+- **Los puntos de interés de los planetas son cosas reales,** según lo que son: una antena con luz roja, restos de una nave medio enterrada, un cráter, un campamento, ruinas, un monolito o un mojón de piedras. Antes eran pilares naranjas y azules brillantes. Cada uno tiene un letrero de madera que se lee de cerca; el punto de recarga del Ancla es una terminal.
+- **Al aterrizar** la nave se posa en un claro (en casa, en la plataforma de despegue) y apareces a su lado. Antes podías aparecer lejos o atorado.
+- **La IA no inventa lo que no hay:**
+  - Con <kbd>F</kbd> y al hablar, sabe dónde está cada persona, qué hace, qué lleva en la mano, su ropa y qué vehículos hay cerca.
+  - Una narración que le pone a alguien un objeto que no lleva, o lo sitúa donde no está, se corrige antes de mostrarse.
+- Los vehículos ya no llevan su nombre flotando encima, y los letreros de las tiendas no se ven cuando la cámara pasa pegada a ellos.
+
+### Corregido
+- La nave tenía una pared invisible alrededor: chocaba como una caja enorme que incluía las alas. Ahora choca con su forma (fuselaje y alas) y se puede pasar junto a ella y bajo las alas.
+- En el espacio se atravesaban los asteroides, los planetas y la estación. Ahora son sólidos y los golpes dañan el casco.
+- Marina decía que te había pillado dentro del faro aunque estaba en la playa. Ahora solo te pilla quien está dentro de verdad.
+- Destellos blancos de día: los faros de los vehículos brillaban siempre y el resplandor de la imagen los convertía en manchas. Ahora solo se encienden de noche o con lluvia, y el resplandor es menos sensible.
+
+### Créditos
+- Coches: [Car Kit](https://kenney.nl/assets/car-kit) de Kenney (CC0).
+- Naves: [Ultimate Spaceships](https://quaternius.com/packs/ultimatespaceships.html) de Quaternius (CC0).
+
 ## [0.7.0] - 2026-11-06
 
 ### Añadido

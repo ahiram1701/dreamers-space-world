@@ -153,7 +153,13 @@ func _setup_common() -> void:
 	_ui.actions.performer = _performer
 	_ui.actions.suggestions = suggestions
 	_ui.scene_context = action_context
+	StoryDirector.people_facts = people_facts
+	StoryDirector.place_names = place_names
 	_interiors.message.connect(_ui.toast)
+	_interiors.fixture_used.connect(_on_fixture_used)
+	_interiors.sat_down.connect(_on_sat)
+	_interiors.slept.connect(_on_slept)
+	_interiors.sleep_check = _sleep_check
 	_households = Households.new()
 	_households.scene = self
 	add_child(_households)
@@ -282,29 +288,61 @@ func _open_shop() -> void:
 			NPCMemory.add_event(staff.npc_id, "El jugador te compró %s." % str(entry.name).to_lower(), 1))
 
 
-## Te sirven lo que pediste: si te sientas a una mesa, te lo traen ahí; si no, a la barra. Comes,
-## se nota en el cuerpo y pasa el rato que se tarda en comer.
+## Te sirven lo que pediste: el mesero va a la barra, lo prepara, te lo trae en una bandeja a tu
+## mesa y te lo deja delante (si no te sientas, en la barra). Comes, se nota en el cuerpo y pasa
+## el rato que se tarda en comer.
 func _serve(entry: Dictionary, staff: TownNPC) -> void:
+	_serving = true
 	if staff:
-		staff.say("Enseguida se lo traigo. Siéntese donde guste.", 3.5)
-	_ui.toast("Pediste %s (%s). Siéntate a una mesa mientras te lo traen." % [str(entry.name).to_lower(), Wallet.text(int(entry.price))])
+		staff.say("Enseguida se lo traigo." + ("" if _player.hold_position else " Siéntese donde guste."), 3.5)
+	_ui.toast("Pediste %s (%s).%s" % [str(entry.name).to_lower(), Wallet.text(int(entry.price)), "" if _player.hold_position else " Siéntate a una mesa mientras te lo traen."])
 	var door := _interiors.current_door()
+	var bar: Vector3 = _interiors.npc_spot(0)
+	if staff and bar != Vector3.INF:  # a la barra a prepararlo
+		staff.walk_to(bar)
+		await _await_arrival(staff, 8.0)
 	var waited := 0.0
 	while waited < 20.0 and not (_player.hold_position and _player.current_gesture() == "sit"):
 		await get_tree().create_timer(0.5).timeout
 		waited += 0.5
 		if _interiors.current_door() != door:
+			_serving = false
 			return  # se fue sin esperar (ya pagó: allá él)
-	await get_tree().create_timer(2.5).timeout
+	if staff and is_instance_valid(staff):
+		staff.set_activity("preparando el pedido", "cook")
+		staff.play_gesture("cook", 4.0)
+	await get_tree().create_timer(4.5).timeout
 	if _interiors.current_door() != door:
+		_serving = false
 		return
 	var seated: bool = _player.hold_position and _player.current_gesture() == "sit"
+	if staff and is_instance_valid(staff):  # te lo trae en la bandeja
+		staff.hold("proc:tray", "una bandeja", 0.4, 0.5)
+		staff.set_activity("llevando un pedido", "")
+		staff.walk_to(_near_player(staff, 0.9))
+		await _await_arrival(staff, 12.0)
+		if is_instance_valid(staff):
+			staff.face(_player.global_position)
+			staff.play_gesture("give", 1.6)
+	if _interiors.current_door() != door:
+		_serving = false
+		return
 	var plate := AssetLibrary.instance("house_interior_pack", "Plate_%d" % (1 + randi() % 3))
 	var front := _player.view_forward() if not seated else _player.facing_dir()
 	var plate_at := _player.global_position + front * (0.55 if seated else 0.45) + Vector3(0, 0.8 if seated else 1.0, 0)
 	var placed: Node3D = AssetLibrary.place(self, plate, plate_at, 0.04, 0.0, false) if plate else null
-	if staff:
+	if staff and is_instance_valid(staff):
 		staff.say("Aquí tiene. ¡Buen provecho!", 3.0)
+		staff.hold("", "")
+		var back := _waiter_spot()
+		var waiter := staff
+		get_tree().create_timer(1.5).timeout.connect(func():
+			if is_instance_valid(waiter) and back != Vector3.INF:
+				waiter.walk_to(back)
+				await waiter.arrived
+				if is_instance_valid(waiter):
+					waiter.settle(back + Vector3(0, 0.1, 0), back + Vector3(0, 0, 2), "", "atendiendo"))
+	_serving = false
 	_player.play_gesture("sit_eat" if seated else "eat", 7.0)
 	await get_tree().create_timer(7.0).timeout
 	var power := int(entry.get("power", 20))
@@ -318,8 +356,60 @@ func _serve(entry: Dictionary, staff: TownNPC) -> void:
 	if seated and _player.hold_position:
 		_player.play_gesture("sit")
 	_ui.toast("Te terminas %s. %s" % [str(entry.name).to_lower(), ["Estaba buenísimo.", "Te sienta de maravilla.", "Justo lo que necesitabas."][randi() % 3]])
-	if staff:
+	if staff and is_instance_valid(staff):
 		NPCMemory.add_event(staff.npc_id, "Le serviste %s al jugador." % str(entry.name).to_lower(), 1)
+
+
+var _serving := false
+
+
+## Dónde espera quien atiende (en la cafetería, en la sala: la barra es de Teo).
+func _waiter_spot() -> Vector3:
+	return _interiors.npc_spot(1 if _interiors.current_kind() == "cafe" else 0)
+
+
+## Espera a que alguien llegue a donde iba (o se acabe el tiempo).
+func _await_arrival(npc: TownNPC, limit: float) -> void:
+	var t := 0.0
+	while t < limit and is_instance_valid(npc) and npc.is_walking():
+		await get_tree().create_timer(0.25).timeout
+		t += 0.25
+
+
+## Te sientas a una mesa de la cafetería o la fonda: el mesero viene a tomarte nota.
+func _on_sat(seat: Node3D) -> void:
+	var kind := _interiors.current_kind()
+	if not Shops.info(kind).get("menu", false) or _serving:
+		return
+	var waiter := _households.staff_here()
+	if waiter == null or waiter.talking:
+		return
+	_serving = true
+	var door := _interiors.current_door()
+	await get_tree().create_timer(1.5).timeout
+	if not is_instance_valid(waiter) or _interiors.current_door() != door or not _player.hold_position:
+		_serving = false
+		return
+	waiter.walk_to(_near_player(waiter, 1.0))
+	await _await_arrival(waiter, 12.0)
+	if not is_instance_valid(waiter) or not _player.hold_position or _interiors.current_door() != door:
+		_serving = false
+		return
+	waiter.face(_player.global_position)
+	waiter.say(["¡Buenas! ¿Qué le traigo?", "Hola, ¿ya sabe qué va a tomar?", "Buenas tardes. Aquí tiene la carta."][randi() % 3], 3.5)
+	_serving = false
+	_open_shop()
+	var panel: Node = get_children().filter(func(c): return c is ShopPanel).back() if get_children().any(func(c): return c is ShopPanel) else null
+	if panel:
+		await panel.closed
+	if is_instance_valid(waiter) and not _serving:  # no pidió nada: vuelve a su sitio
+		waiter.say("Cuando quiera, me llama.", 2.5)
+		var bar: Vector3 = _waiter_spot()
+		if bar != Vector3.INF:
+			waiter.walk_to(bar)
+			await waiter.arrived
+			if is_instance_valid(waiter) and not _serving:
+				waiter.settle(bar + Vector3(0, 0.1, 0), bar + Vector3(0, 0, 2), "", "atendiendo")
 
 
 # --- Tu aspecto en el mundo: armario, tienda de ropa, peluquería ---------------------------
@@ -390,18 +480,24 @@ func _wake(npc: TownNPC) -> void:
 	NPCMemory.add_event(npc.npc_id, "El jugador entró en tu casa mientras dormías y te despertó.", -8)
 
 
-## Entras en una casa con su dueño dentro: de día y si os lleváis bien, te recibe; de noche o
-## si te tiene manía, te echa (y luego lo cuenta).
+## Entras en una casa con su dueño DENTRO (no basta con que esté por el pueblo): de día y si os
+## lleváis bien, te recibe; de noche o si te tiene manía, te echa (y luego lo cuenta). Si forzaste
+## la puerta y no había nadie, al volver solo encuentra la puerta forzada: no sabe que fuiste tú.
 func _check_trespass() -> void:
 	await get_tree().create_timer(1.0).timeout
 	var door := _interiors.current_door()
 	var owner := owner_of_door(door)
-	if owner.is_empty() or not _npcs.has(owner) or not _npcs[owner].is_present():
-		return
-	var npc: TownNPC = _npcs[owner]
 	var forced: bool = _door_rules != null and _door_rules.forced_door == door
 	if _door_rules:
 		_door_rules.forced_door = ""
+	var home_inside: bool = not owner.is_empty() and _npcs.has(owner) and _npcs[owner].is_present() \
+		and InteriorManager.is_interior_pos(_npcs[owner].global_position) and _npcs[owner].global_position.distance_to(_player.global_position) < 30.0
+	if not home_inside:
+		if forced:
+			for id in residents_of(door):
+				NPCMemory.add_event(id, "Al volver a casa encontraste la puerta forzada. No sabes quién fue.", 0, true)
+		return
+	var npc: TownNPC = _npcs[owner]
 	if npc.is_asleep():
 		return  # duermen: si no haces ruido, ni se enteran
 	var mem := NPCMemory.get_mem(owner)
@@ -434,6 +530,139 @@ func _check_trespass() -> void:
 		npc.play_gesture("wave", 2.0)
 		npc.say("¡Ah, eres tú! Pasa, pasa.", 4.0)
 		NPCMemory.add_event(owner, "El jugador vino a verte a tu casa.", 1)
+
+
+## Quién vive en una casa (la familia, o el dueño de un sitio como el faro).
+func residents_of(door: String) -> Array:
+	var out: Array = Households.members(door).duplicate()
+	var owner := owner_of_door(door)
+	if not owner.is_empty() and not owner in out:
+		out.push_front(owner)
+	return out.filter(func(id): return not str(id).is_empty() and WorldDB.get_entity("npc", str(id)).size() > 0)
+
+
+## Quien está ahora mismo en este interior contigo (despierto o no).
+func people_inside() -> Array:
+	var out := []
+	for npc in _npcs.values():
+		if is_instance_valid(npc) and npc.is_present() and InteriorManager.is_interior_pos(npc.global_position) \
+				and npc.global_position.distance_to(_player.global_position) < 30.0:
+			out.append(npc)
+	return out
+
+
+func _first_name(id: String) -> String:
+	return str(WorldDB.get_entity("npc", id).get("name", "alguien")).split(" ")[0]
+
+
+## Comes de la nevera, bebes o te duchas en una casa que no es la tuya.
+func _on_fixture_used(what: String, door: String) -> void:
+	if _interiors.current_kind() == "home":
+		return
+	var residents := residents_of(door)
+	if residents.is_empty():
+		return
+	var verb: String = {"eat": "comió de tu nevera", "drink": "bebió agua en tu cocina", "shower": "se duchó en tu baño"}.get(what, "usó tus cosas")
+	if _interiors.invited.has(door):
+		NPCMemory.add_event(residents[0], "El jugador %s (le habías invitado a pasar)." % verb, 0 if what == "drink" else 1)
+		return
+	var watchers := people_inside().filter(func(n): return not n.is_asleep() and not n.has_meta("passerby"))
+	if not watchers.is_empty():
+		var w: TownNPC = watchers[0]
+		w.face(_player.global_position)
+		w.set_emotion("angry" if what != "drink" else "worried")
+		w.say({"eat": "¡Oye! ¿Te estás comiendo nuestra comida?", "drink": "¿Y tú qué haces en mi cocina?", "shower": "¡¿Te estás duchando en MI baño?!"}.get(what, "¡Oye!"), 4.0)
+		for n in watchers:
+			NPCMemory.add_event(n.npc_id, "Viste al jugador: %s, sin pedir permiso." % verb.replace("tu ", "la ").replace("tus ", "las "), -3 if what == "drink" else -10)
+		for id in residents:
+			if not watchers.any(func(n): return n.npc_id == id):
+				NPCMemory.add_event(id, "Te contaron que el jugador %s sin permiso." % verb, -6 if what != "drink" else -2, true)
+		return
+	if what == "eat":  # nadie le vio: al volver, falta comida (sin saber quién fue)
+		NPCMemory.add_event(residents[0], "Al volver notaste que faltaba comida de tu nevera. No sabes quién fue.", 0, true)
+
+
+## Antes de dormir en una cama: ¿es de alguien que está durmiendo ahí? ¿llegará a acostarse?
+func _sleep_check(door: String, bed: Node3D, minutes: float) -> Dictionary:
+	if _interiors.current_kind() == "home":
+		return {}
+	var owner := _bed_owner(door, bed)
+	if owner.is_empty():
+		return {}
+	for n in people_inside():
+		if n.npc_id == owner and n.is_asleep() and n.global_position.distance_to(bed.global_position) < 2.0:
+			return {"refuse": "Ahí está durmiendo %s." % _first_name(owner)}
+	if not NPCMemory.inside(owner).is_empty() and NPCMemory.inside(owner) != door:
+		return {}  # está fuera (en la clínica, de viaje): esta noche no viene
+	var bedtime := 22.5 + float(hash(owner) % 3) * 0.5
+	var until := fposmod(bedtime - WorldClock.hour(), 24.0) * 60.0
+	if until < minutes:
+		return {"minutes": maxf(until, 20.0), "by": owner}
+	return {}
+
+
+## La cama es de quien vive en la casa (la primera, del dueño; las demás, del resto de la familia).
+func _bed_owner(door: String, bed: Node3D) -> String:
+	var residents := residents_of(door)
+	if residents.is_empty():
+		return ""
+	var beds: Array = _interiors.get("_interior").get("beds") if _interiors.get("_interior") else []
+	var i := 0
+	for k in beds.size():
+		if beds[k].node == bed:
+			i = k
+	return str(residents[i % residents.size()])
+
+
+## Dormiste en una cama ajena: si llega su dueño, te despierta (y reacciona según os llevéis); si
+## alguien de la casa te vio, se lo cuenta; si nadie, al volver encuentra la cama deshecha.
+func _on_slept(door: String, bed: Node3D, _minutes: float, by: String) -> void:
+	if _interiors.current_kind() == "home" or not _interiors.is_inside():
+		return
+	var owner := by if not by.is_empty() else _bed_owner(door, bed)
+	if owner.is_empty():
+		return
+	if not by.is_empty():
+		var npc: TownNPC = _npcs.get(by)
+		if npc == null or not is_instance_valid(npc):
+			var entity := WorldDB.get_entity("npc", by)
+			if entity.is_empty():
+				return
+			npc = TownNPC.new()
+			add_child(npc)
+			npc.setup(entity)
+			npc.redress(false)
+			_npcs[by] = npc
+			_households.spawned()[by] = npc
+		npc.set_present(true)
+		npc.unsettle()
+		npc.global_position = InteriorManager.free_spot_near(self, bed.global_position + bed.global_basis.z * 1.6, Vector3.ZERO, [npc, _player]) + Vector3(0, 0.1, 0)
+		npc.face(_player.global_position)
+		var rel := int(NPCMemory.get_mem(by).relationship)
+		if rel >= 40:
+			npc.set_emotion("surprised")
+			npc.say("¿Te quedaste dormido/a en mi cama? Bueno… venga, levántate, que me toca a mí.", 5.0)
+			NPCMemory.add_event(by, "Al ir a acostarte encontraste al jugador dormido en tu cama. Te sorprendió, pero no te molestó mucho.", -2)
+		elif rel >= 0:
+			npc.set_emotion("angry")
+			npc.play_gesture("point", 2.0)
+			npc.say("¡¿Qué haces en mi cama?! ¡Levántate ahora mismo!", 5.0)
+			NPCMemory.add_event(by, "Al ir a acostarte encontraste al jugador dormido en TU cama, sin permiso.", -15)
+		else:
+			npc.set_emotion("angry")
+			npc.play_gesture("point", 2.5)
+			npc.say("¡Fuera de mi cama y de mi casa! ¡Voy a contárselo a todo el mundo!", 5.0)
+			NPCMemory.add_event(by, "Encontraste al jugador dormido en tu cama, sin permiso. Ya te caía mal.", -25)
+		_ui.toast("%s te despierta: es su cama." % _first_name(by))
+		return
+	var watchers := people_inside().filter(func(n): return not n.is_asleep() and not n.has_meta("passerby"))
+	if not watchers.is_empty():
+		for n in watchers:
+			NPCMemory.add_event(n.npc_id, "Viste al jugador dormir en la cama de %s, sin permiso." % _first_name(owner), -5)
+		if not watchers.any(func(n): return n.npc_id == owner):
+			NPCMemory.add_event(owner, "Te contaron que el jugador durmió en tu cama sin permiso.", -10, true)
+		return
+	NPCMemory.add_event(owner, "Al volver encontraste tu cama deshecha, como si alguien hubiera dormido en ella. No sabes quién.", 0, true)
 
 
 # --- Trabajo -------------------------------------------------------------------------------
@@ -597,6 +826,13 @@ func perform_steps(npc_id: String, steps: Array) -> void:
 		if npc == null or not is_instance_valid(npc) or not npc.is_present():
 			return
 		match str(s.type):
+			"ride":
+				npc_board(npc_id)
+				await get_tree().create_timer(1.5).timeout
+			"get_out":
+				var v: Node3D = npc.riding_vehicle()
+				if v:
+					npc.get_off(v.global_position + v.global_basis.x * 2.0 + Vector3(0, 0.3, 0))
 			"gesture":
 				npc.play_gesture(str(s.gesture), 2.6)
 				await get_tree().create_timer(2.2).timeout
@@ -652,7 +888,8 @@ func player_appearance() -> String:
 	return ("Se nota que el jugador " + ", ".join(signs) + ".") if not signs.is_empty() else ""
 
 
-## Qué está haciendo la gente cercana (su actividad), para que la IA lo tenga en cuenta.
+## Qué está haciendo la gente cercana, dónde está de verdad, qué lleva en las manos y qué ropa
+## lleva: la IA no puede ponerle a nadie una escoba que no tiene ni situarle donde no está.
 func people_doing(exclude: String = "", radius: float = 25.0) -> String:
 	var out := PackedStringArray()
 	for id in _npcs:
@@ -660,8 +897,47 @@ func people_doing(exclude: String = "", radius: float = 25.0) -> String:
 		if id == exclude or not npc.is_present() or npc.global_position.distance_to(_player.global_position) > radius:
 			continue
 		var who: String = WorldDB.get_entity("npc", id).get("name", "?") if NPCMemory.get_mem(id).met else "alguien (%s)" % WorldDB.get_entity("npc", id).get("occupation", "?")
-		out.append("%s %s" % [who, npc.doing()])
-	return "; ".join(out)
+		out.append("%s: %s" % [who, npc_described(npc)])
+	return "\n- ".join(out)
+
+
+## Una persona tal y como está ahora: dónde, qué hace, qué lleva en la mano y qué viste.
+func npc_described(npc: TownNPC) -> String:
+	var where := where_is(npc.global_position)
+	var vehicle: Node3D = npc.riding_vehicle()
+	if vehicle:
+		where = "dentro de %s" % vehicle.call("the_name")
+	return "%s; %s; %s; viste %s" % [where, npc.doing(), npc.held_desc(), Wardrobe.describe(WorldDB.get_entity("npc", npc.npc_id).get("appearance", {}), npc.layers).split(";")[0]]
+
+
+## Dónde está un punto, en palabras: «dentro de la cafetería», «fuera, junto al muelle».
+func where_is(pos: Vector3) -> String:
+	if InteriorManager.is_interior_pos(pos):
+		return "dentro de %s" % _interiors.current_label() if _interiors.is_inside() else "dentro de un edificio"
+	var near := place_near(pos)
+	return ("fuera, junto a: %s" % near) if not near.is_empty() else "fuera, al aire libre"
+
+
+## Lo que el validador necesita saber de la gente cercana (nombre, qué lleva, dónde está).
+func people_facts() -> Array:
+	var out := []
+	for id in _npcs:
+		var npc: TownNPC = _npcs[id]
+		if not npc.is_present() or npc.global_position.distance_to(_player.global_position) > 40.0:
+			continue
+		var nm := str(WorldDB.get_entity("npc", id).get("name", ""))
+		if nm.is_empty():
+			continue
+		out.append({"name": nm.split(" ")[0].to_lower(), "held": npc.held.to_lower(), "place": where_is(npc.global_position).to_lower()})
+	return out
+
+
+## Nombres de los sitios de aquí (para saber cuándo la IA sitúa a alguien en otro).
+func place_names() -> Array:
+	var out: Array = _places.keys().map(func(k): return str(k).to_lower())
+	for id in _interiors.doors():
+		out.append(str(_interiors.doors()[id].label).to_lower().trim_prefix("la ").trim_prefix("el "))
+	return out
 
 
 ## Percepción común (F y diálogos): día, hora, tiempo y, si es el jugador quien actúa, su cuerpo y su dinero.
@@ -740,12 +1016,16 @@ func dialogue_context(npc_id: String) -> String:
 	lines.append("CÓMO VES AL JUGADOR: " + _player_looks())
 	if _door_rules and not _door_rules.context_for(npc_id).is_empty():
 		lines.append(_door_rules.context_for(npc_id))
+	if npc:
+		lines.append("TÚ, AHORA MISMO: %s. (Lo que no llevas en la mano no lo tienes: no digas que agarras, sostienes o usas algo que no está aquí.)" % npc_described(npc))
 	var people := PackedStringArray()
 	for id in _npcs:
 		if id != npc_id and _npcs[id].is_present() and _npcs[id].global_position.distance_to(_player.global_position) < 12.0:
-			people.append(WorldDB.get_entity("npc", id).get("name", "?"))
+			people.append("%s (%s)" % [WorldDB.get_entity("npc", id).get("name", "?"), npc_described(_npcs[id])])
 	if not people.is_empty():
-		lines.append("También hay cerca: %s." % ", ".join(people))
+		lines.append("También hay cerca: %s." % "; ".join(people))
+	var cars := vehicles_described(npc.global_position if npc else _player.global_position)
+	lines.append("VEHÍCULOS CERCA: " + (cars + "." if not cars.is_empty() else "ninguno (si te piden subir a un coche, aquí no hay)."))
 	var around := surroundings_described(npc.global_position if npc else _player.global_position)
 	if not around.is_empty():
 		lines.append(around)
@@ -799,6 +1079,12 @@ func _on_npc_action(npc_id: String, a: Dictionary) -> void:
 			npc_go(npc_id, _near_player(npc, 1.4) if InteriorManager.is_interior_pos(npc.global_position) == _interiors.is_inside() else _player.global_position)
 		"guide_player":
 			guide(npc_id, str(a.get("target", a.get("item_name", ""))))
+		"ride_with_player":
+			npc_board(npc_id)
+		"get_out":
+			var v: Node3D = npc.riding_vehicle()
+			if v:
+				npc.get_off(v.global_position + v.global_basis.x * 2.0 + Vector3(0, 0.3, 0))
 		"invite_in":
 			if _door_rules:
 				_door_rules.invite(npc_id)
@@ -1366,7 +1652,12 @@ func action_context() -> String:
 	lines.append("COSAS Y PERSONAS CERCA (usa estos ids exactos en \"target\"):\n" + ("\n".join(items) if not items.is_empty() else "- nada especial"))
 	var doing := people_doing()
 	if not doing.is_empty():
-		lines.append("LO QUE HACE LA GENTE: " + doing + ".")
+		lines.append("LA GENTE DE CERCA, TAL Y COMO ESTÁ (dónde, qué hace, qué lleva en la mano: no inventes nada de esto):\n- " + doing)
+	var cars := vehicles_described(_player.global_position)
+	lines.append("VEHÍCULOS CERCA: " + (cars + "." if not cars.is_empty() else "ninguno."))
+	var around := surroundings_described(_player.global_position)
+	if not around.is_empty():
+		lines.append(around)
 	return "\n".join(lines)
 
 
@@ -1420,7 +1711,134 @@ func on_vehicle_taken(v: Node3D) -> void:
 		_ui.toast("Alguien te ha visto llevarte %s." % what)
 
 
-## Llegas en tu nave (desde el espacio): queda aparcada a tu lado.
+## Atropellas a alguien: cae, se hace daño y lo recuerda (y quien lo vea, también). Un golpe muy
+## fuerte le manda unos días a la clínica.
+func on_npc_hit(v: Node3D, npc: TownNPC, impact: float) -> void:
+	var driving: bool = v.get("_rider") != null
+	var what: String = v.call("the_name") if v.has_method("the_name") else "un coche"
+	npc.say(["¡Ay! ¡¿Estás loco?!", "¡Aaah!", "¡Cuidado!"][randi() % 3] if impact < 8.0 else "¡Aaagh…!", 3.5)
+	if npc.has_meta("passerby") or npc.npc_id.is_empty():
+		if driving and _ui:
+			_ui.toast("Atropellaste a alguien.")
+		return
+	var id := npc.npc_id
+	var nm: String = str(WorldDB.get_entity("npc", id).get("name", "alguien")).split(" ")[0]
+	if not driving:
+		NPCMemory.add_event(id, "Te golpeó %s que iba sin nadie al volante." % what, 0)
+		return
+	var grave := impact >= 14.0
+	var how := "te dio un golpe leve" if impact < 6.0 else ("te hizo mucho daño" if not grave else "casi te mata: acabaste en la clínica")
+	NPCMemory.add_event(id, "El jugador te atropelló con %s y %s." % [what, how], -15 if impact < 6.0 else (-35 if not grave else -60))
+	if _life:
+		_life.witness("el jugador atropelló a %s con %s" % [nm, what], npc.global_position, [id])
+	if _ui:
+		_ui.toast(("Atropellaste a %s." % nm) + (" Está muy mal herido/a." if grave else ""))
+	if grave:  # al levantarse no puede seguir: se lo llevan a la clínica unos días
+		_errands[id] = true
+		await get_tree().create_timer(6.0).timeout
+		if is_instance_valid(npc):
+			NPCMemory.go_inside(id, "clinica", "la clínica", 60.0 * 24.0 * 2.0, true)
+			_errands.erase(id)
+			npc.set_present(false)
+
+
+## Te subes a un vehículo: quien te acompaña sube contigo (si cabe y está cerca).
+func on_player_boarded(v: Node3D) -> void:
+	for id in _npcs:
+		var npc: TownNPC = _npcs[id]
+		if not npc.is_present() or not NPCMemory.is_following(id) or npc.global_position.distance_to(v.global_position) > 18.0:
+			continue
+		_board_when_near(npc, v)
+
+
+func _board_when_near(npc: TownNPC, v: Node3D) -> void:
+	if npc.global_position.distance_to(v.global_position) > 3.5:
+		npc.walk_to(v.global_position + (npc.global_position - v.global_position).normalized() * 2.0, true)
+		var waited := 0.0
+		while waited < 10.0 and is_instance_valid(npc) and is_instance_valid(v) and npc.global_position.distance_to(v.global_position) > 3.5:
+			await get_tree().create_timer(0.25).timeout
+			waited += 0.25
+	if is_instance_valid(npc) and is_instance_valid(v) and npc.global_position.distance_to(v.global_position) < 6.0:
+		if not v.call("board", npc):
+			npc.say("No quepo. Te veo allá.", 3.0)
+
+
+## Te bajas: los que iban contigo bajan también y, si te acompañaban, te siguen.
+func on_player_alighted(_v: Node3D, left: Array) -> void:
+	for npc in left:
+		if is_instance_valid(npc) and NPCMemory.is_following(npc.npc_id):
+			npc.follow(_player)
+
+
+## Tocas el claxon: quien está delante se aparta (y alguno protesta).
+func on_horn(v: Node3D) -> void:
+	var fwd: Vector3 = v.global_basis.z.normalized()
+	var right: Vector3 = fwd.cross(Vector3.UP).normalized()
+	var people: Array = _npcs.values()
+	people.append_array(get_children().filter(func(c): return c is TownNPC and c.has_meta("passerby")))
+	for npc in people:
+		if not (npc is TownNPC) or not npc.is_present() or npc.talking or npc.is_riding() or npc.is_settled():
+			continue
+		var to: Vector3 = npc.global_position - v.global_position
+		if to.length() > 16.0 or to.normalized().dot(fwd) < 0.5:
+			continue
+		var side: Vector3 = right * (1.0 if to.dot(right) > 0.0 else -1.0)
+		npc.face(v.global_position)
+		npc.walk_to(npc.global_position + side * 3.0, true)
+		if randf() < 0.5:
+			npc.say(["¡Ya voy, ya voy!", "¡Qué prisa!", "¡Eh, tranquilo!"][randi() % 3], 2.5)
+
+
+## «Súbete al coche»: el PNJ va al vehículo en el que estás (o al más cercano) y se sube.
+func npc_board(npc_id: String) -> String:
+	if not _npcs.has(npc_id):
+		return ""
+	var npc: TownNPC = _npcs[npc_id]
+	var v: Node3D = _player.riding if _player.riding is Vehicle else nearest_vehicle(_player.global_position, 20.0)
+	if v == null:
+		return "no hay ningún coche aquí"
+	if int(v.call("free_seats")) <= 0:
+		return "no queda sitio en %s" % v.call("the_name")
+	_board_when_near(npc, v)
+	return "se sube a %s" % v.call("the_name")
+
+
+## El vehículo más cercano (a menos de radius), o null.
+func nearest_vehicle(pos: Vector3, radius: float) -> Node3D:
+	var best: Node3D = null
+	var best_d := radius
+	for c in get_children():
+		if c is Vehicle and c.global_position.distance_to(pos) < best_d:
+			best = c
+			best_d = c.global_position.distance_to(pos)
+	return best
+
+
+## Vehículos cerca (para la IA): «el sedán de Teo, a 8 m, vacío».
+func vehicles_described(pos: Vector3, radius: float = 30.0) -> String:
+	var out := PackedStringArray()
+	for c in get_children():
+		if not (c is Vehicle or c is Ship or c is Boat) or c.global_position.distance_to(pos) > radius:
+			continue
+		var nm: String = c.call("the_name") if c.has_method("the_name") else str(c.get("display_name"))
+		var owner := str(c.get("owner_id")) if c.get("owner_id") != null else ""
+		var whose := ""
+		if owner == "player":
+			whose = " (tuyo)"
+		elif not owner.is_empty() and WorldDB.get_entity("npc", owner).size() > 0:
+			whose = " de %s" % str(WorldDB.get_entity("npc", owner).get("name", "un vecino")).split(" ")[0]
+		var who := []
+		if c.get("_rider") != null:
+			who.append("el jugador al volante")
+		if c is Vehicle:
+			for p in c.call("passengers"):
+				who.append(str(WorldDB.get_entity("npc", p.npc_id).get("name", "alguien")).split(" ")[0])
+		out.append("%s%s, a %d m, %s" % [nm, whose, int(c.global_position.distance_to(pos)), ("con " + ", ".join(PackedStringArray(who))) if not who.is_empty() else "vacío"])
+	return "; ".join(out)
+
+
+## Llegas en tu nave (desde el espacio): se posa en un claro (en casa, en la plataforma de
+## despegue) y apareces junto a ella, nunca lejos ni metido dentro de algo.
 func _park_arrival_ship() -> void:
 	var arrival: Dictionary = WorldDB.get_state("arrival_ship", {})
 	if arrival.is_empty() or str(arrival.get("to", "")) != GameState.current_location() or arrival.get("ship", {}).is_empty():
@@ -1428,13 +1846,50 @@ func _park_arrival_ship() -> void:
 	WorldDB.set_state("arrival_ship", {})
 	var e: Dictionary = arrival.ship.duplicate(true)
 	e.erase("id")
-	var side := _player.view_forward().cross(Vector3.UP).normalized()
-	var at := _player.global_position + side * 9.0
-	at.y = ground_at(at.x, at.z) + 0.1 if not _interiors.is_inside() else _player.global_position.y
+	var at := landing_spot(_player.global_position, Vector3(11, 4, 12))
 	e["pos"] = [at.x, at.y, at.z]
 	var saved := Creations.add(e)
-	if not saved.is_empty():
-		Creations.build(self, saved)
+	if saved.is_empty():
+		return
+	var ship := Creations.build(self, saved)
+	# Bajas por el costado de la nave
+	var side: Vector3 = (ship.global_basis.x if ship else Vector3.RIGHT).normalized()
+	var out := at - side * 7.0
+	out.y = ground_at(out.x, out.z)
+	_player.global_position = InteriorManager.free_spot_near(self, out, -side, [_player]) + Vector3(0, 0.2, 0)
+	_player.velocity = Vector3.ZERO
+
+
+## Sitio donde cabe algo de tamaño size (ancho, alto, largo) cerca de near: plano y sin nada
+## encima. Una escena puede dar el suyo con arrival_pad() (la plataforma de despegue).
+func landing_spot(near: Vector3, size: Vector3) -> Vector3:
+	if has_method("arrival_pad"):
+		var pad: Vector3 = call("arrival_pad")
+		if pad != Vector3.INF:
+			return pad
+	var space := get_world_3d().direct_space_state
+	var box := BoxShape3D.new()
+	box.size = size
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = box
+	q.collision_mask = Layers.WORLD | Layers.CHARACTERS
+	q.exclude = [_player.get_rid()]
+	for ring in range(0, 8):
+		var r := 12.0 + ring * 6.0
+		for k in 12:
+			var a := TAU * k / 12.0 + ring * 0.37
+			var p := near + Vector3(sin(a), 0, cos(a)) * r
+			var g := ground_at(p.x, p.z)
+			var flat := true  # plano: las esquinas a la misma altura (±1 m)
+			for c in [Vector3(1, 0, 1), Vector3(-1, 0, 1), Vector3(1, 0, -1), Vector3(-1, 0, -1)]:
+				if absf(ground_at(p.x + c.x * size.x / 2.0, p.z + c.z * size.z / 2.0) - g) > 1.0:
+					flat = false
+			if not flat or (_water_level > -INF and g < _water_level + 0.3):
+				continue
+			q.transform = Transform3D(Basis(), Vector3(p.x, g + size.y / 2.0 + 0.8, p.z))
+			if space.intersect_shape(q, 1).is_empty():
+				return Vector3(p.x, g + 0.1, p.z)
+	return Vector3(near.x + 14.0, ground_at(near.x + 14.0, near.z) + 0.1, near.z)
 
 
 ## La nave sale de la atmósfera: al espacio (SpaceScene), contigo dentro.

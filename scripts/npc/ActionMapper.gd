@@ -48,6 +48,10 @@ const LOOK := ["mira hacia", "mira al ", "mira a la ", "mira por", "se asoma", "
 const WALK := ["se acerca a", "camina hacia", "va hacia", "se dirige a", "da unos pasos hacia", "se aproxima a", "se mueve hacia"]
 const WEAR := ["se pone el", "se pone la", "se pone los", "se coloca el", "se coloca la"]
 const REMOVE := ["se quita el", "se quita la", "se quita los"]
+## Subirse o bajarse de un vehículo (si hay uno cerca: si no, la frase no se muestra).
+const RIDE := ["se sube al coche", "se sube al auto", "se sube al carro", "se sube a la camioneta", "se sube a la furgoneta",
+	"se monta en el", "se monta en la", "se sienta en el asiento del copiloto", "sube al coche", "sube al auto", "se sube al asiento"]
+const GET_OUT := ["se baja del coche", "se baja del auto", "se baja del carro", "se baja de la camioneta", "baja del coche", "sale del coche"]
 
 
 ## Traduce una acotación a pasos. `known`: nombres de cosas y sitios que existen (para mirar o
@@ -74,6 +78,10 @@ static func _sentence(sentence: String, known: Array) -> Array:
 			out.append({"type": "wear", "garment": garment})
 		elif REMOVE.any(func(w): return low.contains(w)):
 			out.append({"type": "remove", "garment": garment})
+	if RIDE.any(func(w): return low.contains(w)):
+		out.append({"type": "ride"})
+	elif GET_OUT.any(func(w): return low.contains(w)):
+		out.append({"type": "get_out"})
 	for w in WALK:
 		var i := low.find(w)
 		if i >= 0:

@@ -121,11 +121,10 @@ static func build(scene: Node3D, e: Dictionary) -> Node3D:
 	var types: Array = behaviors.map(func(b): return str(b.get("type", "")))
 	var pos := Vector3(e.pos[0], e.pos[1], e.pos[2])
 	var root: Node3D
-	if vehicle_builder.is_valid() and (("wheels" in types and "engine" in types) or "thruster" in types or ("float" in types and "engine" in types)):
+	if vehicle_builder.is_valid() and (("wheels" in types and ("engine" in types or "pedals" in types)) or "thruster" in types or ("float" in types and "engine" in types)):
 		root = vehicle_builder.call(scene, e)
 		if root:
-			root.set_meta("creation_id", e.id)
-			_label(root, str(e.get("name", "")), e)
+			root.set_meta("creation_id", e.id)  # (un vehículo no lleva su nombre flotando: lo dice el aviso al acercarte)
 			for b in behaviors:
 				Behaviors.attach(root, b, scene, e)
 			return root

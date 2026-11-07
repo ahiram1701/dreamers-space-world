@@ -111,12 +111,25 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3, opts
 			_put(root, "Trashcan_Large", Vector3(w / 2 - 0.6, 0, d / 2 - 1.5), 0.0)
 			out.npc_spots = [origin + Vector3(-2.4, 0, -d / 2 + 2.6), origin + Vector3(4.0, 0, 0)]  # junto a su mesa, no encima de la silla
 		"lighthouse":
-			# Escalera de caracol al fondo; la mesa de Marina a un lado, lejos de la puerta
+			# Escalera de caracol al fondo, con barandilla, que sube por una trampilla del techo hasta
+			# la linterna (arriba sales al balcón de la torre); la mesa de Marina a un lado
 			for i in 12:
 				var a := TAU * i / 12.0
 				PropsBuilder._box(root, Vector3(cos(a) * 1.6, 0.25 + i * 0.25, sin(a) * 1.6) + Vector3(-2.2, 0, -2.4),
 					Vector3(1.2, 0.08, 0.5), Color("#5a5048"), true).rotation.y = -a
+				var post := PropsBuilder._box(root, Vector3(cos(a) * 2.15, 0.75 + i * 0.25, sin(a) * 2.15) + Vector3(-2.2, 0, -2.4),
+					Vector3(0.04, 1.0, 0.04), Color("#2d3238"), false)
+				post.rotation.y = -a
 			PropsBuilder._cylinder(root, Vector3(-2.2, HEIGHT / 2, -2.4), 0.12, 0.12, HEIGHT, Color("#3a3a3a"), true)
+			var top_a := TAU * 11 / 12.0
+			var top := Vector3(cos(top_a) * 1.6, 0.25 + 11 * 0.25, sin(top_a) * 1.6) + Vector3(-2.2, 0, -2.4)
+			# La trampilla: un hueco oscuro en el techo con su marco, justo encima del último peldaño
+			PropsBuilder._box(root, Vector3(top.x, HEIGHT - 0.02, top.z), Vector3(1.1, 0.06, 1.1), Color("#121212"), false)
+			PropsBuilder._box(root, Vector3(top.x, HEIGHT - 0.06, top.z), Vector3(1.3, 0.08, 1.3), Color("#5a4632"), false)
+			_use_at(root, top + Vector3(0, 0.05, 0), out, "climb_up", "Subir a la linterna")
+			out["hatch"] = origin + top + Vector3(0, 0.1, 0)
+			_use(root, "Kitchen_Fridge", Vector3(-w / 2 + 0.6, 0, 3.2), PI / 2, out, "eat", "Comer algo de la nevera")
+			_use(root, "Kitchen_Sink", Vector3(-w / 2 + 0.5, 0, 2.3), PI / 2, out, "drink", "Beber agua")
 			_put(root, "Table_RoundSmall", Vector3(3.0, 0, -2.6), 0.0)
 			_put(root, "Chair_4", Vector3(3.0, 0, -1.8), PI, out.seats)
 			_put(root, "Shelf_Small2", Vector3(-w / 2 + 0.3, 1.2, 1.5), PI / 2)
@@ -257,11 +270,11 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3, opts
 			_living(root, w, d, floors, out, rng, origin)
 			if sleepers >= 3:
 				_seat(root, "Chair_%d" % (1 + rng.randi() % 4), Vector3(1.6, 0, 1.5), PI, out, "table")
-			_put(root, "Bathroom_Shower1", Vector3(w / 2 - 0.8, 0, -d / 2 + 0.8), 0.0)
+			_use(root, "Bathroom_Shower1", Vector3(w / 2 - 0.8, 0, -d / 2 + 0.8), 0.0, out, "shower", "Ducharse")
 			_put(root, "Bathroom_Toilet", Vector3(w / 2 - 2.2, 0, -d / 2 + 0.45), 0.0)
-			_put(root, "Kitchen_Fridge", Vector3(w / 2 - 0.6, 0, 2.6), -PI / 2)
+			_use(root, "Kitchen_Fridge", Vector3(w / 2 - 0.6, 0, 2.6), -PI / 2, out, "eat", "Comer algo de la nevera")
 			_put(root, "Kitchen_Oven", Vector3(w / 2 - 0.5, 0, 1.6), -PI / 2)
-			_put(root, "Kitchen_Sink", Vector3(w / 2 - 0.5, 0, 0.7), -PI / 2)
+			_use(root, "Kitchen_Sink", Vector3(w / 2 - 0.5, 0, 0.7), -PI / 2, out, "drink", "Beber agua")
 			out.kitchen = [{"pos": origin + Vector3(w / 2 - 1.5, 0, 1.6), "face": origin + Vector3(w / 2, 0, 1.6)},
 				{"pos": origin + Vector3(w / 2 - 1.5, 0, 0.7), "face": origin + Vector3(w / 2, 0, 0.7)}]
 			out.npc_spots = [origin + Vector3(0.8, 0, 0.2), origin + Vector3(-1.0, 0, 1.6), origin + Vector3(3.4, 0, 0.0)]

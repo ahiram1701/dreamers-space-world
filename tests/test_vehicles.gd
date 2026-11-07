@@ -34,7 +34,7 @@ func _run() -> void:
 	# --- El pueblo tiene vehículos -------------------------------------------------------------
 	var all: Array = Creations.all_here()
 	var kinds: Array = all.map(func(e): return str(e.get("factory", e.name)))
-	_expect(kinds.count("sedan") == 2 and "pickup" in kinds and "bike" in kinds and "speedboat" in kinds, "coches, camioneta, moto, bici y lancha en el pueblo (%s)" % [kinds])
+	_expect(["sedan", "pickup", "van", "taxi", "moto", "bike", "speedboat"].all(func(k): return k in kinds), "coches, camioneta, taxi, moto, bici y lancha en el pueblo (%s)" % [kinds])
 	var bike: Dictionary = all.filter(func(e): return e.get("factory", "") == "bike")[0]
 	_expect(bike.owner == "player", "la bici es tuya")
 	_expect(all.any(func(e): return e.name == "Lanzadera vieja"), "y hay una lanzadera vieja en la plataforma de despegue")

@@ -200,7 +200,7 @@ func populate(door: String, kind: String) -> void:
 				npc.redress(false)
 				scene._npcs[id] = npc
 				_spawned[id] = npc
-				var spot: Vector3 = scene._interiors.npc_spot(0)
+				var spot: Vector3 = scene._interiors.npc_spot(1 if kind == "cafe" else 0)  # (en la cafetería, la barra es de Teo)
 				npc.settle(spot + Vector3(0, 0.1, 0), spot + Vector3(0, 0, 2), "", "atendiendo")
 				get_tree().create_timer(1.2).timeout.connect(func():
 					if is_instance_valid(npc):

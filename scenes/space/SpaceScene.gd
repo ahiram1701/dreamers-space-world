@@ -1,8 +1,9 @@
 extends Node3D
 ## El espacio: vuelas en tu nave por el sistema solar de este mundo (StarSystem). El sol, los
-## planetas con su atmósfera, el cinturón de asteroides y la estación. Al acercarte a un planeta
-## o a la estación, E para aterrizar o acoplarte (Travel.land).
-##   W/S: empujar · A/D: girar · Espacio/Ctrl: cabecear · Shift: crucero · E: aterrizar · Esc: menú
+## planetas con su atmósfera, el cinturón de asteroides y la estación; todo es sólido (chocar daña
+## el casco). Al acercarte a un planeta o a la estación, E para aterrizar o acoplarte (Travel.land).
+##   Ratón: apuntar · W/S: empujar · A/D: alabear · Espacio/Ctrl: subir/bajar · Shift: crucero
+##   · Tab: destino · Z: asistencia de vuelo · E: aterrizar · Esc: menú
 
 const PLANET_SHADER := preload("res://shaders/planet.gdshader")
 const SKY_SHADER := preload("res://shaders/space_sky.gdshader")
@@ -16,6 +17,13 @@ var _prompt: Label
 var _near: Dictionary = {}
 var _landing := false
 var _bodies := []   # [{planet, node}]
+var _rocks: Array = []        # transformaciones de los asteroides del cinturón
+var _rock_bodies: Array = []  # los ~40 más cercanos tienen cuerpo (se reciclan al moverte)
+var _rock_t := 0.0
+var _target := 0              # índice del planeta de destino (Tab)
+var _marker: Label
+var _hit_flash := 0.0
+const MOUSE := 0.0022
 
 
 func _ready() -> void:
@@ -27,6 +35,8 @@ func _ready() -> void:
 	_belt()
 	_spawn_ship()
 	_ui()
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_target = maxi(system.planets.find(StarSystem.home_planet(system)), 0)
 
 
 func _environment() -> void:
@@ -101,6 +111,7 @@ func _planet(p: Dictionary) -> Node3D:
 		mi.material_override = mat
 		root.add_child(mi)
 		root.set_meta("spin", 0.01)
+		_solid_sphere(root, r)
 		if p.get("rings", false):
 			var ring := MeshInstance3D.new()
 			var tm := TorusMesh.new()
@@ -159,6 +170,27 @@ func _station(root: Node3D, r: float) -> void:
 		l.position = Vector3(cos(k * TAU / 8.0), 0, sin(k * TAU / 8.0)) * r * 0.9
 		root.add_child(l)
 	root.set_meta("spin", 0.05)
+	# Sólida con su forma (el anillo, el eje y los radios): se puede pasar por los huecos
+	var body := StaticBody3D.new()
+	body.collision_layer = Layers.WORLD
+	for mi in root.get_children():
+		if mi is MeshInstance3D and not (mi.mesh is SphereMesh):
+			var cs := CollisionShape3D.new()
+			cs.shape = (mi as MeshInstance3D).mesh.create_trimesh_shape()
+			cs.transform = (mi as MeshInstance3D).transform
+			body.add_child(cs)
+	root.add_child(body)
+
+
+func _solid_sphere(root: Node3D, r: float) -> void:
+	var body := StaticBody3D.new()
+	body.collision_layer = Layers.WORLD
+	var cs := CollisionShape3D.new()
+	var sh := SphereShape3D.new()
+	sh.radius = r
+	cs.shape = sh
+	body.add_child(cs)
+	root.add_child(body)
 
 
 func _belt() -> void:
@@ -181,6 +213,16 @@ func _belt() -> void:
 		var t := Transform3D(Basis.from_euler(Vector3(rng.randf() * TAU, rng.randf() * TAU, 0)).scaled(Vector3(s, s * rng.randf_range(0.6, 1.0), s)),
 			Vector3(cos(a) * d, rng.randfn(0.0, 120.0), sin(a) * d))
 		mm.set_instance_transform(i, t)
+		_rocks.append(t)
+	for i in 40:  # cuerpos que se colocan en los asteroides más cercanos a la nave
+		var body := StaticBody3D.new()
+		body.collision_layer = Layers.WORLD
+		var cs := CollisionShape3D.new()
+		cs.shape = SphereShape3D.new()
+		body.add_child(cs)
+		body.position = Vector3(0, -1.0e7 - i * 100.0, 0)
+		add_child(body)
+		_rock_bodies.append(body)
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = mm
 	var mat := StandardMaterial3D.new()
@@ -248,8 +290,14 @@ func _ui() -> void:
 	_prompt.add_theme_color_override("font_outline_color", Color.BLACK)
 	_prompt.add_theme_constant_override("outline_size", 8)
 	layer.add_child(_prompt)
+	_marker = Label.new()
+	_marker.add_theme_font_size_override("font_size", 20)
+	_marker.add_theme_color_override("font_color", Color("#9fe0ff"))
+	_marker.add_theme_color_override("font_outline_color", Color.BLACK)
+	_marker.add_theme_constant_override("outline_size", 6)
+	layer.add_child(_marker)
 	var help := Label.new()
-	help.text = "W/S empujar · A/D girar · Espacio/Ctrl cabecear · Shift crucero · E aterrizar · Esc menú"
+	help.text = "Ratón apuntar · W/S empujar · A/D alabear · Espacio/Ctrl subir/bajar · Shift crucero · Tab destino · Z asistencia · E aterrizar · Esc menú"
 	help.anchor_top = 1.0
 	help.anchor_bottom = 1.0
 	help.position = Vector2(24, -40)
@@ -266,6 +314,7 @@ func _process(delta: float) -> void:
 	var want := ship.global_transform * Vector3(0, 5.0, -16.0)
 	_cam.global_position = _cam.global_position.lerp(want, clampf(8.0 * delta, 0.0, 1.0)) if _cam.global_position.distance_to(want) < 200.0 else want
 	_cam.look_at(ship.global_transform * Vector3(0, 1.5, 12.0), ship.global_basis.y)
+	_cam.h_offset = lerpf(_cam.h_offset, 0.0, clampf(6.0 * delta, 0.0, 1.0))
 	# El sol alumbra desde donde está
 	var to_ship := ship.global_position.normalized()
 	if to_ship.length() > 0.1:
@@ -283,8 +332,19 @@ func _process(delta: float) -> void:
 		var c := StarSystem.position_of(best)
 		ship.global_position = c + (ship.global_position - c).normalized() * float(best.radius)
 		ship.velocity = Vector3.ZERO
-	_hud.text = "%s · %s · combustible %d%%\nCerca: %s a %s" % [ship.display_name, _speed_text(ship.speed()), int(ship.fuel * 100.0),
-		best.get("name", "?"), _dist_text(maxf(best_d, 0.0))]
+	var tgt: Dictionary = system.planets[clampi(_target, 0, system.planets.size() - 1)]
+	var tpos := StarSystem.position_of(tgt)
+	var tdist := maxf(ship.global_position.distance_to(tpos) - float(tgt.radius), 0.0)
+	_hud.text = "%s · %s · combustible %d%% · casco %d%%%s\nCerca: %s a %s\nDestino: %s a %s%s" % [ship.display_name, _speed_text(ship.speed()), int(ship.fuel * 100.0),
+		int(ship.hull), "" if ship.assist else " · asistencia APAGADA", best.get("name", "?"), _dist_text(maxf(best_d, 0.0)), tgt.name, _dist_text(tdist),
+		"  (Shift para crucero)" if tdist > 20000.0 and ship.speed() < 2000.0 else ""]
+	_update_marker(tpos, str(tgt.name), tdist)
+	_place_rock_bodies(delta)
+	if _hit_flash > 0.0:
+		_hit_flash -= delta
+		_hud.modulate = Color(1, 0.5, 0.5) if int(_hit_flash * 10.0) % 2 == 0 else Color.WHITE
+	else:
+		_hud.modulate = Color.WHITE
 	if _landing:
 		_prompt.text = "Entrando en la atmósfera…" if best.get("kind", "") != "station" else "Acoplando…"
 	elif _near.is_empty():
@@ -304,11 +364,70 @@ func _dist_text(d: float) -> String:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("interact") and not _near.is_empty() and StarSystem.can_land(_near) and not _landing:
+	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and ship:
+		ship.steer += Vector2(event.relative.x, event.relative.y * (-1.0 if Settings.invert_y else 1.0)) * MOUSE * Settings.mouse_sensitivity
+	elif event is InputEventMouseButton and event.pressed:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	elif event.is_action_pressed("next_target"):
+		_target = (_target + 1) % system.planets.size()
+	elif event.is_action_pressed("flight_assist") and ship:
+		ship.assist = not ship.assist
+	elif event.is_action_pressed("interact") and not _near.is_empty() and StarSystem.can_land(_near) and not _landing:
 		_land(str(_near.name))
 	elif event.is_action_pressed("pause"):
 		WorldDB.flush()
 		get_tree().change_scene_to_file("res://scenes/main_menu/MainMenu.tscn")
+
+
+## Una flecha en pantalla hacia el destino (o en el borde, si queda detrás o fuera).
+func _update_marker(tpos: Vector3, name: String, dist: float) -> void:
+	var vp := get_viewport().get_visible_rect().size
+	var behind := _cam.is_position_behind(tpos)
+	var sp := _cam.unproject_position(tpos)
+	var inside := not behind and sp.x > 0 and sp.y > 0 and sp.x < vp.x and sp.y < vp.y
+	if inside:
+		_marker.text = "◇ %s · %s" % [name, _dist_text(dist)]
+		_marker.position = sp + Vector2(-12, -12)
+	else:
+		var c := vp / 2.0
+		var d := (sp - c) * (-1.0 if behind else 1.0)
+		if d.length() < 1.0:
+			d = Vector2(0, 1)
+		var edge := c + d.normalized() * minf(c.x, c.y) * 0.85
+		_marker.position = edge
+		_marker.text = ("◀ " if d.x < -absf(d.y) else ("▶ " if d.x > absf(d.y) else ("▲ " if d.y < 0 else "▼ "))) + name
+
+
+## Los asteroides cercanos tienen cuerpo: se pueden golpear (no se atraviesan).
+func _place_rock_bodies(delta: float) -> void:
+	_rock_t -= delta
+	if _rock_t > 0.0 or ship == null:
+		return
+	_rock_t = 0.5
+	var p := ship.global_position
+	if absf(p.length() - float(system.get("belt", 30000.0))) > 6000.0:
+		return  # lejos del cinturón
+	var near := []
+	for t in _rocks:
+		var d: float = (t.origin as Vector3).distance_squared_to(p)
+		if d < 2500.0 * 2500.0:
+			near.append([d, t])
+	near.sort_custom(func(a, b): return a[0] < b[0])
+	for i in _rock_bodies.size():
+		var body: StaticBody3D = _rock_bodies[i]
+		if i < near.size():
+			var t: Transform3D = near[i][1]
+			body.global_position = t.origin
+			(body.get_child(0).shape as SphereShape3D).radius = t.basis.get_scale().x * 0.92
+		else:
+			body.global_position = Vector3(0, -1.0e7 - i * 100.0, 0)
+
+
+func on_ship_hit(strength: float) -> void:
+	_hit_flash = 1.0
+	_cam.h_offset = randf_range(-0.4, 0.4) * clampf(strength / 20.0, 0.2, 1.0)
+	if ship.hull <= 0.0:
+		_prompt.text = "El casco está destrozado: la nave va a la deriva."
 
 
 func _land(planet_name: String) -> void:
