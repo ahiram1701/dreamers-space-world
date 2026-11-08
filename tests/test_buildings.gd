@@ -56,8 +56,9 @@ func _run() -> void:
 	var origin: Vector3 = Vector3(0, -400, 0)
 	var bed2: Dictionary = interiors.activity_spot("bed", 0)
 	_expect(not bed2.is_empty() and bed2.pos.y > origin.y + 2.5, "en la casa de dos plantas, las camas están arriba")
-	var w := 10.0
-	var d := 8.0
+	var sz: Vector2 = interiors.get("_interior").get("size", Vector2(10, 8))  # (v0.10: del tamaño del edificio)
+	var w := sz.x
+	var d := sz.y
 	player.global_position = origin + Vector3(-w / 2 + 0.75, 0.2, d / 2 - 0.4)
 	await physics_frame
 	player.auto_walk_to(origin + Vector3(-w / 2 + 0.75, 3.3, d / 2 - 0.7 - 4.6), 0.4)

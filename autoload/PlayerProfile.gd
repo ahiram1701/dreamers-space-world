@@ -50,6 +50,23 @@ func apply_signals(signals: Array) -> void:
 
 
 ## Texto para el prompt. Solo menciona rasgos marcados para no inventar personalidad.
+## Lo que el jugador ha aprendido a hacer (con F: «Teo me enseña a cocinar»).
+func skills() -> Array:
+	return WorldDB.get_state("skills", [])
+
+
+func learn(skill: String, from: String = "") -> bool:
+	var s := skill.strip_edges().to_lower()
+	if s.is_empty():
+		return false
+	var all := skills()
+	if all.any(func(x): return str(x.get("skill", "")) == s):
+		return false
+	all.append({"skill": s, "from": from})
+	WorldDB.set_state("skills", all)
+	return true
+
+
 func describe() -> String:
 	var p := get_profile()
 	var parts: PackedStringArray = []
@@ -58,4 +75,6 @@ func describe() -> String:
 		if absi(v) >= 3:
 			parts.append("%s (%+d)" % [LABELS[t][1 if v > 0 else 0], v])
 	var traits := "aún no se sabe mucho de su carácter" if parts.is_empty() else ", ".join(parts)
-	return "%s. Carácter observado: %s. Decisiones tomadas: %d." % [player_name(), traits, int(p.decisions)]
+	var known := skills().map(func(x): return str(x.get("skill", "")))
+	return "%s. Carácter observado: %s. Decisiones tomadas: %d.%s" % [player_name(), traits, int(p.decisions),
+		(" Sabe hacer: %s." % ", ".join(PackedStringArray(known))) if not known.is_empty() else ""]

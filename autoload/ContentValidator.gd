@@ -24,6 +24,7 @@ const ACTION := {"t": "object", "fields": {
 	"item_effect": {"t": "enum", "from": "item_effect", "default": "none"},
 	"lent": {"t": "bool", "default": false},
 	"target": {"t": "string", "min": 1, "max": 80, "opt": true},
+	"verb": {"t": "string", "min": 2, "max": 20, "opt": true},
 	"amount": {"t": "int", "min": -30, "max": 30, "default": 0},
 	"text": {"t": "string", "min": 3, "max": 300, "opt": true},
 	# Reacción de una persona a lo que hace el jugador (npc_react) e irse encerrado (go_inside)
@@ -54,6 +55,7 @@ const ACTION := {"t": "object", "fields": {
 	# Dormir o esperar (sleep, wait): hasta qué hora (3.5 = 3:30) o cuántas horas
 	"until_hour": {"t": "float", "min": 0.0, "max": 24.0, "opt": true},
 	"hours": {"t": "float", "min": 0.1, "max": 16.0, "opt": true},
+	"floor": {"t": "bool", "default": false},
 	# Frase de narración de este paso (world_action.steps)
 	"narration": {"t": "string", "min": 2, "max": 300, "opt": true},
 }}

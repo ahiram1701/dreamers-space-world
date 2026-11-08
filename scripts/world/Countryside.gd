@@ -151,6 +151,7 @@ func build(s: Node3D, ground: Callable, places: Dictionary) -> void:
 			"crossing": _crossing(at)
 	# Pescar también desde la punta del muelle del pueblo
 	_fishing_spot(Vector3(38.0, 0.6, 6.0), "el muelle")
+	_town_life(ground)
 	_birds = Node3D.new()
 	_birds.name = "Pajaros"
 	add_child(_birds)
@@ -424,6 +425,7 @@ func _fish(where: String) -> void:
 
 func _process(delta: float) -> void:
 	_move_animals(delta)
+	_update_puddles(delta)
 	_move_birds(delta)
 	if _fishing.is_empty():
 		return
@@ -462,6 +464,98 @@ func _catch(player: Node, ok: bool) -> void:
 func _toast(text: String) -> void:
 	if scene and scene.get("_ui") and scene.get("_ui").has_method("toast"):
 		scene.get("_ui").toast(text)
+
+
+# --- Vida en el pueblo: perros y gatos, tendederos, charcos al llover -------------------------
+
+var _puddles: Array = []
+var _puddle_t := 0.0
+
+
+func _town_life(ground: Callable) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 777
+	# Perros y gatos que deambulan por las calles (cada uno por su zona)
+	var homes := [Vector3(-12, 0, -30), Vector3(-14, 0, 22), Vector3(4, 0, 40), Vector3(-30, 0, 0)]
+	for i in homes.size():
+		var dog := i % 2 == 0
+		var a := _pet(dog, rng)
+		var h: Vector3 = homes[i]
+		a.position = h + Vector3(rng.randf_range(-3, 3), 0, rng.randf_range(-3, 3))
+		a.set_meta("goal", a.position)
+		a.set_meta("pen", [h, Vector2(9, 9)])
+		_animals.append(a)
+		Decor.landmark(a, Vector3.ZERO, "un perro del barrio" if dog else "un gato callejero", "pet")
+	# Tendederos con ropa detrás de algunas casas
+	var doors: Dictionary = scene.get("_interiors").doors() if scene and scene.get("_interiors") else {}
+	var k := 0
+	for id in doors:
+		if k >= 4 or not str(id).begins_with("casa"):
+			continue
+		var b: Dictionary = doors[id].get("building", {})
+		if b.is_empty():
+			continue
+		k += 1
+		var front := Vector3(sin(float(b.yaw)), 0, cos(float(b.yaw)))
+		var side := front.cross(Vector3.UP)
+		var back: Vector3 = (b.base as Vector3) - front * ((b.size as Vector3).z / 2.0 + 2.2)
+		back.y = float(ground.call(back.x, back.z))
+		for sx in [-1.2, 1.2]:
+			PropsBuilder._cylinder(self, back + side * sx + Vector3(0, 0.9, 0), 0.03, 0.03, 1.8, Color("#6a6a6a"), false)
+		var line := PropsBuilder._box(self, back + Vector3(0, 1.75, 0), Vector3(2.4, 0.01, 0.01), Color("#dddddd"), false)
+		line.rotation.y = atan2(side.x, side.z) + PI / 2
+		for c in 4:
+			var cloth := PropsBuilder._box(self, back + side * (-0.9 + c * 0.6) + Vector3(0, 1.45, 0), Vector3(0.45, 0.55, 0.02), Color.from_hsv(rng.randf(), 0.45, 0.85), false)
+			cloth.rotation.y = atan2(side.x, side.z) + PI / 2
+		Decor.landmark(self, back, "un tendedero con ropa secándose", "laundry")
+	# Charcos en la calle (solo se ven cuando llueve)
+	for i in 14:
+		var p := Vector3(rng.randf_range(-7.5, -2.5), 0, rng.randf_range(-55, 55))
+		p.y = float(ground.call(p.x, p.z)) + 0.02
+		var pud := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = rng.randf_range(0.4, 1.1)
+		cm.bottom_radius = cm.top_radius
+		cm.height = 0.01
+		pud.mesh = cm
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(0.12, 0.14, 0.16, 0.7)
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.metallic = 0.6
+		m.roughness = 0.05
+		pud.material_override = m
+		pud.scale = Vector3(1.0, 1.0, rng.randf_range(0.6, 1.0))
+		pud.position = p
+		pud.visible = false
+		pud.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(pud)
+		_puddles.append(pud)
+
+
+func _pet(dog: bool, rng: RandomNumberGenerator) -> Node3D:
+	var a := Node3D.new()
+	a.name = "Perro" if dog else "Gato"
+	add_child(a)
+	var col: Color = [Color("#8a5a2b"), Color("#2b2b2b"), Color("#d8c7a8"), Color("#a06a3a")][rng.randi() % 4] if dog else [Color("#e08a3a"), Color("#3a3a3a"), Color("#d8d0c4")][rng.randi() % 3]
+	var s := 0.55 if dog else 0.32
+	PropsBuilder._box(a, Vector3(0, 0.55 * s, 0), Vector3(0.35, 0.3, 0.8) * s, col, false)
+	PropsBuilder._box(a, Vector3(0, 0.8 * s, 0.5 * s), Vector3(0.28, 0.26, 0.3) * s, col, false)
+	PropsBuilder._box(a, Vector3(0, 0.75 * s, -0.48 * s), Vector3(0.06, 0.06, 0.35) * s, col, false).rotation.x = -0.6
+	for lx in [-0.12, 0.12]:
+		for lz in [-0.28, 0.28]:
+			PropsBuilder._box(a, Vector3(lx * s, 0.2 * s, lz * s), Vector3(0.08, 0.4, 0.08) * s, col.darkened(0.2), false)
+	a.set_meta("wait", rng.randf_range(0.0, 3.0))
+	return a
+
+
+func _update_puddles(delta: float) -> void:
+	_puddle_t -= delta
+	if _puddle_t > 0.0 or _puddles.is_empty():
+		return
+	_puddle_t = 2.0
+	var wet := Weather.current() in ["rain", "storm"]
+	for pd in _puddles:
+		(pd as Node3D).visible = wet
 
 
 # --- Animales y pájaros ------------------------------------------------------------------------

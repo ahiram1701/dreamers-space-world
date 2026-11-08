@@ -19,7 +19,14 @@ var _near: Dictionary = {}
 var _landing := false
 var _bodies := []   # [{planet, node}]
 var _rocks: Array = []        # transformaciones de los asteroides del cinturón
-var _rock_bodies: Array = []  # los ~40 más cercanos tienen cuerpo (se reciclan al moverte)
+var _rock_bodies: Array = []  # (ya no se usan: las rocas chocan con la cuenta, ver _rock_hit)
+## Rocas del cinturón para chocar con ellas sin cuerpos físicos: celda (500 m) -> [índices].
+const ROCK_CELL := 500.0
+const ROCK_AXES := Vector3(1.0, 0.8, 1.0)   # la forma de la malla de la roca (esfera achatada)
+var _rock_grid := {}
+var _rock_inv: Array = []     # inversa de la base de cada roca (de su espacio al de la unidad)
+var _rock_size: Array = []    # su radio mayor
+var _prev_ship_pos := Vector3.INF
 var _rock_t := 0.0
 var _target := 0              # índice del planeta de destino (Tab)
 var _marker: Label
@@ -29,6 +36,8 @@ var _toast: Label
 var _toast_t := 0.0
 var _land_after_auto := ""
 var _heat_t := 0.0
+var _map: SystemMap
+var _entry_fx: ColorRect
 var _moons: Array = []        # [{node, center, r, speed, angle}]
 var _traffic: Array = []      # [{node, from, to, t, speed}]
 var _dust: MultiMeshInstance3D
@@ -154,6 +163,23 @@ func _planet(p: Dictionary) -> Node3D:
 
 func _station(root: Node3D, r: float) -> void:
 	var metal := Creations.material("metal", Color("#b8bcc2"))
+	# Anillos de aproximación al muelle: guían hasta el eje (E para acoplar)
+	for k in 5:
+		var guide := MeshInstance3D.new()
+		var gm := TorusMesh.new()
+		gm.inner_radius = r * 0.16
+		gm.outer_radius = r * 0.18
+		guide.mesh = gm
+		var glow := StandardMaterial3D.new()
+		glow.albedo_color = Color("#4fc3f7")
+		glow.emission_enabled = true
+		glow.emission = Color("#4fc3f7")
+		glow.emission_energy_multiplier = 1.4
+		glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		guide.material_override = glow
+		guide.rotation.x = PI / 2.0
+		guide.position = Vector3(0, r * 0.6 + k * r * 0.5, 0)
+		root.add_child(guide)
 	var ring := MeshInstance3D.new()
 	var tm := TorusMesh.new()
 	tm.inner_radius = r * 0.8
@@ -235,7 +261,13 @@ func _belt() -> void:
 			Vector3(cos(a) * d, rng.randfn(0.0, 120.0), sin(a) * d))
 		mm.set_instance_transform(i, t)
 		_rocks.append(t)
-	for i in 40:  # cuerpos que se colocan en los asteroides más cercanos a la nave
+		_rock_inv.append(t.basis.inverse())
+		_rock_size.append(s)
+		var cell := Vector3i(floori(t.origin.x / ROCK_CELL), floori(t.origin.y / ROCK_CELL), floori(t.origin.z / ROCK_CELL))
+		if not _rock_grid.has(cell):
+			_rock_grid[cell] = []
+		_rock_grid[cell].append(i)
+	for i in 0:  # (antes: 40 cuerpos reciclados; al acercarte se quitaban y la roca se atravesaba)
 		var body := StaticBody3D.new()
 		body.collision_layer = Layers.WORLD
 		var cs := CollisionShape3D.new()
@@ -342,7 +374,7 @@ func _ui() -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		if ship: ship.piloted = true)
 	var help := Label.new()
-	help.text = "Ratón apuntar · W/S empujar · A/D alabear · Shift crucero · X frenar · Tab destino · G piloto automático · V cabina · Z asistencia · E aterrizar · F hacer algo · Esc menú"
+	help.text = "Ratón apuntar · W/S empujar · A/D alabear · Shift crucero · X frenar · Tab destino · M mapa · G piloto automático · V cabina · Z asistencia · E aterrizar · F hacer algo · Esc menú"
 	help.anchor_top = 1.0
 	help.anchor_bottom = 1.0
 	help.position = Vector2(24, -40)
@@ -547,6 +579,7 @@ func _on_autopilot_arrived() -> void:
 func _physics_process(delta: float) -> void:
 	if ship == null:
 		return
+	_rock_collide()
 	# No se atraviesan los planetas ni el sol: si la nave queda dentro (con su tamaño), sale
 	for p in system.planets:
 		if p.kind == "station":
@@ -583,6 +616,7 @@ func _physics_process(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	_update_world(delta)
+	_map_update()
 	if _toast_t > 0.0:
 		_toast_t -= delta
 		_toast.modulate.a = clampf(_toast_t, 0.0, 1.0)
@@ -618,10 +652,10 @@ func _process(delta: float) -> void:
 		pax.append(str(WorldDB.get_entity("npc", str(id)).get("name", "?")).split(" ")[0])
 	_hud.text = "%s · %s · combustible %d%% · casco %d%%%s%s\nCerca: %s a %s\nDestino: %s a %s%s%s" % [ship.display_name, _speed_text(ship.speed()), int(ship.fuel * 100.0),
 		int(ship.hull), "" if ship.assist else " · asistencia APAGADA", " · ¡PROXIMIDAD!" if ship.proximity else "", best.get("name", "?"), _dist_text(maxf(best_d, 0.0)), tgt.name, _dist_text(tdist),
-		"  · PILOTO AUTOMÁTICO (G o W/S para tomar el mando)" if ship.autopilot else ("  (G: piloto automático · Shift: crucero)" if tdist > 20000.0 and ship.speed() < 1000.0 else ""),
+		("  · PILOTO AUTOMÁTICO (G o W/S para tomar el mando) · llegada en %s" % _eta_text(tdist)) if ship.autopilot else ("  (G: piloto automático · Shift: crucero)" if tdist > 20000.0 and ship.speed() < 1000.0 else ""),
 		("\nA bordo: " + ", ".join(pax)) if not pax.is_empty() else ""]
 	_update_marker(tpos, str(tgt.name), tdist)
-	_place_rock_bodies(delta)
+	pass  # (las rocas ya no necesitan cuerpos: ver _rock_collide)
 	if _hit_flash > 0.0:
 		_hit_flash -= delta
 		_hud.modulate = Color(1, 0.5, 0.5) if int(_hit_flash * 10.0) % 2 == 0 else Color.WHITE
@@ -639,6 +673,15 @@ func _process(delta: float) -> void:
 		_prompt.text = "%s: %s" % [_near.name, StarSystem.describe(_near)]
 
 
+## Cuánto falta para llegar al destino a la velocidad con la que te acercas.
+func _eta_text(dist: float) -> String:
+	var tgt: Dictionary = system.planets[clampi(_target, 0, system.planets.size() - 1)]
+	var to := (StarSystem.position_of(tgt) - ship.global_position).normalized()
+	var closing := maxf(ship.velocity.dot(to), 1.0)
+	var secs := int(dist / closing)
+	return "%d:%02d" % [secs / 60, secs % 60] if secs < 3600 else "más de una hora"
+
+
 func _speed_text(v: float) -> String:
 	return "%.0f m/s" % v if v < 1000.0 else "%.1f km/s" % (v / 1000.0)
 
@@ -652,6 +695,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("act") and _actions and not _actions.is_busy():
 		_actions.open()
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed("map"):
+		toggle_map()
 		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("autopilot") and ship:
@@ -727,11 +774,187 @@ func _place_rock_bodies(delta: float) -> void:
 			body.global_position = Vector3(0, -1.0e7 - i * 100.0, 0)
 
 
+## Índices de las rocas cerca del segmento a→b (con un margen).
+func _rocks_near(a: Vector3, b: Vector3, margin: float) -> Array:
+	var lo := a.min(b) - Vector3.ONE * (margin + 45.0)
+	var hi := a.max(b) + Vector3.ONE * (margin + 45.0)
+	var c0 := Vector3i(floori(lo.x / ROCK_CELL), floori(lo.y / ROCK_CELL), floori(lo.z / ROCK_CELL))
+	var c1 := Vector3i(floori(hi.x / ROCK_CELL), floori(hi.y / ROCK_CELL), floori(hi.z / ROCK_CELL))
+	var out := []
+	if (c1 - c0).x > 20 or (c1 - c0).y > 20 or (c1 - c0).z > 20:
+		return out  # (un tramo larguísimo: nada que mirar aquí)
+	for x in range(c0.x, c1.x + 1):
+		for y in range(c0.y, c1.y + 1):
+			for z in range(c0.z, c1.z + 1):
+				var cell := Vector3i(x, y, z)
+				if _rock_grid.has(cell):
+					out.append_array(_rock_grid[cell])
+	return out
+
+
+## ¿Toca el segmento a→b (con radio `pad`) la roca i? Devuelve la fracción del tramo (0..1) o -1.
+func _rock_hit(i: int, a: Vector3, b: Vector3, pad: float) -> float:
+	var t: Transform3D = _rocks[i]
+	var inv: Basis = _rock_inv[i]
+	var k := 1.0 + pad / float(_rock_size[i])
+	var u0 := (inv * (a - t.origin)) / ROCK_AXES
+	var u1 := (inv * (b - t.origin)) / ROCK_AXES
+	if u0.length() < k:
+		return 0.0
+	var d := u1 - u0
+	var qa := d.dot(d)
+	if qa < 1e-9:
+		return -1.0
+	var qb := 2.0 * u0.dot(d)
+	var qc := u0.dot(u0) - k * k
+	var disc := qb * qb - 4.0 * qa * qc
+	if disc < 0.0:
+		return -1.0
+	var hit := (-qb - sqrt(disc)) / (2.0 * qa)
+	return hit if hit >= 0.0 and hit <= 1.0 else -1.0
+
+
+## Las rocas son sólidas: si la nave las toca (o las cruzó en este paso), sale por su superficie,
+## rebota y se daña el casco.
+func _rock_collide() -> void:
+	var p := ship.global_position
+	var a := _prev_ship_pos if _prev_ship_pos != Vector3.INF else p
+	_prev_ship_pos = p
+	if absf(p.length() - float(system.get("belt", 30000.0))) > 4000.0 and absf(a.length() - float(system.get("belt", 30000.0))) > 4000.0:
+		return
+	var pad := ship.length * 0.5
+	var best := -1
+	var best_t := INF
+	for i in _rocks_near(a, p, pad):
+		var h := _rock_hit(i, a, p, pad)
+		if h >= 0.0 and h < best_t:
+			best_t = h
+			best = i
+	if best < 0:
+		return
+	var t: Transform3D = _rocks[best]
+	var inv: Basis = _rock_inv[best]
+	var k := 1.0 + pad / float(_rock_size[best])
+	var contact := a.lerp(p, best_t)
+	var q := (inv * (contact - t.origin)) / ROCK_AXES
+	if q.length() < 0.001:
+		q = Vector3.UP
+	q = q.normalized() * k * 1.02
+	var n := (inv.transposed() * (q / ROCK_AXES)).normalized()
+	ship.global_position = t.origin + t.basis * (q * ROCK_AXES)
+	_prev_ship_pos = ship.global_position
+	var into := -ship.velocity.dot(n)
+	if into > 0.0:
+		ship.velocity = ship.velocity.bounce(n) * 0.35
+		if into > 8.0:
+			ship.hull = maxf(ship.hull - minf((into - 8.0) * 0.6, Ship.MAX_HIT), 0.0)
+			Sfx.at(self, "crash", ship.global_position)
+			on_ship_hit(into)
+
+
+## ¿Hay una roca en el tramo a→b? (para cortar el crucero y para el piloto automático)
+func rock_on_segment(a: Vector3, b: Vector3, pad: float = 20.0) -> bool:
+	for i in _rocks_near(a, b, pad):
+		if _rock_hit(i, a, b, pad) >= 0.0:
+			return true
+	return false
+
+
+## El mapa del sistema (M): se marca el destino con un clic, y «Ir» activa el piloto automático.
+func toggle_map() -> void:
+	if _map and is_instance_valid(_map):
+		_map.get_parent().queue_free()
+		_map = null
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		if ship:
+			ship.piloted = true
+		return
+	var layer := CanvasLayer.new()
+	layer.layer = 20
+	add_child(layer)
+	_map = SystemMap.new()
+	_map.system = system
+	_map.target = _target
+	layer.add_child(_map)
+	_map.target_chosen.connect(func(i: int, go: bool):
+		_target = i
+		if go:
+			_start_autopilot(system.planets[i], false)
+			toast("Piloto automático rumbo a %s." % system.planets[i].name)
+			toggle_map())
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if ship:
+		ship.piloted = false
+
+
+func _map_update() -> void:
+	if _map and is_instance_valid(_map) and ship:
+		_map.ship_pos = ship.global_position
+
+
+## Lo que ve el radar de la cabina: [posición, color] de lo más cercano (planetas, lunas, rocas,
+## naves; el destino en amarillo).
+func radar_contacts(from: Vector3) -> Array:
+	var out := []
+	var tgt: Dictionary = system.planets[clampi(_target, 0, system.planets.size() - 1)]
+	for p in system.planets:
+		out.append([StarSystem.position_of(p), Color("#ffe066") if p == tgt else Color("#7cc8ff")])
+	for mo in _moons:
+		out.append([(mo.node as Node3D).global_position, Color("#c8c8c8")])
+	for tr in _traffic:
+		out.append([(tr.node as Node3D).global_position, Color("#ff9f40")])
+	for i in _rocks_near(from, from, 1500.0).slice(0, 6):
+		out.append([(_rocks[i] as Transform3D).origin, Color("#a07850")])
+	out.sort_custom(func(a, b): return (a[0] as Vector3).distance_to(from) < (b[0] as Vector3).distance_to(from))
+	return out.slice(0, 12)
+
+
 func on_ship_hit(strength: float) -> void:
+	if ship and ship.has_method("shake_cockpit"):
+		ship.shake_cockpit(strength)
 	_hit_flash = 1.0
 	_cam.h_offset = randf_range(-0.4, 0.4) * clampf(strength / 20.0, 0.2, 1.0)
 	if ship.hull <= 0.0:
 		_prompt.text = "El casco está destrozado: la nave va a la deriva."
+
+
+## Entrar en la atmósfera (o acoplarse a la estación): la nave se encara al planeta y desciende,
+## el casco se pone al rojo, todo tiembla y el cielo toma el color del planeta. Unos segundos; y
+## mientras la IA prepara el lugar, el resplandor sigue.
+func _atmosphere_entry(planet_name: String) -> void:
+	var planet: Dictionary = {}
+	for p in system.planets:
+		if p.name == planet_name:
+			planet = p
+	if planet.is_empty() or ship == null:
+		return
+	var station: bool = planet.kind == "station"
+	var center := StarSystem.position_of(planet)
+	var layer := CanvasLayer.new()
+	layer.layer = 18
+	add_child(layer)
+	_entry_fx = ColorRect.new()
+	_entry_fx.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_entry_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_entry_fx.color = Color(1.0, 0.45, 0.15, 0.0) if not station else Color(0.6, 0.85, 1.0, 0.0)
+	layer.add_child(_entry_fx)
+	ship.autopilot = false
+	ship.piloted = false
+	var t := 0.0
+	while t < 3.2 and is_inside_tree():
+		var dt := get_process_delta_time()
+		t += dt
+		var down := (center - ship.global_position).normalized()
+		ship.velocity = ship.velocity.lerp(down * (220.0 if not station else 40.0), clampf(dt * 1.5, 0.0, 1.0))
+		var up := Vector3.UP if absf(down.y) < 0.95 else Vector3.RIGHT
+		ship.global_basis = ship.global_basis.slerp(Basis.looking_at(-down, up), clampf(dt * 1.2, 0.0, 1.0)).orthonormalized()
+		var heat := sin(clampf(t / 3.2, 0.0, 1.0) * PI) * (0.55 if not station else 0.25)
+		_entry_fx.color.a = heat
+		_cam.h_offset = randf_range(-1.0, 1.0) * heat * 0.6
+		ship.shake_cockpit(heat * 30.0)
+		await get_tree().process_frame
+	if is_instance_valid(_entry_fx):
+		_entry_fx.color.a = 0.35  # sigue el resplandor mientras se prepara el lugar
 
 
 func _land(planet_name: String) -> void:
@@ -744,6 +967,7 @@ func _land(planet_name: String) -> void:
 	e["hull"] = ship.hull
 	space["ship"] = e
 	WorldDB.set_state("space", space)
+	await _atmosphere_entry(planet_name)
 	var r := await Travel.land(planet_name)
 	if not is_inside_tree():
 		return

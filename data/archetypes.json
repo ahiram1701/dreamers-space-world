@@ -16,7 +16,7 @@
 	"anchor_base": ["marina_watch", "samir_radio", "teo_notebook", "none"],
 	"quest_objective": ["visit_poi", "talk_npc", "bring_item"],
 	"ending": ["close_the_loop", "return_home", "keep_traveling"],
-	"npc_action": ["sleep", "wait", "give_item", "take_item", "follow_player", "stop_following", "go_to", "change_stat", "reveal_place", "give_quest", "complete_quest", "refuse_contact", "journal", "update_item", "remove_item", "place_object", "affect_nearby", "play", "leave", "go_inside", "approach", "npc_react", "give_to_npc", "use", "change_need", "pay", "earn", "charge", "pay_player", "spawn_npc", "create_place", "share_number", "hire_player", "quit_job", "guide_player", "invite_in", "force_door", "climb", "move_to", "ride_with_player", "get_out"],
+	"npc_action": ["sleep", "wait", "give_item", "take_item", "follow_player", "stop_following", "go_to", "change_stat", "reveal_place", "give_quest", "complete_quest", "refuse_contact", "journal", "update_item", "remove_item", "place_object", "affect_nearby", "play", "leave", "go_inside", "approach", "npc_react", "give_to_npc", "use", "change_need", "pay", "earn", "charge", "pay_player", "spawn_npc", "create_place", "share_number", "hire_player", "quit_job", "guide_player", "invite_in", "force_door", "climb", "move_to", "ride_with_player", "get_out", "travel", "ride", "land", "interact", "drive_to", "buy", "call", "swim_to", "learn"],
 	"stat": ["health", "energy", "instability"],
 	"placeable": ["boat", "raft", "campfire", "tent", "shelter", "table", "chair", "bed", "fence", "sign", "torch", "box", "garden", "other"],
 	"world_feature": ["tree", "rock", "bush", "crop"],

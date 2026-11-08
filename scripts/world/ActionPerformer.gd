@@ -24,7 +24,7 @@ const REACH := {"npc": 1.1, "tree": 1.3, "rock": 1.4, "bush": 1.0, "door": 0.9, 
 const WORD_KIND := {"árbol": "tree", "arbol": "tree", "roca": "rock", "piedra": "rock", "arbusto": "bush",
 	"silla": "seat", "sofá": "seat", "cama": "bed", "barca": "boat", "bote": "boat", "agua": "water", "mar": "water", "puerta": "door"}
 const EFFECTS := ["give_item", "update_item", "remove_item", "place_object", "affect_nearby", "change_stat", "journal",
-	"reveal_place", "npc_react", "give_to_npc", "change_need", "pay", "earn", "spawn_npc", "create_place"]
+	"reveal_place", "npc_react", "give_to_npc", "change_need", "pay", "earn", "spawn_npc", "create_place", "share_number", "take_item", "get_out"]
 
 var scene: LocationScene
 var player: Player
@@ -170,6 +170,41 @@ func _do_step(s: Dictionary, rest: Array) -> Array:
 				return []
 			var note: String = await scene.travel_to(loc)
 			return [note] if not note.is_empty() else []
+		"interact":
+			return await _interact(s)
+		"drive_to":
+			return await _drive_to(str(s.get("target", "")))
+		"buy":
+			return await _buy(str(s.get("item_name", s.get("target", ""))))
+		"call":
+			var cid := str(s.get("target", "")).trim_prefix("npc:")
+			if cid.is_empty() or WorldDB.get_entity("npc", cid).is_empty():
+				cid = Actions.npc_from(str(s.get("target", "")))
+			if cid.is_empty():
+				return ["No sabes a quién llamar."]
+			if not bool(NPCMemory.get_mem(cid).get("met", false)):
+				return ["No tienes el número de %s." % str(WorldDB.get_entity("npc", cid).get("name", "esa persona")).get_slice(" ", 0)]
+			if scene.has_method("start_call"):
+				scene.start_call(cid)
+			return []
+		"swim_to":
+			var where := str(s.get("target", ""))
+			var water := scene.resolve_target("water")
+			if not water.is_empty():
+				await player.auto_walk_to(water.pos, 0.4)
+			var dest := scene.place_position(where)
+			Body.change("hygiene", 10.0)
+			Body.change("rest", -8.0)
+			if dest != Vector3.INF:
+				return ["Nadas hasta %s." % where] + await _long_walk(dest)
+			return ["Nadas un rato."]
+		"learn":
+			var skill := str(s.get("item_name", s.get("text", "")))
+			var teacher := str(s.get("target", "")).trim_prefix("npc:")
+			if PlayerProfile.learn(skill, teacher):
+				Journal.log_event("Aprendiste: %s." % skill, "info")
+				return ["Aprendes %s." % skill.to_lower()]
+			return []
 		"ride":
 			var rid := str(s.get("target", "")).trim_prefix("npc:")
 			if not scene._npcs.has(rid):
@@ -224,6 +259,123 @@ func _do_step(s: Dictionary, rest: Array) -> Array:
 			if type in EFFECTS:
 				return Actions.execute("", [s])
 	return []
+
+
+## Usar una cosa cualquiera: encender o apagar (la tele, una lámpara), abrir, sentarse… o, si no
+## hay nada que hacer con ella, mirarla de cerca.
+func _interact(s: Dictionary) -> Array:
+	var e := scene.resolve_target(str(s.get("target", "")))
+	if e.is_empty():
+		return ["No ves eso por aquí."]
+	await _reach(e)
+	if _cancelled:
+		return []
+	var verb := str(s.get("verb", "use")).to_lower()
+	var node: Variant = e.get("node")
+	var holder: Node = node.get_parent() if node is Interactable and node.get_parent() and node.get_parent().has_meta("toggle_apply") else node
+	if holder is Node3D and (holder as Node3D).has_meta("toggle_apply"):
+		player.play_gesture("open", 0.8)
+		var on := not (verb in ["turn_off", "off", "close", "apagar", "cerrar"]) if verb != "use" else not Toggle.is_on(holder)
+		return [Toggle.set_on(holder, on)]
+	if node is Interactable:
+		(node as Interactable).use(player)
+		await get_tree().create_timer(0.8).timeout
+		return []
+	Examine.examine(player, str(e.label), e.pos)
+	return []
+
+
+## Ir en vehículo: sube a tu coche (o a uno cercano: si no es tuyo, es robo), conduce hasta allí
+## y gasta gasolina. Un trayecto largo pasa en un fundido.
+func _drive_to(target: String) -> Array:
+	var dest := scene.place_position(target)
+	if dest == Vector3.INF and target.to_lower().contains("pueblo"):
+		dest = scene.place_position("plaza")
+	if dest == Vector3.INF:
+		return ["No sabes cómo llegar a «%s»." % target]
+	var v: Node3D = player.riding if player.riding is Vehicle else null
+	if v == null:
+		var best := 60.0
+		for c in scene.get_children():
+			if c is Vehicle and not c.pedals and c.global_position.distance_to(player.global_position) < best:
+				var mine := str(c.get("owner_id")) in ["player", ""]
+				if mine or v == null:
+					v = c
+					best = c.global_position.distance_to(player.global_position) - (30.0 if mine else 0.0)
+		if v == null:
+			return ["No hay ningún vehículo cerca para ir hasta allí."]
+		await player.auto_walk_to(v.global_position, 2.2)
+		if _cancelled:
+			return []
+		v.call("_on_use", player)
+		await get_tree().create_timer(0.8).timeout
+	var dist := v.global_position.distance_to(dest)
+	var fuel_used := dist * 0.00012
+	v.set("fuel", maxf(float(v.get("fuel")) - fuel_used, 0.0))
+	var fade := ColorRect.new()
+	fade.color = Color(0, 0, 0, 0)
+	fade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var layer := CanvasLayer.new()
+	layer.layer = 50
+	layer.add_child(fade)
+	add_child(layer)
+	var tw := create_tween()
+	tw.tween_property(fade, "color:a", 1.0, 0.6)
+	await tw.finished
+	WorldClock.advance(dist / 11.0 / 60.0)
+	var road := dest + (v.global_position - dest).normalized() * 6.0
+	road.y = scene.ground_at(road.x, road.z) + 0.6 if scene.has_method("ground_at") else road.y
+	(v as RigidBody3D).linear_velocity = Vector3.ZERO
+	(v as RigidBody3D).angular_velocity = Vector3.ZERO
+	var dir := (dest - road)
+	dir.y = 0.0
+	v.global_transform = Transform3D(Basis(Vector3.UP, atan2(dir.x, dir.z)), road)
+	await get_tree().create_timer(0.3).timeout
+	tw = create_tween()
+	tw.tween_property(fade, "color:a", 0.0, 0.6)
+	await tw.finished
+	layer.queue_free()
+	return ["Conduces hasta %s (%d min)." % [target, roundi(dist / 11.0 / 60.0)]]
+
+
+## Comprar de verdad: vas al local que lo vende, con su precio y su horario.
+func _buy(what: String) -> Array:
+	var low := what.to_lower()
+	var kind := ""
+	var entry := {}
+	for k in Shops.data().kinds:
+		for it in Shops.info(k).get("items", []):
+			var n := str(it.name).to_lower()
+			if not low.is_empty() and (n.contains(low) or low.contains(n) or low.contains(n.get_slice(" ", 0))):
+				kind = k
+				entry = it
+				break
+		if not kind.is_empty():
+			break
+	if kind.is_empty():
+		return ["Aquí no venden «%s»." % what]
+	var door: String = scene._interiors.door_of_kind(kind)
+	if door.is_empty():
+		return ["Aquí no hay %s." % Shops.label(kind)]
+	if not Shops.is_open(kind, WorldClock.hour()):
+		return ["%s está cerrado: abre %s." % [Shops.label(kind).capitalize(), Shops.hours_text(kind)]]
+	if scene._interiors.current_door() != door:
+		if scene._interiors.is_inside():
+			await scene._interiors.leave()
+			await scene._interiors.wait_idle()
+		await player.auto_walk_to(scene._interiors.door_position(door), 1.0)
+		if _cancelled:
+			return []
+		scene._interiors.try_enter(door)
+		await get_tree().create_timer(0.3).timeout
+		await scene._interiors.wait_idle()
+	if entry.get("menu", false) or Shops.info(kind).get("menu", false):
+		return ["En %s se pide a la mesera: siéntate a una mesa." % Shops.label(kind)]
+	var id := Shops.buy(entry)
+	if id.is_empty():
+		return ["No te alcanza: %s cuesta %s." % [str(entry.name).to_lower(), Wallet.text(int(entry.price))]]
+	player.play_gesture("give", 1.2)
+	return ["Compras %s por %s." % [str(entry.name).to_lower(), Wallet.text(int(entry.price))]]
 
 
 ## Ir a pie muy lejos (fuera del pueblo, al otro lado del mapa): fundido, el reloj avanza lo que
@@ -466,6 +618,30 @@ static func local_plan(what: String, scene_ref: LocationScene, guess: String) ->
 		elif sleeping and ["suelo", "aquí", "aqui", "en el piso", "en la arena", "en el pasto"].any(func(w): return low.contains(w)):
 			step["floor"] = true
 		return [step]
+	# Encender o apagar algo de aquí: «enciendo la tele», «apago la lámpara»
+	for pair in [[["enciendo", "prendo", "encender", "prender"], "turn_on"], [["apago", "apagar"], "turn_off"]]:
+		if (pair[0] as Array).any(func(w): return low.contains(w)):
+			for id in scene_ref.nearby_targets():
+				var e: Dictionary = scene_ref.nearby_targets()[id]
+				var lab := str(e.label).to_lower().get_slice(" (", 0)  # «la tele (apagada)» → «la tele»
+				var noun := lab.get_slice(" ", lab.get_slice_count(" ") - 1)
+				if e.kind == "thing" and (e.node as Node).has_meta("toggle_apply") and noun.length() > 2 and low.contains(noun):
+					return [{"type": "interact", "target": id, "verb": pair[1]}]
+	# Ir en coche: «manejo hasta la granja», «voy en coche al lago»
+	if ["manejo", "conduzco", "en coche", "en auto", "en carro", "maneja", "conducir"].any(func(w): return low.contains(w)):
+		for nm in scene_ref._places:
+			if low.contains(str(nm).to_lower()):
+				return [{"type": "drive_to", "target": nm}]
+	# Comprar: «compro pan»
+	if ["compro ", "comprar "].any(func(w): return low.contains(w)):
+		var it := low.get_slice("compr", 1).get_slice(" ", 1)
+		return [{"type": "buy", "item_name": low.substr(low.find("compr")).get_slice(" ", 1) if it.length() < 3 else it}]
+	# Llamar por teléfono: «llamo a Marina»
+	if ["llamo a", "llamar a", "le llamo", "la llamo"].any(func(w): return low.contains(w)):
+		for nid in scene_ref._npcs:
+			var first := str(WorldDB.get_entity("npc", nid).get("name", "")).to_lower().get_slice(" ", 0)
+			if first.length() > 2 and low.contains(first):
+				return [{"type": "call", "target": "npc:" + str(nid)}]
 	# Viajar o volver a otro sitio: «regreso al pueblo», «vuelvo a casa», «vamos a Kepra»
 	if ["regreso", "regresar", "vuelvo", "volver", "voy a", "vamos a", "viajo", "viajar", "ir a", "llévame", "llevame"].any(func(w): return low.contains(w)):
 		var dests := scene_ref.travel_destinations()

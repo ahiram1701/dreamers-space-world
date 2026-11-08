@@ -235,7 +235,8 @@ static func truthful_facts(facts: Array) -> Array:
 ## Pasos que tienen sentido en una acción del jugador (tecla F).
 const WORLD_STEPS := ["go_to", "play", "use", "npc_react", "give_to_npc", "give_item", "change_stat", "journal",
 	"reveal_place", "update_item", "remove_item", "place_object", "affect_nearby", "change_need", "pay", "earn",
-	"spawn_npc", "create_place", "sleep", "wait", "climb", "move_to", "force_door", "travel", "ride", "land"]
+	"spawn_npc", "create_place", "sleep", "wait", "climb", "move_to", "force_door", "travel", "ride", "land",
+	"interact", "drive_to", "buy", "call", "swim_to", "learn", "share_number", "take_item", "get_out"]
 const MAX_FINDS_PER_PLACE := 6  # rebuscar sin parar no llena el inventario (fabricar no cuenta)
 const MAX_ACTION_MINUTES := 240
 ## Si la narración cuenta esto, tiene que haber un paso de este tipo (si no, se pide otra vez).
@@ -261,6 +262,7 @@ Reglas:
 - Las personas cercanas reaccionan de inmediato y de forma creíble según su carácter y su relación con el jugador (npc_react). Una conversación larga se tiene hablando con ellas (E), aquí solo su reacción inmediata.
 - Solo puedes usar lo que aparece en "COSAS Y PERSONAS CERCA", con su id exacto en "target", y lo que el jugador LLEVA ENCIMA (eso lo tiene a mano siempre, aunque no esté en la lista de cosas cercanas). Si lo que quiere hacer no está cerca, no ocurre: dilo en la narración.
 - TODO lo que narres que pasa de verdad necesita su paso. Si no hay paso, no pasa.
+- Si el jugador quiere hacer algo físicamente posible, busca CÓMO con estos pasos (interact sirve para casi cualquier cosa que haya cerca). No lo niegues por falta de un paso exacto.
 - La gente está donde dice "LA GENTE DE CERCA" y lleva en las manos SOLO lo que dice ahí. No le pongas a nadie una escoba, un trapo, una taza ni nada que no lleve, ni la sitúes en otro sitio. Los vehículos que existen son los de "VEHÍCULOS CERCA"; nada más.
 
 "narration": resumen breve (1 a 3 frases, segunda persona).
@@ -286,6 +288,12 @@ Reglas:
 - create_place: aparece o se abre un sitio nuevo que encaja con el lugar y la época (una panadería, un taller…). "item_name": su nombre (el del letrero); "target": shop, bakery, bar, workshop, house, office, clinic o market; "text": cómo es.
 - sleep: dormir. "until_hour": hora a la que se despierta (0–24; 3.5 = 3:30, 15 = 3 de la tarde) o "hours": cuántas horas. "target": "home" si va a dormir a su casa (el juego le lleva, entra y se acuesta en su cama), "bed" para la cama más cercana; "floor": true SOLO si quiere dormir en el suelo. Hace pasar el tiempo él solo ("minutes": 0).
 - travel: ir a otro lugar. "target": "location:<id>" de "OTROS LUGARES A LOS QUE PUEDE VIAJAR" (va en su nave o con el Ancla) o el nombre de un sitio de "SITIOS DE ESTE LUGAR" aunque esté lejos ("regreso al pueblo" = "pueblo"/la plaza).
+- interact: usar cualquier COSA de la lista (thing:N, object:N…): encender o apagar (la tele, una lámpara), abrir, mirar, tocar, sentarse… "target": id; "verb": turn_on, turn_off, open, close, use o look.
+- drive_to: ir en vehículo a un sitio (sube a tu coche o a uno cercano, conduce y gasta gasolina). "target": un sitio de este lugar.
+- buy: comprar algo de verdad en un local de aquí (con su precio y su horario). "item_name": lo que compra.
+- call: llamar por teléfono a alguien que conoce. "target": npc:id.
+- swim_to: nadar hasta un sitio con agua (la isla, el muelle). "target": el sitio.
+- learn: aprender algo de alguien o practicando ("Teo me enseña a hacer café"). "item_name": la habilidad; "target": npc:id si se lo enseña alguien.
 - land: (solo en el espacio, en la nave) aterrizar. "target": el nombre del planeta o la estación; la nave va sola hasta allí si está lejos.
 - ride: una persona se sube al vehículo del jugador (o al más cercano). "target": su id (npc:...). Úsalo cuando el jugador le pide que suba y ella acepta.
 - wait: esperar sin dormir (hasta una hora o unas horas), mismos campos. Hace pasar el tiempo él solo ("minutes": 0).
@@ -386,6 +394,13 @@ func act(what: String, scene_context: String) -> Dictionary:
 				var cs := check_world_claims(str(s.narration), people, places)
 				s["narration"] = cs.text
 	var steps := plan_steps(data)
+	if steps.is_empty() and data.has("_dropped"):  # usó pasos que no existen: una vez más, con la lista buena
+		messages.append({"role": "assistant", "content": JSON.stringify(data)})
+		messages.append({"role": "user", "content": "Esos pasos no existen (%s). Usa solo estos tipos: %s. Devuelve el JSON completo otra vez." % [", ".join(PackedStringArray(data._dropped)), ", ".join(PackedStringArray(WORLD_STEPS))]})
+		var again2 := await ContentGenerator.request_valid("world_action", messages)
+		if again2.ok:
+			data = again2.data
+			steps = plan_steps(data)
 	var passes_time := steps.any(func(s): return s.get("type", "") in ["sleep", "wait"])  # el paso ya mueve el reloj
 	return {"ok": true, "narration": data.narration, "steps": steps, "error": "",
 		"minutes": 0 if passes_time else clampi(int(data.get("minutes", 5)), 0, MAX_ACTION_MINUTES)}
@@ -432,8 +447,10 @@ func plan_steps(data: Dictionary) -> Array:
 	var finds: Dictionary = WorldDB.get_state("finds", {})
 	var crafting: bool = raw.any(func(a): return a.get("type", "") in ["remove_item", "affect_nearby"])
 	var out := []
+	var dropped := []
 	for a in raw:
 		if not (a.get("type", "") in WORLD_STEPS):
+			dropped.append(str(a.get("type", "?")))
 			continue
 		if a.type == "give_item" and not crafting:
 			if int(finds.get(place, 0)) >= MAX_FINDS_PER_PLACE:
@@ -444,6 +461,9 @@ func plan_steps(data: Dictionary) -> Array:
 	# Modelos que solo dan "actions": el gesto va primero, los efectos después
 	if data.get("steps", []).is_empty():
 		out.sort_custom(func(x, y): return x.type == "play" and y.type != "play")
+	if not dropped.is_empty():
+		print_debug("[F] pasos desconocidos quitados: %s" % [dropped])
+		data["_dropped"] = dropped
 	return out
 
 

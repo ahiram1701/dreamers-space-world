@@ -3,6 +3,49 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.10.0] - 2026-11-08
+
+### Corregido
+- **El Despertar a las 3:33 no empezaba.** La zona del faro no detectaba al jugador. Ahora basta con llegar a la puerta del faro (allí siempre son las 3:33), y el objetivo lo dice así.
+- **Los vehículos ya no vuelcan tan fácil:**
+  - Agarre de neumático realista: derrapan antes de volcar, como un coche de verdad.
+  - Centro de masa bajo los ejes, ruedas más separadas y una barra estabilizadora.
+  - La dirección no deja pedir más curva de la que se puede tomar a esa velocidad.
+  - Un coche volcado se endereza solo, también sin nadie dentro.
+- **La bici** ya no va a paso de caminante: llega a 5 m/s en unos 4 s y circula a 7–8 m/s.
+- **Dormir:** te acuestas a lo largo de la cama, con la cabeza en la almohada y sobre el colchón. Antes te tumbabas de lado o al revés, flotando, y los PNJ se hundían.
+- **La escalera de caracol del faro** se sube andando, sin trabarse: una rampa por debajo de los peldaños y barandilla para no caerse.
+- **El balcón:** sales al balcón de verdad del edificio, que ahora se puede pisar. Antes quedabas en el aire, delante.
+- **Los meteoritos ya no se atraviesan:** el choque se calcula contra la forma real de cada roca del cinturón, también a velocidad de crucero.
+- **La tecla F con la IA real:** los pasos «viajar», «subir al vehículo» y «aterrizar» se descartaban sin aviso; ahora se usan.
+
+### Cambiado
+- **Interiores a la medida del exterior:**
+  - El tamaño de dentro sale del edificio de fuera.
+  - Los edificios redondos son redondos por dentro: el faro es una sala circular con la escalera en el centro y la vida de Marina alrededor (la torre es más ancha), y las chozas y agujas de otros planetas tienen su propia sala redonda.
+- **Examinar no molesta:** el aviso «Examinar» solo aparece cuando te paras a mirar algo de cerca; andando ves puertas, personas y muebles.
+- **Más cosas para examinar y usar:** casi todos los muebles de dentro, y lámparas y una tele que se encienden y se apagan (se queda como la dejes).
+- **La cabina de la nave:**
+  - Asiento, palanca de gases y paneles laterales con pilotos que se iluminan (asistencia, piloto automático, proximidad, casco).
+  - Un radar con lo que hay cerca y luz roja de alarma.
+  - Sacudidas en los golpes. El casco exterior ya no tapa la vista.
+- **El viaje por el espacio:**
+  - Mapa del sistema con <kbd>M</kbd>: marcas el destino con un clic y «Ir allí».
+  - Tiempo de llegada con el piloto automático.
+  - Entrada en la atmósfera, con la nave descendiendo, el resplandor del calor y las sacudidas.
+  - Anillos de aproximación para acoplarse a la estación.
+
+### Añadido
+- **La tecla F hace mucho más:**
+  - Usar cualquier cosa que tengas cerca: encender la tele, apagar una lámpara, abrir, sentarte.
+  - Ir en coche a un sitio (y gastar gasolina).
+  - Comprar de verdad en la tienda, con su precio y su horario.
+  - Llamar por teléfono a alguien que conoces.
+  - Nadar hasta un sitio.
+  - Aprender algo, que queda en tu perfil y la IA lo tiene en cuenta.
+  - Si la IA usa un paso que no existe, se le pide otra vez con la lista buena.
+- **Vida en el pueblo:** perros y gatos que deambulan, tendederos con ropa detrás de las casas y charcos en la calle cuando llueve.
+
 ## [0.9.0] - 2026-11-07
 
 ### Añadido

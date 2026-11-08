@@ -22,6 +22,7 @@ var player: Player
 var target: Node = null
 
 var _candidates: Array[Node] = []
+var _still_t := 0.0   # cuánto llevas casi quieto (los avisos de «Examinar» solo salen así)
 var _prompt: Label
 var _layer: CanvasLayer
 
@@ -58,6 +59,7 @@ func candidates() -> Array[Node]:
 
 
 func _physics_process(_delta: float) -> void:
+	_still_t = _still_t + _delta if Vector2(player.velocity.x, player.velocity.z).length() < 0.4 else 0.0
 	var best := pick()
 	if best != target:
 		target = best
@@ -66,6 +68,7 @@ func _physics_process(_delta: float) -> void:
 	_prompt.visible = show
 	if show:
 		_prompt.text = "[E]  " + str(target.call("interaction_prompt"))
+		_prompt.modulate.a = 0.7 if _is_quiet(target) else 1.0  # examinar: más tenue
 
 
 ## El mejor candidato ahora mismo (o null). Público para los tests.
@@ -86,6 +89,8 @@ func pick() -> Node:
 		var angle := 0.0 if d < 0.01 else forward.angle_to(flat / d)
 		if angle > MAX_ANGLE and d > CLOSE:
 			continue
+		if _is_quiet(c) and (_still_t < 0.5 or d > 2.0 or angle > deg_to_rad(22.0)):
+			continue  # examinar: solo si te paras a mirar algo de cerca (andando no molesta)
 		if not _visible(head, p, c):
 			continue
 		var score := d + angle * 1.6 - (PERSON_BONUS if c is TownNPC else 0.0) - float(c.get("pick_priority") if c.get("pick_priority") != null else 0.0)
@@ -93,6 +98,10 @@ func pick() -> Node:
 			best_score = score
 			best = c
 	return best
+
+
+static func _is_quiet(c: Node) -> bool:
+	return c != null and str(c.name).begins_with("Examinar")
 
 
 ## Nada sólido entre la cabeza del jugador y el objetivo (salvo el propio objetivo).

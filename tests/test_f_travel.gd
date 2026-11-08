@@ -102,10 +102,12 @@ func _run() -> void:
 	_expect(arrival.get("to", "") == "home" and not arrival.get("ship", {}).is_empty(), "con tu nave, que aparcarás en la plataforma")
 	await process_frame
 	await process_frame
-	if is_instance_valid(gen):
+	# (la escena actual la descarga el árbol: liberarla a mano hacía que al cerrar se liberase dos veces)
+	for i in 30:
+		await process_frame
+	unload_current_scene()
+	if is_instance_valid(gen) and gen.is_inside_tree():
 		gen.queue_free()
-	if current_scene and is_instance_valid(current_scene) and current_scene != gen:
-		current_scene.queue_free()
 	await process_frame
 	db.delete_world(world_id)
 	db.set_last_world_id(previous_last)

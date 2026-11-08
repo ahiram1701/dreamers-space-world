@@ -25,7 +25,7 @@ signal knocked(door_id: String)
 signal force_requested(door_id: String)
 
 const ORIGIN := Vector3(0, -400, 0)
-const BED_TOP := 0.1   # a qué altura queda alguien tumbado sobre la cama   # bajo el mundo: nada de fuera se ve desde dentro
+const BED_TOP := 0.28  # a qué altura quedan los pies de alguien tumbado (el cuerpo, sobre el colchón)   # bajo el mundo: nada de fuera se ve desde dentro
 
 var player: Player
 var _doors := {}          # id -> { pos, yaw, kind, seed, label, node }
@@ -284,7 +284,12 @@ func enter(id: String, through: bool = false) -> void:
 	_clear_interior()
 	entering.emit(_doors[id].kind, id)
 	var door: Dictionary = _doors[id]
-	_interior = InteriorBuilder.build(self, door.kind, door.seed, ORIGIN, door.get("opts", {}))
+	var opts: Dictionary = door.get("opts", {}).duplicate()
+	if door.has("building"):  # por dentro, del tamaño (y la forma) que tiene por fuera
+		var bs: Vector3 = door.building.size
+		opts["footprint"] = Vector2(bs.x, bs.z)
+		opts["height"] = bs.y
+	_interior = InteriorBuilder.build(self, door.kind, door.seed, ORIGIN, opts)
 	_current = id
 	var exit_it := Interactable.create(_interior.root, _interior.exit - ORIGIN + Vector3(0, 1.0, 0), 1.9, "Salir", func(p): leave())
 	exit_it.name = "Salida"
@@ -300,6 +305,8 @@ func enter(id: String, through: bool = false) -> void:
 		Interactable.create(node, Vector3(0, 1.0, 0), 1.4, u.get("prompt", "Usar"), func(p): use_fixture(what, node), node)
 	player.velocity = Vector3.ZERO
 	player.global_position = _interior.spawn
+	if not is_free(self, _interior.spawn, [player], 0.3):  # (nunca dentro de un mueble)
+		player.global_position = free_spot_near(self, _interior.spawn, Vector3(0, 0, -1), [player]) + Vector3(0, 0.1, 0)
 	player.look_direction(Vector3(0, 0, -1))  # mirando hacia dentro de la habitación
 	player.clear_look()
 	entered.emit(door.kind, id)
@@ -343,29 +350,42 @@ func _go_balcony(id: String) -> void:
 	var front := Vector3(sin(float(b.yaw)), 0, cos(float(b.yaw)))
 	var base: Vector3 = b.base
 	var spot := base + front * (size.z / 2.0 + 0.55) + Vector3(0, size.y / floors + 0.05, 0)
+	var opts: Dictionary = _doors[id].get("opts", {})
+	var bsize := Vector2(2.8, 1.3)
+	if opts.has("balcony_spot"):  # el balcón del propio modelo
+		spot = opts.balcony_spot
+		bsize = opts.get("balcony_size", bsize)
 	if not _balconies.has(id):
 		var slab := StaticBody3D.new()
 		slab.collision_layer = Layers.WORLD
 		var cs := CollisionShape3D.new()
 		var box := BoxShape3D.new()
-		box.size = Vector3(2.8, 0.15, 1.3)
+		box.size = Vector3(bsize.x, 0.15, bsize.y)
 		cs.shape = box
 		slab.add_child(cs)
+		var floor_mesh := MeshInstance3D.new()  # se ve (antes no: parecía que flotabas)
+		var fm := BoxMesh.new()
+		fm.size = box.size
+		floor_mesh.mesh = fm
+		var wood := StandardMaterial3D.new()
+		wood.albedo_color = Color("#7a5a3c")
+		floor_mesh.material_override = wood
+		slab.add_child(floor_mesh)
 		get_parent().add_child(slab)
 		slab.global_position = spot - Vector3(0, 0.08, 0)
 		slab.rotation.y = float(b.yaw)
 		for sx in [-1.0, 1.0]:  # barandilla a los lados y delante (para no caerse al salir)
 			var rail := CollisionShape3D.new()
 			var rb := BoxShape3D.new()
-			rb.size = Vector3(0.08, 1.0, 1.3)
+			rb.size = Vector3(0.08, 1.0, bsize.y)
 			rail.shape = rb
-			rail.position = Vector3(sx * 1.4, 0.55, 0)
+			rail.position = Vector3(sx * bsize.x / 2.0, 0.55, 0)
 			slab.add_child(rail)
 		var fr := CollisionShape3D.new()
 		var fb := BoxShape3D.new()
-		fb.size = Vector3(2.8, 1.0, 0.08)
+		fb.size = Vector3(bsize.x, 1.0, 0.08)
 		fr.shape = fb
-		fr.position = Vector3(0, 0.55, 0.62)
+		fr.position = Vector3(0, 0.55, bsize.y / 2.0 - 0.04)
 		slab.add_child(fr)
 		Interactable.create(get_parent(), spot - front * 0.3 + Vector3(0, 1.0, 0), 1.2, "Entrar", func(_p): enter_at(id, "balcony_in"))
 		Decor.landmark(get_parent(), spot, "el balcón de %s" % _doors[id].label, "balcony")
@@ -556,7 +576,11 @@ func rest(minutes: float, bed: Node3D = null, sleeping: bool = true) -> void:
 	_busy = true
 	if bed:
 		_ignore_collision(bed)
-		player.global_position = bed.global_position + Vector3(0, 0.45, 0)
+		# Tumbado a lo largo, con la cabeza en la almohada (antes: de lado o al revés, y flotando)
+		var along := bed.global_basis.z.normalized()
+		player.global_position = bed.global_position + along * 0.85 + Vector3(0, BED_TOP, 0)
+		player.velocity = Vector3.ZERO
+		player.look_direction(along)
 	if sleeping:
 		player.hold_position = true
 		player.play_gesture("sleep")

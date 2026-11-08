@@ -499,6 +499,7 @@ func _add_doors() -> void:
 			_interiors.add_door("edificio_%d" % i, pos, b.rotation.y, kind, int(_def.get("seed", 1)) * 100 + i, label)
 			_interiors.set_building("edificio_%d" % i, b.global_position, size, b.rotation.y)
 			_interiors.set_door_option("edificio_%d" % i, "floors", floors)
+			_interiors.set_door_option("edificio_%d" % i, "shape", "round" if style in ["hut", "spire", "dome"] else "box")
 			var sign := Label3D.new()
 			sign.text = label.split(" ", false, 1)[-1].capitalize()
 			sign.font_size = 56
@@ -514,6 +515,7 @@ func _add_doors() -> void:
 			{"dome": "una cúpula", "scifi": "un edificio", "house": "una casa"}[inner])
 		_interiors.set_building("edificio_%d" % i, b.global_position, size, b.rotation.y)
 		_interiors.set_door_option("edificio_%d" % i, "floors", floors)
+		_interiors.set_door_option("edificio_%d" % i, "shape", "round" if style in ["hut", "spire", "dome"] else "box")
 
 
 func _era_label(era: String) -> String:

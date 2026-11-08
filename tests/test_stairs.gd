@@ -34,9 +34,9 @@ func _run() -> void:
 	var space := world.get_world_3d().direct_space_state
 	# Cada peldaño de la escalera de caracol: cabe una persona de pie encima (sin techo)
 	var blocked := []
-	for i in 12:
-		var a := TAU * i / 12.0
-		var top := origin + Vector3(cos(a) * 1.6, 0.25 + i * 0.25 + 0.04, sin(a) * 1.6) + Vector3(-2.2, 0, -2.4)
+	for i in 12:  # (v0.10: escalera centrada, sobre una rampa helicoidal)
+		var a := 1.92 + TAU * (i + 0.5) / 12.0
+		var top := origin + Vector3(cos(a) * 0.775, (i + 1) * 0.25 + 0.12, sin(a) * 0.775)
 		if not _clear(space, top):
 			blocked.append(i)
 	_expect(blocked.is_empty(), "en el faro, de pie en cada peldaño no te das con el techo %s" % [blocked])

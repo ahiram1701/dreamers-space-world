@@ -59,6 +59,14 @@ var _prev_cam: Camera3D
 var _cam_pitch := 0.0
 var _gauges: Label3D
 var _stick: Node3D
+var _throttle: Node3D
+var _buttons := {}            # nombre -> material del piloto (asistencia, piloto automático, proximidad)
+var _radar: Node3D
+var _radar_dots: Array = []
+var _radar_t := 0.0
+var _cabin_light: OmniLight3D
+var _shake := 0.0
+var _prev_vel := Vector3.ZERO
 
 
 static func build(s: Node, e: Dictionary, space: bool = false) -> Node3D:
@@ -408,7 +416,8 @@ func _fly_space(c: Dictionary, delta: float, has_fuel: bool) -> void:
 	if boost and velocity.length() > normal_top:
 		var ahead := velocity.normalized() * clampf(velocity.length() * 2.0, 300.0, 4000.0)
 		var q := PhysicsRayQueryParameters3D.create(global_position, global_position + ahead, collision_mask, [get_rid()])
-		if not get_world_3d().direct_space_state.intersect_ray(q).is_empty():
+		var rocks: bool = scene != null and scene.has_method("rock_on_segment") and scene.call("rock_on_segment", global_position, global_position + ahead, length)
+		if rocks or not get_world_3d().direct_space_state.intersect_ray(q).is_empty():
 			boost = false
 			proximity = true
 	var top := CRUISE if boost else normal_top
@@ -543,11 +552,15 @@ func set_cockpit(on: bool) -> void:
 			_build_cockpit()
 		_prev_cam = get_viewport().get_camera_3d()
 		_cockpit_root.visible = true
+		if _body:
+			_body.visible = false  # (el casco de fuera tapaba la vista desde dentro)
 		_cockpit_cam.fov = Settings.fov
 		_cockpit_cam.make_current()
 	else:
 		if _cockpit_root:
 			_cockpit_root.visible = false
+		if _body:
+			_body.visible = true
 		if _prev_cam and is_instance_valid(_prev_cam):
 			_prev_cam.make_current()
 		_prev_cam = null
@@ -592,6 +605,79 @@ func _build_cockpit() -> void:
 	stick_mesh.position.y = 0.16
 	stick_mesh.material_override = frame_m
 	_stick.add_child(stick_mesh)
+	# Asiento: respaldo, cabecero y reposabrazos
+	_cockpit_box(Vector3(0.62, 0.9, 0.12), e + Vector3(0, -0.25, -0.42), Vector3(0.2, 0, 0), dark)
+	_cockpit_box(Vector3(0.36, 0.26, 0.1), e + Vector3(0, 0.33, -0.45), Vector3(0.2, 0, 0), dark)
+	_cockpit_box(Vector3(0.62, 0.12, 0.6), e + Vector3(0, -0.74, -0.15), Vector3.ZERO, dark)
+	for sx in [-1.0, 1.0]:
+		_cockpit_box(Vector3(0.1, 0.1, 0.55), e + Vector3(sx * 0.36, -0.55, -0.1), Vector3.ZERO, frame_m)
+	# Paneles laterales con botones que se iluminan
+	for sx in [-1.0, 1.0]:
+		_cockpit_box(Vector3(0.05, 0.4, 0.7), e + Vector3(sx * 0.72, -0.45, 0.35), Vector3(0, 0, -sx * 0.5), dark)
+	var labels := [["asistencia", Color("#4fe08a"), -1.0, 0.0], ["piloto", Color("#4fc3f7"), -1.0, 0.12], ["proximidad", Color("#ff4a4a"), 1.0, 0.0], ["casco", Color("#ffb347"), 1.0, 0.12]]
+	for lb in labels:
+		var bm := StandardMaterial3D.new()
+		bm.albedo_color = (lb[1] as Color).darkened(0.6)
+		bm.emission_enabled = true
+		bm.emission = lb[1]
+		bm.emission_energy_multiplier = 0.0
+		var btn := MeshInstance3D.new()
+		var bx := BoxMesh.new()
+		bx.size = Vector3(0.05, 0.05, 0.05)
+		btn.mesh = bx
+		btn.material_override = bm
+		btn.position = e + Vector3(float(lb[2]) * 0.69, -0.36 - float(lb[3]), 0.3)
+		_cockpit_root.add_child(btn)
+		_buttons[lb[0]] = bm
+	# Palanca de gases, a la izquierda
+	_throttle = Node3D.new()
+	_throttle.position = e + Vector3(-0.36, -0.55, 0.05)
+	_cockpit_root.add_child(_throttle)
+	var th := MeshInstance3D.new()
+	var thm := BoxMesh.new()
+	thm.size = Vector3(0.05, 0.22, 0.05)
+	th.mesh = thm
+	th.position.y = 0.11
+	th.material_override = frame_m
+	_throttle.add_child(th)
+	# Radar: un disco con los cuerpos cercanos como puntos (planetas, rocas, naves)
+	_radar = Node3D.new()
+	_radar.position = e + Vector3(0.42, -0.46, 0.7)
+	_radar.rotation = Vector3(-0.6, 0, 0)
+	_cockpit_root.add_child(_radar)
+	var disc := MeshInstance3D.new()
+	var dm := CylinderMesh.new()
+	dm.top_radius = 0.13
+	dm.bottom_radius = 0.13
+	dm.height = 0.01
+	disc.mesh = dm
+	var rmat := StandardMaterial3D.new()
+	rmat.albedo_color = Color("#06131c")
+	rmat.emission_enabled = true
+	rmat.emission = Color("#0d3a2a")
+	rmat.emission_energy_multiplier = 0.8
+	disc.material_override = rmat
+	_radar.add_child(disc)
+	for k in 12:
+		var dot := MeshInstance3D.new()
+		var sm := SphereMesh.new()
+		sm.radius = 0.008
+		sm.height = 0.016
+		dot.mesh = sm
+		var dmat := StandardMaterial3D.new()
+		dmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		dmat.albedo_color = Color("#7cffb0")
+		dot.material_override = dmat
+		dot.visible = false
+		_radar.add_child(dot)
+		_radar_dots.append(dot)
+	# Luz de la cabina (roja si hay peligro)
+	_cabin_light = OmniLight3D.new()
+	_cabin_light.light_color = Color("#9fd0ff")
+	_cabin_light.light_energy = 0.5
+	_cabin_light.omni_range = 2.5
+	_cabin_light.position = e + Vector3(0, 0.35, 0.2)
+	_cockpit_root.add_child(_cabin_light)
 	# Instrumentos (texto en la pantalla)
 	_gauges = Label3D.new()
 	_gauges.font_size = 28
@@ -633,10 +719,50 @@ func _cockpit_box(size: Vector3, at: Vector3, rot: Vector3, mat: Material) -> vo
 	_cockpit_root.add_child(mi)
 
 
+## Un golpe sacude la cabina.
+func shake_cockpit(strength: float) -> void:
+	_shake = maxf(_shake, clampf(strength / 40.0, 0.05, 0.25))
+
+
 func _update_cockpit(delta: float, c: Dictionary) -> void:
 	if _cockpit_cam == null:
 		return
 	_cockpit_cam.rotation.x = lerpf(_cockpit_cam.rotation.x, _cam_pitch, 1.0 - exp(-10.0 * delta))
+	# Inercia: al acelerar la cabeza va hacia atrás; los golpes la sacuden
+	var acc := (global_basis.inverse() * (velocity - _prev_vel)) / maxf(delta, 0.001)
+	_prev_vel = velocity
+	_shake = maxf(_shake - delta * 0.6, 0.0)
+	_cockpit_cam.position = _cockpit_cam.position.lerp(_eye + Vector3(0, 0, -clampf(acc.z * 0.002, -0.06, 0.06)) + Vector3(randf_range(-_shake, _shake), randf_range(-_shake, _shake), 0) * 0.3, clampf(10.0 * delta, 0.0, 1.0))
+	if _throttle:
+		_throttle.rotation.x = lerpf(_throttle.rotation.x, float(c.thrust) * 0.5 + (0.3 if c.boost else 0.0), 8.0 * delta)
+	if not _buttons.is_empty():
+		var blink := 0.5 + 0.5 * sin(Time.get_ticks_msec() / 150.0)
+		_buttons.asistencia.emission_energy_multiplier = 2.0 if assist else 0.0
+		_buttons.piloto.emission_energy_multiplier = 2.0 if autopilot else 0.0
+		_buttons.proximidad.emission_energy_multiplier = 3.0 * blink if proximity else 0.0
+		_buttons.casco.emission_energy_multiplier = 3.0 * blink if hull < 30.0 else 0.0
+	if _cabin_light:
+		var alarm := proximity or hull < 30.0
+		_cabin_light.light_color = Color("#ff3b30") if alarm else Color("#9fd0ff")
+		_cabin_light.light_energy = (0.4 + 0.5 * (0.5 + 0.5 * sin(Time.get_ticks_msec() / 200.0))) if alarm else 0.5
+	_radar_t -= delta
+	if _radar and _radar_t <= 0.0:
+		_radar_t = 0.2
+		var contacts: Array = scene.call("radar_contacts", global_position) if scene and scene.has_method("radar_contacts") else []
+		var inv := global_basis.inverse()
+		for k in _radar_dots.size():
+			var dot: MeshInstance3D = _radar_dots[k]
+			if k >= contacts.size():
+				dot.visible = false
+				continue
+			var rel: Vector3 = inv * ((contacts[k][0] as Vector3) - global_position)
+			var flat := Vector2(rel.x, rel.z)
+			var dist := flat.length()
+			var r := clampf(log(1.0 + dist / 200.0) / log(1.0 + 60000.0 / 200.0), 0.0, 1.0) * 0.12
+			var p2 := flat.normalized() * r if dist > 0.01 else Vector2.ZERO
+			dot.position = Vector3(-p2.x, 0.012 + clampf(rel.y / 20000.0, -0.02, 0.02), -p2.y)
+			(dot.material_override as StandardMaterial3D).albedo_color = contacts[k][1]
+			dot.visible = true
 	if _stick:
 		_stick.rotation.x = lerpf(_stick.rotation.x, float(c.thrust) * 0.35, 8.0 * delta)
 		_stick.rotation.z = lerpf(_stick.rotation.z, -float(c.side) * 0.35, 8.0 * delta)

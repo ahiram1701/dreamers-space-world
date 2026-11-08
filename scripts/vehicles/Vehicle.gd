@@ -37,7 +37,11 @@ const GEAR_TORQUE := [1.35, 1.2, 1.05, 0.9, 0.75]
 const DRIVE := {"suv": "awd", "suv_luxury": "awd", "pickup": "awd", "flatbed": "awd", "sports": "rwd", "race": "rwd",
 	"police": "rwd", "delivery": "rwd", "ambulance": "rwd", "firetruck": "rwd", "garbage": "rwd", "tractor": "rwd"}
 ## Agarre de los neumáticos (VehicleWheel3D.friction_slip): antes 2.9, patinaba como en hielo.
-const GRIP := {"sports": 8.0, "race": 9.0, "police": 7.5, "delivery": 5.5, "ambulance": 5.8, "firetruck": 5.5, "garbage": 5.5, "tractor": 6.0}
+## (v0.10: más bajo. Con 6–9 los neumáticos agarraban más de lo que aguanta el coche antes de
+## volcar, así que en una curva volcaba en vez de derrapar, como pasa con un coche de verdad.)
+const GRIP := {"sports": 2.0, "race": 2.2, "police": 1.8, "delivery": 1.3, "ambulance": 1.35, "firetruck": 1.3, "garbage": 1.3, "tractor": 1.5}
+const GRIP_CAR := 1.6
+const LATERAL_G := 9.0     # m/s²: lo que la dirección deja pedir en curva (≈0.9 g)
 
 var entry_id := ""
 var display_name := "el vehículo"
@@ -111,7 +115,7 @@ static func build(s: Node, e: Dictionary) -> Node3D:
 	if v.pedals and not "engine" in types:
 		v.power = 1.2
 		v.uses_fuel = false
-	v.max_speed = 7.0 if v.pedals and not "engine" in types else 9.0 + v.power * 2.6
+	v.max_speed = 8.0 if v.pedals and not "engine" in types else 9.0 + v.power * 2.6
 	v.fuel = clampf(float(e.get("fuel", 1.0)), 0.0, 1.0)
 	v.health = clampf(float(e.get("health", 100.0)), 0.0, 100.0)
 	s.add_child(v)
@@ -164,16 +168,17 @@ func _build_kit(model_path: String, kit: Dictionary, user_scale: float) -> bool:
 			w.suspension_travel = 0.2
 			w.suspension_stiffness = 38.0 if not big else 55.0
 			w.suspension_max_force = 60000.0
-			w.damping_compression = 2.4
-			w.damping_relaxation = 3.2
+			w.damping_compression = 0.5
+			w.damping_relaxation = 0.7
 			var drive: String = DRIVE.get(factory_kind, "fwd")
-			w.wheel_friction_slip = float(GRIP.get(factory_kind, 6.8))
+			w.wheel_friction_slip = float(GRIP.get(factory_kind, GRIP_CAR))
 			w.wheel_roll_influence = 0.05
 			w.use_as_traction = drive == "awd" or (nm.contains("back") if drive == "rwd" else nm.contains("front"))
 			w.use_as_steering = nm.contains("front")
 			w.set_meta("rear", nm.contains("back"))
 			w.set_meta("grip", w.wheel_friction_slip)
-			w.position = Vector3(center.x * bs.x, center.y * ws + 0.12, center.z * bs.z)
+			# (más separadas: la carrocería se estiró más que el eje y la vía quedaba estrechísima)
+			w.position = Vector3(center.x * bs.x * 1.25, center.y * ws + 0.12, center.z * bs.z)
 			add_child(w)
 			mi.get_parent().remove_child(mi)
 			mi.transform = Transform3D(Basis.from_scale(Vector3.ONE * ws) * t.basis, (t.origin - center) * ws)
@@ -198,7 +203,7 @@ func _build_kit(model_path: String, kit: Dictionary, user_scale: float) -> bool:
 	_box(Vector3((hi.x - lo.x) * 0.84, hi.y - belt, (hi.z - lo.z) * (0.85 if big else 0.6)), Vector3((hi.x + lo.x) / 2.0, (hi.y + belt) / 2.0, (hi.z + lo.z) / 2.0 - (hi.z - lo.z) * 0.05))
 	mass = float(kit.get("mass", 1400.0))
 	center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
-	center_of_mass = Vector3(0, bottom + 0.02, (hi.z + lo.z) / 2.0)
+	center_of_mass = Vector3(0, -0.1, (hi.z + lo.z) / 2.0)  # bajo los ejes: no vuelca en las curvas
 	angular_damp = 0.9   # sin trompos ni bamboleos de más
 	# Asientos: conductor a la izquierda (+x mirando hacia delante), copiloto y dos detrás
 	var sx := (hi.x - lo.x) * 0.2
@@ -252,10 +257,10 @@ func _build_parts(e: Dictionary, wheels: Array) -> void:
 			w.suspension_travel = 0.18
 			w.suspension_stiffness = 45.0 if wheels.size() > 2 else 60.0
 			w.suspension_max_force = 9000.0
-			w.damping_compression = 2.2
-			w.damping_relaxation = 2.8
+			w.damping_compression = 0.5
+			w.damping_relaxation = 0.7
 			var two := wheels.size() <= 2
-			w.wheel_friction_slip = 6.5 if two else 5.5
+			w.wheel_friction_slip = 2.4 if two else 1.8
 			w.set_meta("grip", w.wheel_friction_slip)
 			w.set_meta("rear", at.z <= 0.0)
 			w.wheel_roll_influence = 0.05 if two else 0.12
@@ -306,7 +311,7 @@ func _build_parts(e: Dictionary, wheels: Array) -> void:
 	if wheels.size() <= 2:  # con la persona encima pesa más (y no rebota como una pluma)
 		mass = maxf(mass, 80.0 if pedals else 180.0)
 	center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
-	center_of_mass = Vector3((hi.x + lo.x) / 2.0, bottom + 0.1, (hi.z + lo.z) / 2.0)
+	center_of_mass = Vector3((hi.x + lo.x) / 2.0, minf(bottom * 0.3, 0.1), (hi.z + lo.z) / 2.0)
 	if _seat == Vector3(0, 1.0, 0):
 		_seat = Vector3(0, hi.y * 0.75, (lo.z + hi.z) / 2.0 - (hi.z - lo.z) * 0.1)
 	_seats.push_front(_seat)
@@ -341,6 +346,9 @@ func _finish(wheel_count: int) -> void:
 	if wheel_count <= 2:  # bici o moto: un par la mantiene derecha (y se inclina, a la vista, al girar)
 		_two_wheel = true
 		angular_damp = 1.8
+		if pedals and not uses_fuel:  # (el freno de aire de Godot se comía casi todo el pedaleo)
+			linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
+			linear_damp = 0.02
 	_use = Interactable.create(self, Vector3(0, 1.0, 0), maxf(length * 0.6, 1.8), _prompt(), _on_use, self)
 	contact_monitor = true
 	max_contacts_reported = 6
@@ -534,21 +542,16 @@ func _physics_process(delta: float) -> void:
 			freeze = hold
 	if _two_wheel:
 		_balance(delta)
+	else:
+		_stabilize()
+	_check_flip(delta)
+	if pedals and not uses_fuel:  # bici: sin el freno del aire de Godot (iba a 1.85 m/s), con arrastre de verdad
+		apply_central_force(-linear_velocity * linear_velocity.length() * 0.25)
 	if _rider == null:
 		engine_force = 0.0
 		brake = 12.0
 		_prev_vel = linear_velocity
 		return
-	# Volcado: tras unos segundos, se endereza (empujando entre todos, como haría cualquiera)
-	if upright < 0.3 and linear_velocity.length() < 1.5:
-		_flip_t += delta
-		if _flip_t > 3.0:
-			_flip_t = 0.0
-			global_transform = Transform3D(Basis(Vector3.UP, global_rotation.y), global_position + Vector3(0, 1.0, 0))
-			linear_velocity = Vector3.ZERO
-			angular_velocity = Vector3.ZERO
-	else:
-		_flip_t = 0.0
 	var input := Controls.drive_vector() if _rider.controls_enabled else Vector2.ZERO
 	var throttle := input.y
 	var has_fuel := (fuel > 0.0 or not uses_fuel) and health > 0.0
@@ -563,14 +566,16 @@ func _physics_process(delta: float) -> void:
 		gear = GEARS.size()
 	var lo_speed: float = 0.0 if gear == 1 else max_speed * float(GEARS[gear - 2])
 	var hi_speed: float = max_speed * float(GEARS[gear - 1])
-	var force := power * (110.0 if pedals and not uses_fuel else 260.0) * mass / 1000.0 * 1.4 * (float(GEAR_TORQUE[gear - 1]) * 0.78 if not pedals else 1.0)
+	var force := power * 260.0 * mass / 1000.0 * 1.4 * float(GEAR_TORQUE[gear - 1]) * 0.78
+	if pedals and not uses_fuel:  # piernas: mucha fuerza al arrancar, menos cuanto más rápido
+		force = minf(180.0, 350.0 / maxf(av, 0.5)) * mass / 80.0
 	var foot_brake := 0.0
 	var engine_brake := 0.0
 	if throttle > 0.0 and v < -0.5 or throttle < 0.0 and v > 0.5:
 		foot_brake = 40.0 * absf(throttle) * mass / 1300.0  # frenar antes de cambiar de sentido
 		engine_force = 0.0
 	else:
-		engine_brake = 0.0 if throttle != 0.0 else 2.2 * mass / 1300.0  # el motor retiene (solo las motrices)
+		engine_brake = 0.0 if throttle != 0.0 or pedals else 2.2 * mass / 1300.0  # el motor retiene (solo las motrices)
 		# El par cae suave al acercarse a la velocidad máxima (antes, un corte en seco)
 		var taper := clampf((max_speed - av) / maxf(max_speed * 0.18, 0.5), 0.0, 1.0)
 		engine_force = throttle * force * (1.0 if throttle > 0.0 else 0.5) * (taper if throttle > 0.0 else 1.0) if has_fuel else 0.0
@@ -584,8 +589,10 @@ func _physics_process(delta: float) -> void:
 			engine_force *= lerpf(0.35, 1.0, grip / 0.6)
 	# Dirección: menos ángulo cuanto más rápido, y vuelve sola al centro al soltar
 	var steer_max := lerpf(0.4, 0.08, clampf(av / max_speed, 0.0, 1.0)) if _two_wheel else lerpf(0.55, 0.18, clampf(av / max_speed, 0.0, 1.0))
+	# Nunca más curva de la que se puede tomar a esta velocidad (≈0.9 g): no se vuelca girando
+	steer_max = minf(steer_max, LATERAL_G * maxf(length * 0.6, 1.0) / maxf(av * av, 1.0))
 	var want := -input.x * steer_max
-	steering = move_toward(steering, want, (2.4 if absf(want) > absf(steering) else 4.5) * delta)
+	steering = move_toward(steering, want, (1.6 if absf(want) > absf(steering) else 4.0) * delta)
 	# Frenos por rueda: pie, motor (las motrices) y freno de mano (las de atrás, que patinan)
 	for w in find_children("Wheel_*", "VehicleWheel3D", false, false):
 		var wh := w as VehicleWheel3D
@@ -761,6 +768,36 @@ func _debris(at: Vector3) -> void:
 		rb.linear_velocity = _prev_vel * 0.4 + Vector3(randf_range(-2, 2), 3.0, randf_range(-2, 2))
 		rb.angular_velocity = Vector3(randf_range(-6, 6), randf_range(-6, 6), randf_range(-6, 6))
 		get_tree().create_timer(90.0).timeout.connect(func(): if is_instance_valid(rb): rb.queue_free())
+
+
+## Coches: una barra estabilizadora (un par suave contra el balanceo) para que no se tumben.
+func _stabilize() -> void:
+	var fwd := global_basis.z.normalized()
+	var roll_err := global_basis.y.cross(Vector3.UP).dot(fwd)
+	var roll_rate := angular_velocity.dot(fwd)
+	apply_torque(fwd * (roll_err * mass * 2.0 - roll_rate * mass * 0.4))
+
+
+## Volcado: tras unos segundos se endereza (con o sin nadie dentro), mirando hacia donde apuntaba
+## y en un sitio libre.
+func _check_flip(delta: float) -> void:
+	var upright := global_basis.y.dot(Vector3.UP)
+	if upright < 0.3 and linear_velocity.length() < 1.5:
+		_flip_t += delta
+		if _flip_t > 3.0:
+			_flip_t = 0.0
+			var f := global_basis.z
+			f.y = 0.0
+			if f.length() < 0.1:
+				f = -global_basis.y
+				f.y = 0.0
+			var yaw := atan2(f.x, f.z) if f.length() > 0.01 else 0.0
+			var at := InteriorManager.free_spot_near(self, global_position, Vector3.ZERO, [self]) if is_inside_tree() else global_position
+			global_transform = Transform3D(Basis(Vector3.UP, yaw), at + Vector3(0, 0.8, 0))
+			linear_velocity = Vector3.ZERO
+			angular_velocity = Vector3.ZERO
+	else:
+		_flip_t = 0.0
 
 
 ## Bici y moto: un par las mantiene derechas (no simulamos el equilibrio del ciclista) y, a la

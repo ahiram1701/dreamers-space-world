@@ -113,6 +113,10 @@ func _process(_delta: float) -> void:
 	if _awakening != null:
 		_beacon_glass.emission_energy_multiplier = _beacon.light_energy * 0.4
 		return  # la secuencia controla el faro
+	# Si ya estabas junto al faro cuando quedó todo listo (tu última charla fue allí), empieza igual
+	if not GameState.is_awakened() and not _interiors.is_inside() and Engine.get_process_frames() % 30 == 0 			and Vector2(_player.global_position.x - LIGHTHOUSE_POS.x, _player.global_position.z - LIGHTHOUSE_POS.z).length() < 5.5 			and _progress().get("awakening_ready", false):
+		_on_lighthouse_entered(_player)
+		return
 	# El faro "respira"; cuando el Despertar está cerca, parpadea nervioso.
 	_beacon.light_energy = beacon_energy(WorldClock.hour(), Time.get_ticks_msec() / 1000.0, _progress().get("awakening_ready", false))
 	_beacon_glass.emission_energy_multiplier = _beacon.light_energy * 0.4
@@ -230,7 +234,7 @@ func _update_objective() -> void:
 	if GameState.is_awakened():
 		_set_objective("Bahía de las Horas · Pulsa T para usar el Ancla")
 	elif p.awakening_ready:
-		_set_objective("Son casi las 3:33. Ve al faro.")
+		_set_objective("Ve a la puerta del faro (allí siempre son las 3:33).")
 	else:
 		var left := PackedStringArray()
 		for id in _schedules:
@@ -620,9 +624,10 @@ func _build_landmarks() -> void:
 	var base_y := _ground_height(LIGHTHOUSE_POS.x, LIGHTHOUSE_POS.z)
 	var lp := LIGHTHOUSE_POS + Vector3(0, base_y, 0)
 	_cylinder(lp + Vector3(0, 0.6, 0), 3.4, 3.6, 1.2, Color("#8a8478"))
-	var tower := _cylinder(lp + Vector3(0, 10.2, 0), 1.55, 2.3, 18, Color("#f2efe6"))
-	tower.add_child(_stripe(-2.5, 2.05))
-	tower.add_child(_stripe(3.5, 1.8))
+	# Torre más ancha abajo: dentro vive Marina (sala redonda con la escalera de caracol en medio)
+	var tower := _cylinder(lp + Vector3(0, 10.2, 0), 2.1, 3.2, 18, Color("#f2efe6"))
+	tower.add_child(_stripe(-2.5, 2.83))
+	tower.add_child(_stripe(3.5, 2.47))
 	_cylinder(lp + Vector3(0, 19.35, 0), 2.4, 2.4, 0.3, Color("#2d3238"))
 	var glass := _cylinder(lp + Vector3(0, 20.6, 0), 1.25, 1.25, 2.2, Color("#fff3b0"))
 	glass.material_override.emission_enabled = true
@@ -651,6 +656,7 @@ func _build_landmarks() -> void:
 	zs.shape.radius = 5.5
 	zone.add_child(zs)
 	zone.position = lp + Vector3(0, 1, 0)
+	Layers.zone(zone)  # (sin esto la zona no «veía» al jugador y a las 3:33 no pasaba nada)
 	zone.body_entered.connect(_on_lighthouse_entered)
 	add_child(zone)
 	var rng := RandomNumberGenerator.new()
@@ -850,6 +856,20 @@ func _add_door(root: Node3D, kind: String, id: String, label: String) -> void:
 	var mname := str(model.get_meta("model_name"))
 	_interiors.set_door_option(id, "floors", AssetLibrary.floors_of(mname, size.y))
 	_interiors.set_door_option(id, "balcony", mname.contains("Balcony"))
+	if mname.contains("Balcony"):
+		# El balcón de verdad del modelo: ahí se sale (antes, una losa invisible por delante). Y la
+		# caja de choque de la casa acaba en la fachada, para poder pisarlo.
+		var bal := AssetLibrary.balcony_of(root)
+		if not bal.is_empty():
+			_interiors.set_door_option(id, "balcony_spot", root.global_transform * (bal.local as Vector3))
+			_interiors.set_door_option(id, "balcony_size", Vector2(float(bal.width), float(bal.depth)))
+			for body in root.get_children():
+				if body is StaticBody3D:
+					for cs in body.get_children():
+						if cs is CollisionShape3D and cs.shape is BoxShape3D:
+							var bx: BoxShape3D = cs.shape
+							bx.size.z -= float(bal.depth) + 0.1
+							cs.position.z -= (float(bal.depth) + 0.1) / 2.0
 	var sign: String = {"clothes": "Ropa", "salon": "Peluquería"}.get(kind, str(Shops.info(kind).get("sign", "")) if Shops.is_shop(kind) else "")
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(id)
@@ -889,7 +909,7 @@ func _lighthouse_door(lp: Vector3) -> void:
 	var out := Vector3(-1, 0, 1).normalized()
 	var yaw := atan2(out.x, out.z)
 	var plinth_top := 1.2
-	var door_at := lp + out * 2.32 + Vector3(0, plinth_top, 0)
+	var door_at := lp + out * 3.18 + Vector3(0, plinth_top, 0)
 	var model := AssetLibrary.instance("house_interior_pack", "Door_4")
 	if model:
 		AssetLibrary.place(self, model, door_at, 2.25, yaw, true)
@@ -904,7 +924,9 @@ func _lighthouse_door(lp: Vector3) -> void:
 	for k in 4:  # escalones hasta el zócalo
 		var step := _box(lp + out * (3.75 + k * 0.38) + Vector3(0, (plinth_top - k * 0.3) / 2.0, 0), Vector3(1.8, plinth_top - k * 0.3, 0.38), Color("#8a8478"))
 		step.rotation.y = yaw
-	_interiors.add_door("faro", lp + out * 3.0 + Vector3(0, plinth_top, 0), yaw, "lighthouse", 33, "el faro")
+	_interiors.add_door("faro", lp + out * 3.45 + Vector3(0, plinth_top, 0), yaw, "lighthouse", 33, "el faro")
+	_interiors.set_building("faro", lp, Vector3(6.4, 18.0, 6.4), yaw)
+	_interiors.set_door_option("faro", "shape", "round")
 
 
 ## El balcón de la linterna (a 19 m): se puede salir a él por la escalera de dentro. Barandilla

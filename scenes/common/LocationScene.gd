@@ -1865,13 +1865,28 @@ func nearby_targets() -> Dictionary:
 			out["door:" + id] = {"kind": "door", "label": "puerta de " + d.label, "pos": d.pos, "node": d.node}
 	var n := 0
 	for it in get_tree().get_nodes_in_group("interactables"):
-		if n >= 8 or not (it is Interactable) or it.prompt.begins_with("Entrar") or it.prompt.begins_with("Llamar"):
+		if n >= 8 or not (it is Interactable) or it.prompt.begins_with("Entrar") or it.prompt.begins_with("Llamar") or str(it.name).begins_with("Examinar"):
 			continue
 		if it.global_position.distance_to(here) < 14.0:
 			n += 1
 			var kind := "seat" if it.prompt.begins_with("Sentarse") else "bed" if it.prompt.begins_with("Dormir") \
 				else "boat" if it.owner_node is Boat else "exit" if it.prompt == "Salir" else "object"
 			out["%s:%d" % [kind, n]] = {"kind": kind, "label": it.prompt.to_lower(), "pos": it.global_position, "node": it}
+	# Las cosas que hay alrededor (muebles, la tele, una farola, el granero…): la F también las usa
+	var things := []
+	for g in ["things", "landmark"]:
+		for t in get_tree().get_nodes_in_group(g):
+			if t is Node3D and is_instance_valid(t) and (t as Node3D).global_position.distance_to(here) < 12.0:
+				var label := str(t.get_meta("thing", t.get_meta("label", "")))
+				if not label.is_empty() and not str(t.get_meta("kind", "")) in ["traffic"]:
+					things.append([t, label])
+	things.sort_custom(func(a, b): return (a[0] as Node3D).global_position.distance_to(here) < (b[0] as Node3D).global_position.distance_to(here))
+	var k := 0
+	for th in things.slice(0, 10):
+		k += 1
+		var node: Node3D = th[0]
+		var state := (" (encendida)" if Toggle.is_on(node) else " (apagada)") if node.has_meta("toggle_apply") else ""
+		out["thing:%d" % k] = {"kind": "thing", "label": str(th[1]) + state, "pos": node.global_position, "node": node}
 	var water := _water_spot()
 	if water != Vector3.INF:
 		out["water"] = {"kind": "water", "label": "el agua (orilla)", "pos": water, "node": null}

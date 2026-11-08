@@ -114,6 +114,46 @@ func _run() -> void:
 		sedan._debris(sedan.global_position + Vector3(0, 1, 0))
 	_expect(town.get_children().any(func(c): return c.has_meta("debris") and c.get_meta("debris") == "kit"), "un coche, sus piezas de coche")
 
+	# 5. Bici con brío; coches que no vuelcan; un coche volcado se endereza solo
+	player.global_position = bike.global_position + Vector3(-1.2, 0.3, 0)
+	bike._on_use(player)
+	Input.action_press("move_forward")
+	for i in 240:
+		await physics_frame
+	var bike_v: float = bike.speed()
+	Input.action_release("move_forward")
+	_expect(bike_v > 5.0, "la bici llega a %.1f m/s en 4 s (antes no pasaba de 1.9)" % bike_v)
+	bike._on_use(player)
+	for i in 10:
+		await physics_frame
+	var V = load("res://scripts/vehicles/Vehicle.gd")
+	for kind in ["sedan", "suv"]:
+		var ce: Dictionary = V.place_factory(town, kind, Vector3(-60, town.ground_at(-60, 20) + 0.3, 20), 0.0, "player")
+		var c = Creations.node_of(town, ce.id)
+		for i in 20:
+			await physics_frame
+		player.global_position = c.global_position + Vector3(-2.5, 0.3, 0)
+		c._on_use(player)
+		c.linear_velocity = c.global_basis.z * 15.0
+		Input.action_press("move_forward")
+		Input.action_press("move_left")
+		var min_up := 1.0
+		for i in 150:
+			await physics_frame
+			min_up = minf(min_up, c.global_basis.y.dot(Vector3.UP))
+		Input.action_release("move_left")
+		Input.action_release("move_forward")
+		_expect(min_up > 0.6, "%s a 54 km/h con el volante a tope: no vuelca (inclinación mín. %.2f)" % [kind, min_up])
+		c._on_use(player)
+		for i in 10:
+			await physics_frame
+		if kind == "sedan":
+			c.global_transform = Transform3D(Basis(Vector3.FORWARD, PI), c.global_position + Vector3(0, 1.5, 0))
+			c.linear_velocity = Vector3.ZERO
+			for i in 300:
+				await physics_frame
+			_expect(c.global_basis.y.dot(Vector3.UP) > 0.8, "un coche volcado, sin nadie dentro, se endereza solo")
+
 	town.queue_free()
 	await process_frame
 	db.delete_world(world_id)

@@ -12,6 +12,7 @@ const KEYS := {
 	"cockpit_view": [KEY_V],        # en la nave: vista de cabina o de fuera
 	"ship_brake": [KEY_X],          # en la nave (espacio): frenar en seco
 	"autopilot": [KEY_G],           # en el espacio: piloto automático al destino marcado
+	"map": [KEY_M],                 # en el espacio: mapa del sistema
 	"horn": [KEY_H],                # en un vehículo: claxon
 	"next_target": [KEY_TAB],       # en el espacio: cambiar de destino
 	"flight_assist": [KEY_Z],       # en el espacio: amortiguar la inercia o no

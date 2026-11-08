@@ -11,6 +11,7 @@ extends RefCounted
 const FURNITURE := "house_interior_pack"
 const SCALE := 0.5          # los muebles de este pack vienen al doble de tamaño real
 const HEIGHT := 3.2
+const SPIRAL_START := 1.92  # (rad) dónde empieza la escalera del faro: junto a la puerta
 
 ## Tamaño de cada tipo de interior (ancho x fondo) y colores de pared y suelo.
 const ROOMS := {
@@ -52,6 +53,21 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3, opts
 	var room: Dictionary = ROOMS.get(kind, ROOMS.house)
 	var w: float = room.size.x
 	var d: float = room.size.y
+	# Por dentro, del tamaño del edificio por fuera (sin pasarse: hasta un 20 % menos que la
+	# distribución de siempre, para que los muebles quepan). Los redondos, con su radio.
+	var round: bool = kind in ["lighthouse", "dome"] or str(opts.get("shape", "")) == "round"
+	if opts.has("footprint"):
+		var fp: Vector2 = opts.footprint
+		if round:
+			var rr := clampf(minf(fp.x, fp.y) / 2.0 - 0.3, 2.2, 6.0)
+			w = rr * 2.0
+			d = rr * 2.0
+		else:
+			w = clampf(fp.x - 0.4, room.size.x * 0.8, room.size.x)
+			d = clampf(fp.y - 0.4, room.size.y * 0.8, room.size.y)
+	elif kind == "lighthouse":
+		w = 5.8
+		d = 5.8
 	var root := Node3D.new()
 	root.position = origin
 	parent.add_child(root)
@@ -60,12 +76,15 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3, opts
 	var wall := Color(room.wall).lerp(Color(["#f0e6d2", "#d8e4e8", "#e8d4c8", "#dfe6d0"][rng.randi() % 4]), 0.3 if kind == "house" else 0.0)
 	# Edificios de dos plantas por fuera (casas, tiendas, la estación…): también por dentro, con
 	# escalera de verdad hasta arriba. El faro tiene la suya (de caracol, hasta la linterna).
-	var floors := clampi(int(opts.get("floors", 1)), 1, 4) if not (kind in ["lighthouse", "dome"]) else 1
-	var hole := Rect2(-2.2 - 2.35, -2.4 - 2.35, 4.7, 4.7) if kind == "lighthouse" else Rect2()
+	var floors := clampi(int(opts.get("floors", 1)), 1, 4) if not round else 1
 	if kind == "dome":
 		_dome_shell(root, w / 2.0, wall, Color(room.floor))
+	elif round:
+		_round_shell(root, w / 2.0, wall, Color(room.floor), 1.6 if kind == "lighthouse" else 0.0)
 	else:
-		_shell(root, w, d, wall, Color(room.floor), kind == "scifi", floors, hole)
+		_shell(root, w, d, wall, Color(room.floor), kind == "scifi", floors)
+	if round and not (kind in ["lighthouse", "dome"]):  # choza o aguja: su propia distribución, redonda
+		return _round_layout(root, kind, w / 2.0, origin, rng)
 	if kind in ["house", "home"]:
 		_home_rooms(root, w, d, wall, floors)
 	elif floors > 1:
@@ -73,7 +92,7 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3, opts
 	for f in range(1, floors - 1):  # tercera planta y más: otro tramo, en la pared de enfrente
 		_stairs_up(root, w, d, f)
 
-	var out := {"root": root, "spawn": origin + Vector3(0, 0.1, d / 2.0 - 2.4), "exit": origin + Vector3(0, 0.1, d / 2.0 - 0.4),
+	var out := {"root": root, "size": Vector2(w, d), "spawn": origin + Vector3(0, 0.1, d / 2.0 - 2.4), "exit": origin + Vector3(0, 0.1, d / 2.0 - 0.4),
 		"npc_spots": [], "seats": [], "beds": [], "uses": [], "sofa": [], "table": [], "kitchen": []}
 	match kind:
 		"home":  # tu casa: recámara, baño, sala-comedor y cocina (y arriba, si tiene dos plantas)
@@ -108,7 +127,7 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3, opts
 			out.npc_spots = [origin + Vector3(-2.0, 0, -d / 2 + 1.55), origin + Vector3(3.0, 0, 0.5)]
 		"station":
 			for i in 5:  # bancos de la sala de espera
-				_seat(root, "Couch_Small1", Vector3(-6.0 + i * 1.6, 0, 1.6), PI, out, "sofa")
+				_seat(root, "Couch_Small1", Vector3(-6.0 + i * 1.6, 0, minf(1.6, d / 2 - 3.4)), PI, out, "sofa")
 			_put(root, "Kitchen_Cabinet1", Vector3(5.5, 0, -d / 2 + 0.5), 0.0)  # taquilla
 			_put(root, "Table_RoundLarge", Vector3(-4.0, 0, -d / 2 + 1.4), 0.0)  # mesa del taller de Samir
 			_put(root, "Chair_3", Vector3(-4.0, 0, -d / 2 + 2.4), PI, out.seats)
@@ -123,46 +142,40 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3, opts
 			_put(root, "Trashcan_Large", Vector3(w / 2 - 0.6, 0, d / 2 - 1.5), 0.0)
 			out.npc_spots = [origin + Vector3(-2.4, 0, -d / 2 + 2.6), origin + Vector3(4.0, 0, 0)]  # junto a su mesa, no encima de la silla
 		"lighthouse":
-			# Escalera de caracol al fondo, con barandilla, que sube por una trampilla del techo hasta
-			# la linterna (arriba sales al balcón de la torre); la mesa de Marina a un lado
-			for i in 12:
-				var a := TAU * i / 12.0
-				PropsBuilder._box(root, Vector3(cos(a) * 1.6, 0.25 + i * 0.25, sin(a) * 1.6) + Vector3(-2.2, 0, -2.4),
-					Vector3(1.2, 0.08, 0.5), Color("#5a5048"), true).rotation.y = -a
-				var post := PropsBuilder._box(root, Vector3(cos(a) * 2.15, 0.75 + i * 0.25, sin(a) * 2.15) + Vector3(-2.2, 0, -2.4),
-					Vector3(0.04, 1.0, 0.04), Color("#2d3238"), false)
-				post.rotation.y = -a
-			PropsBuilder._cylinder(root, Vector3(-2.2, HEIGHT / 2, -2.4), 0.12, 0.12, HEIGHT, Color("#3a3a3a"), true)
-			var top_a := TAU * 11 / 12.0
-			var top := Vector3(cos(top_a) * 1.6, 0.25 + 11 * 0.25, sin(top_a) * 1.6) + Vector3(-2.2, 0, -2.4)
-			# El techo tiene un hueco sobre la escalera (antes era macizo y te dabas con la cabeza a
-			# media subida): sube un tubo de piedra y arriba está la trampilla de la linterna
+			# Sala redonda (como la torre por fuera) con la escalera de caracol en el centro: sube por
+			# un hueco redondo del techo hasta la trampilla de la linterna. La vida de Marina alrededor.
+			var r := w / 2.0
+			out.spawn = origin + Vector3(0, 0.1, r - 0.9)
+			out.exit = origin + Vector3(0, 0.1, r - 0.35)
+			# (empieza junto a la entrada: desde la puerta se llega al primer peldaño sin pasar por debajo)
+			var top := _spiral_stairs(root, Vector3.ZERO, 0.3, 1.25, 12, 0.25, Color("#5a5048"), SPIRAL_START)
+			PropsBuilder._cylinder(root, Vector3(0, HEIGHT / 2, 0), 0.22, 0.22, HEIGHT, Color("#3a3a3a"), true)
 			var shaft_h := 2.8
-			var hc := hole.get_center()
-			for side in [-1.0, 1.0]:
-				PropsBuilder._box(root, Vector3(hc.x + side * (hole.size.x / 2 + 0.1), HEIGHT + shaft_h / 2, hc.y), Vector3(0.2, shaft_h, hole.size.y + 0.4), wall.darkened(0.1), true)
-				PropsBuilder._box(root, Vector3(hc.x, HEIGHT + shaft_h / 2, hc.y + side * (hole.size.y / 2 + 0.1)), Vector3(hole.size.x, shaft_h, 0.2), wall.darkened(0.1), true)
-			PropsBuilder._box(root, Vector3(hc.x, HEIGHT + shaft_h + 0.1, hc.y), Vector3(hole.size.x + 0.4, 0.2, hole.size.y + 0.4), wall.darkened(0.2), true)
+			_round_walls(root, Vector3(0, HEIGHT, 0), 1.6, shaft_h, wall.darkened(0.1), 14, -1.0)
+			_floor_disc(root, 1.9, wall.darkened(0.2), Vector3(0, HEIGHT + shaft_h + 0.2, 0))
 			var lamp := OmniLight3D.new()
 			lamp.light_color = Color("#ffe2b8")
-			lamp.omni_range = 5.0
+			lamp.omni_range = 4.0
 			lamp.light_energy = 0.9
-			lamp.position = Vector3(hc.x, HEIGHT + shaft_h - 0.4, hc.y)
+			lamp.position = Vector3(0, HEIGHT + shaft_h - 0.4, 0)
 			root.add_child(lamp)
-			# La trampilla, en lo alto del tubo, justo encima del último peldaño
-			PropsBuilder._box(root, Vector3(top.x, HEIGHT + shaft_h - 0.02, top.z), Vector3(1.1, 0.06, 1.1), Color("#121212"), false)
-			PropsBuilder._box(root, Vector3(top.x, HEIGHT + shaft_h - 0.06, top.z), Vector3(1.3, 0.08, 1.3), Color("#5a4632"), false)
+			PropsBuilder._box(root, Vector3(top.x, HEIGHT + shaft_h - 0.02, top.z), Vector3(0.9, 0.06, 0.9), Color("#121212"), false)
+			PropsBuilder._box(root, Vector3(top.x, HEIGHT + shaft_h - 0.06, top.z), Vector3(1.1, 0.08, 1.1), Color("#5a4632"), false)
 			_use_at(root, top + Vector3(0, 0.05, 0), out, "climb_up", "Subir a la linterna")
 			out["hatch"] = origin + top + Vector3(0, 0.1, 0)
-			_use(root, "Kitchen_Fridge", Vector3(-w / 2 + 0.6, 0, 3.2), PI / 2, out, "eat", "Comer algo de la nevera")
-			_use(root, "Kitchen_Sink", Vector3(-w / 2 + 0.5, 0, 2.3), PI / 2, out, "drink", "Beber agua")
-			_put(root, "Table_RoundSmall", Vector3(3.0, 0, -2.6), 0.0)
-			_put(root, "Chair_4", Vector3(3.0, 0, -1.8), PI, out.seats)
-			_put(root, "Shelf_Small2", Vector3(-w / 2 + 0.3, 1.2, 1.5), PI / 2)
-			_put(root, "Light_Stand1", Vector3(w / 2 - 0.6, 0, -d / 2 + 0.6), 0.0)
-			_put(root, "Bed_Single", Vector3(0.6, 0, -d / 2 + 1.3), 0.0, out.beds)  # Marina vive aquí
-			_put(root, "Bookshelf", Vector3(w / 2 - 0.4, 0, 0.6), -PI / 2)
-			out.npc_spots = [origin + Vector3(3.0, 0, -1.0)]
+			# Alrededor, pegado a la pared curva y mirando al centro
+			var ring := func(deg: float, dist: float) -> Vector3:
+				var a := deg_to_rad(deg)
+				return Vector3(sin(a), 0, cos(a)) * dist
+			var face := func(deg: float) -> float: return deg_to_rad(deg) + PI
+			_put(root, "Bed_Single", ring.call(200.0, r - 0.6), face.call(200.0) + PI / 2, out.beds)  # Marina vive aquí
+			_use(root, "Kitchen_Fridge", ring.call(105.0, r - 0.45), face.call(105.0), out, "eat", "Comer algo de la nevera")
+			_use(root, "Kitchen_Sink", ring.call(130.0, r - 0.45), face.call(130.0), out, "drink", "Beber agua")
+			_put(root, "Table_RoundSmall", ring.call(-110.0, r - 1.05), 0.0)
+			_put(root, "Chair_4", ring.call(-110.0, r - 1.05) + ring.call(-110.0, -0.75), face.call(-110.0), out.seats)
+			_put(root, "Bookshelf", ring.call(-150.0, r - 0.35), face.call(-150.0))
+			_put(root, "Light_Stand1", ring.call(-70.0, r - 0.4), 0.0)
+			out.npc_spots = [origin + ring.call(-110.0, r - 1.9)]
 		"dome":  # una cúpula habitada: literas, una terminal, cocina pequeña, mesa y cajas
 			var r := w / 2.0
 			out.spawn = origin + Vector3(0, 0.1, r - 2.0)
@@ -368,18 +381,133 @@ static func _upper_floor(root: Node3D, w: float, d: float, kind: String, out: Di
 
 
 ## Suelo, paredes, techo, ventanas y luz. La pared de delante tiene la puerta (hacia +Z).
+## Una pared curva (en tramos) de radio r, desde `base` y de `h` de alto. door_deg: hueco de puerta
+## en esa dirección (grados; < 0: sin hueco).
+static func _round_walls(root: Node3D, base: Vector3, r: float, h: float, wall: Color, segs: int = 20, door_deg: float = 0.0) -> void:
+	for i in segs:
+		var a := TAU * (i + 0.5) / segs
+		if door_deg >= 0.0 and absf(angle_difference(a, deg_to_rad(door_deg))) < TAU / segs:
+			continue
+		var mid := base + Vector3(sin(a), 0, cos(a)) * r
+		var seg := PropsBuilder._box(root, mid + Vector3(0, h / 2.0, 0), Vector3(2.0 * r * sin(PI / segs) + 0.05, h, 0.25), wall, true)
+		seg.rotation.y = a
+
+
+## Una sala redonda de techo plano (el faro, una choza, una aguja): suelo, pared curva con la
+## puerta, techo (con un hueco redondo en el centro si hole_r > 0), ventanas y luz.
+static func _round_shell(root: Node3D, r: float, wall: Color, floor_color: Color, hole_r: float = 0.0) -> void:
+	_floor_disc(root, r, floor_color)
+	_round_walls(root, Vector3.ZERO, r, HEIGHT, wall, 20, 0.0)
+	var segs := 20
+	for i in segs:  # techo: un anillo de tramos (deja el hueco del centro)
+		var a := TAU * (i + 0.5) / segs
+		var inner := maxf(hole_r, 0.0)
+		var depth := r - inner + 0.2
+		var mid := Vector3(sin(a), 0, cos(a)) * (inner + depth / 2.0)
+		var seg := PropsBuilder._box(root, mid + Vector3(0, HEIGHT + 0.1, 0), Vector3(2.0 * (inner + depth) * sin(PI / segs) + 0.08, 0.2, depth), wall.darkened(0.15), true)
+		seg.rotation.y = a
+	for deg in [70.0, 160.0, 250.0, 300.0]:  # ventanas en la pared curva
+		var a := deg_to_rad(deg)
+		var win := PropsBuilder._box(root, Vector3(sin(a), 0, cos(a)) * (r - 0.14) + Vector3(0, 1.7, 0), Vector3(0.8, 1.0, 0.03), Color("#9fc8e8"), false)
+		win.rotation.y = a
+		win.material_override.emission_enabled = true
+		win.material_override.emission = Color("#bfe0ff")
+		win.material_override.emission_energy_multiplier = 0.5
+	var outside := PropsBuilder._box(root, Vector3(0, 1.2, r + 0.05), Vector3(1.4, 2.4, 0.05), Color("#ffe9c4"), true)
+	outside.material_override.emission_enabled = true
+	outside.material_override.emission = Color("#fff1d6")
+	outside.material_override.emission_energy_multiplier = 0.6
+	var light := OmniLight3D.new()
+	light.light_color = Color("#ffe2b8")
+	light.omni_range = r * 2.4
+	light.light_energy = 1.3
+	light.position = Vector3(r * 0.4, HEIGHT - 0.4, -r * 0.3)
+	root.add_child(light)
+
+
+## Choza o aguja por dentro: cama y fuego (choza) o equipos (aguja), todo junto a la pared curva.
+static func _round_layout(root: Node3D, kind: String, r: float, origin: Vector3, rng: RandomNumberGenerator) -> Dictionary:
+	var out := {"root": root, "spawn": origin + Vector3(0, 0.1, r - 0.9), "exit": origin + Vector3(0, 0.1, r - 0.35),
+		"npc_spots": [origin + Vector3(0, 0, -r * 0.3)], "seats": [], "beds": [], "uses": [], "sofa": [], "table": [], "kitchen": []}
+	var at := func(deg: float, dist: float) -> Vector3:
+		return Vector3(sin(deg_to_rad(deg)), 0, cos(deg_to_rad(deg))) * dist
+	if kind == "scifi":
+		var props := ["Props_Computer", "Props_ComputerSmall", "Props_Shelf", "Props_Capsule", "Props_Crate", "Props_Pod"]
+		for i in 5:
+			var m := AssetLibrary.instance("modular_sci_fi", props[i % props.size()])
+			if m:
+				var deg := 120.0 + i * 30.0
+				AssetLibrary.place(root, m, at.call(deg, r - 0.7), 1.2, deg_to_rad(deg) + PI, true)
+		_put(root, "Bed_Single", at.call(250.0, r - 0.7), deg_to_rad(250.0) + PI / 2, out.beds)
+	else:
+		_put(root, "Bed_Single", at.call(200.0, r - 0.6), deg_to_rad(200.0) + PI / 2, out.beds)
+		var fire := AssetLibrary.instance("survival_pack", "Bonfire")
+		if fire:
+			AssetLibrary.place(root, fire, Vector3(0, 0, -0.2), 0.4, 0.0, true)
+		_put(root, "Shelf_Small1", at.call(120.0, r - 0.3) + Vector3(0, 1.2, 0), deg_to_rad(120.0) + PI)
+		_seat(root, "Chair_3", at.call(-120.0, r - 0.8), deg_to_rad(-120.0) + PI, out, "table")
+		var glow := OmniLight3D.new()
+		glow.light_color = Color("#ff9a4a")
+		glow.omni_range = r * 1.6
+		glow.light_energy = 0.8
+		glow.position = Vector3(0, 0.6, -0.2)
+		root.add_child(glow)
+	return out
+
+
+## Escalera de caracol alrededor de `c`: peldaños que se ven (sin colisión) y, debajo, una rampa
+## helicoidal invisible por la que se sube andando, con barandilla sólida por fuera. Devuelve el
+## punto de arriba (el último peldaño). (Antes se pisaban los peldaños sueltos: había huecos y
+## costaba muchísimo subir.)
+static func _spiral_stairs(root: Node3D, c: Vector3, r_in: float, r_out: float, steps: int, rise: float, col: Color, a0: float = 0.0) -> Vector3:
+	var rm := (r_in + r_out) / 2.0
+	var width := r_out - r_in
+	var pts: Array = []
+	for i in steps + 1:
+		var a := a0 + TAU * i / 12.0
+		pts.append(c + Vector3(cos(a) * rm, i * rise, sin(a) * rm))
+	for i in steps:
+		var a := a0 + TAU * (i + 0.5) / 12.0
+		var y := (i + 1) * rise
+		var step := PropsBuilder._box(root, c + Vector3(cos(a) * rm, y - 0.04, sin(a) * rm), Vector3(width, 0.08, 2.0 * rm * sin(PI / 12.0) + 0.12), col, false)
+		step.rotation.y = -a + PI / 2
+		var post := PropsBuilder._box(root, c + Vector3(cos(a) * (r_out + 0.05), y + 0.5, sin(a) * (r_out + 0.05)), Vector3(0.04, 1.0, 0.04), Color("#2d3238"), false)
+		post.rotation.y = -a
+	var body := StaticBody3D.new()
+	body.collision_layer = Layers.WORLD
+	root.add_child(body)
+	for i in steps:
+		var p0: Vector3 = pts[i]
+		var p1: Vector3 = pts[i + 1]
+		var t := (p1 - p0).normalized()
+		var mid := (p0 + p1) / 2.0
+		var radial := Vector3(mid.x - c.x, 0, mid.z - c.z).normalized()
+		var up := radial.cross(t).normalized()
+		if up.y < 0.0:
+			up = -up
+		var x := up.cross(t).normalized()
+		var cs := CollisionShape3D.new()
+		var bx := BoxShape3D.new()
+		bx.size = Vector3(width + 0.1, 0.12, p0.distance_to(p1) + 0.12)
+		cs.shape = bx
+		cs.transform = Transform3D(Basis(x, up, t), mid + Vector3(0, rise * 0.5 - 0.06, 0))
+		body.add_child(cs)
+		# Barandilla por fuera (no te caes por el borde)
+		var rail := CollisionShape3D.new()
+		var rb := BoxShape3D.new()
+		rb.size = Vector3(0.06, 1.0, p0.distance_to(p1) + 0.05)
+		rail.shape = rb
+		rail.transform = Transform3D(Basis(x, up, t), mid + radial * (width / 2.0 + 0.08) + Vector3(0, rise * 0.5 + 0.5, 0))
+		body.add_child(rail)
+	var last: Vector3 = pts[steps]
+	return last + Vector3(0, rise * 0.5, 0)
+
+
 ## Por dentro de una cúpula: suelo redondo, pared curva (en tramos) con el hueco de la puerta,
 ## la bóveda por encima y una luz en lo alto.
 static func _dome_shell(root: Node3D, r: float, wall: Color, floor_color: Color) -> void:
 	_floor_disc(root, r, floor_color)
-	var segs := 20
-	for i in segs:
-		var a := TAU * (i + 0.5) / segs
-		var mid := Vector3(sin(a), 0, cos(a)) * r
-		if absf(angle_difference(a, 0.0)) < TAU / segs:  # el hueco de la puerta (hacia +z)
-			continue
-		var seg := PropsBuilder._box(root, mid + Vector3(0, 1.6, 0), Vector3(2.0 * r * sin(PI / segs) + 0.05, 3.2, 0.25), wall, true)
-		seg.rotation.y = a
+	_round_walls(root, Vector3.ZERO, r, 3.2, wall, 20, 0.0)
 	var vault := MeshInstance3D.new()
 	var sm := SphereMesh.new()
 	sm.radius = r
@@ -405,7 +533,7 @@ static func _dome_shell(root: Node3D, r: float, wall: Color, floor_color: Color)
 	root.add_child(light)
 
 
-static func _floor_disc(root: Node3D, r: float, c: Color) -> void:
+static func _floor_disc(root: Node3D, r: float, c: Color, at: Vector3 = Vector3.ZERO) -> void:
 	var body := StaticBody3D.new()
 	body.collision_layer = Layers.WORLD
 	var cs := CollisionShape3D.new()
@@ -424,7 +552,7 @@ static func _floor_disc(root: Node3D, r: float, c: Color) -> void:
 	m.albedo_color = c
 	mi.material_override = m
 	body.add_child(mi)
-	body.position.y = -0.1
+	body.position = at + Vector3(0, -0.1, 0)
 	root.add_child(body)
 
 
@@ -565,6 +693,35 @@ static func _living(root: Node3D, w: float, d: float, floors: int, out: Dictiona
 	_seat(root, "Chair_%d" % (1 + rng.randi() % 4), Vector3(2.5, 0, 0.6), -PI / 2, out, "table")
 	_put(root, "Houseplant_%d" % (1 + rng.randi() % 8), Vector3(w / 2 - 0.6, 0, d / 2 - 0.8), 0.0)
 	_put(root, "Light_Floor%d" % (1 + rng.randi() % 4), Vector3(w / 2 - 3.4, 0, -d / 2 + 3.0), 0.0)
+	# La tele, frente al sofá (se enciende: los vecinos «ven la tele» de verdad)
+	if floors == 1:
+		_tv(root, Vector3(-w / 2 + 3.7, 0, 1.6), -PI / 2)
+	else:
+		_tv(root, Vector3(-1.4, 0, -d / 2 + 3.3), PI)
+
+
+## Una tele sobre su mueble: encendida, la pantalla brilla y cambia de imagen.
+static func _tv(root: Node3D, pos: Vector3, yaw: float) -> void:
+	var holder := Node3D.new()
+	holder.position = pos
+	holder.rotation.y = yaw
+	root.add_child(holder)
+	PropsBuilder._box(holder, Vector3(0, 0.25, 0), Vector3(1.2, 0.5, 0.4), Color("#4a3a2c"), true)
+	PropsBuilder._box(holder, Vector3(0, 0.88, 0), Vector3(1.0, 0.62, 0.06), Color("#141414"), false)
+	var screen := PropsBuilder._box(holder, Vector3(0, 0.88, 0.035), Vector3(0.9, 0.52, 0.01), Color("#0b0d10"), false)
+	var mat: StandardMaterial3D = screen.material_override
+	var glow := OmniLight3D.new()
+	glow.light_color = Color("#9fc4ff")
+	glow.omni_range = 3.0
+	glow.light_energy = 0.6
+	glow.position = Vector3(0, 0.9, 0.5)
+	holder.add_child(glow)
+	holder.set_meta("thing", "la tele")
+	Toggle.make(holder, "la tele", func(on: bool):
+		mat.emission_enabled = on
+		mat.emission = Color.from_hsv(randf(), 0.35, 0.9)
+		mat.emission_energy_multiplier = 1.1
+		glow.visible = on)
 
 
 ## Un tabique recto (alineado con x o z) de `a` a `b`, con un hueco de puerta de 1 m centrado en
@@ -619,6 +776,17 @@ static func _seat(root: Node3D, model_name: String, pos: Vector3, yaw: float, ou
 
 ## Coloca un mueble del pack de interiores a su tamaño real. Si se pasa `list`, guarda su
 ## posición (asientos, camas) para poder usarlo con E.
+## Cómo se llama cada mueble (para examinarlo y para que la IA y la tecla F lo conozcan).
+const FURNITURE_LABELS := {"Bookshelf": "una estantería con libros", "Kitchen_Oven": "el horno", "Kitchen_Oven_Large": "el horno",
+	"Light_Stand1": "una lámpara de pie", "Light_Stand2": "una lámpara de pie", "Light_Floor1": "una lámpara de pie", "Light_Floor2": "una lámpara de pie",
+	"Light_Floor3": "una lámpara de pie", "Light_Floor4": "una lámpara de pie", "Light_Desk": "una lámpara de escritorio",
+	"Shelf_Small1": "una repisa", "Shelf_Small2": "una repisa", "Shelf_Small3": "una repisa", "Shelf_Large": "una estantería", "Shelf_1": "un estante", "Shelf_2": "un estante",
+	"Drawer_5": "una cómoda", "NightStand_1": "una mesita de noche", "Table_RoundLarge": "una mesa", "Table_RoundSmall": "una mesa pequeña",
+	"Bathroom_Toilet": "el inodoro", "Bathroom_Sink": "el lavabo", "Trashcan_Large": "un bote de basura", "Kitchen_Cabinet1": "un mueble de cocina",
+	"Kitchen_2Drawers": "la barra", "Fireplace": "la chimenea", "Bathroom_Mirror1": "un espejo", "Carpet_1": "una alfombra", "Carpet_2": "una alfombra", "Carpet_Round": "una alfombra redonda"}
+const LAMPS := ["Light_Stand1", "Light_Stand2", "Light_Floor1", "Light_Floor2", "Light_Floor3", "Light_Floor4", "Light_Desk"]
+
+
 static func _put(root: Node3D, model_name: String, pos: Vector3, yaw: float, list: Variant = null) -> void:
 	var m := AssetLibrary.instance(FURNITURE, model_name)
 	if m == null:
@@ -633,3 +801,16 @@ static func _put(root: Node3D, model_name: String, pos: Vector3, yaw: float, lis
 		placed.position.y -= b.size.y * SCALE
 	if list is Array:
 		list.append({"node": placed, "name": model_name})
+	elif FURNITURE_LABELS.has(model_name):  # se puede examinar (y la tecla F lo conoce)
+		placed.set_meta("thing", FURNITURE_LABELS[model_name])
+		placed.add_to_group("things")
+		Examine.attach(root, pos, FURNITURE_LABELS[model_name], "furniture")
+	if model_name in LAMPS:  # las lámparas se encienden y se apagan
+		var bulb := OmniLight3D.new()
+		bulb.light_color = Color("#ffd9a0")
+		bulb.omni_range = 4.5
+		bulb.light_energy = 1.1
+		bulb.position.y = b.size.y * SCALE * 0.9
+		bulb.visible = false
+		placed.add_child(bulb)
+		Toggle.make(placed, "la lámpara", func(on: bool): bulb.visible = on)

@@ -312,6 +312,38 @@ static func _is_body(material_name: String) -> bool:
 	return false
 
 
+## El balcón (el más bajo) de un edificio ya colocado: lo que sobresale de la fachada por delante
+## (+z) a más de 1.2 m del suelo. Devuelve {local: punto sobre su suelo, en coordenadas del
+## edificio, width, depth} o {} si no tiene.
+static func balcony_of(root: Node3D) -> Dictionary:
+	if not root.is_inside_tree():
+		return {}
+	var inv := root.global_transform.affine_inverse()
+	var pts := PackedVector3Array()
+	for mi in _meshes(root):
+		var t := inv * mi.global_transform
+		var faces := mi.mesh.get_faces()
+		for i in range(0, faces.size(), 3):
+			pts.append(t * faces[i])
+	if pts.is_empty():
+		return {}
+	var edge := -INF
+	for v in pts:
+		edge = maxf(edge, v.z)
+	var min_y := INF
+	var x0 := INF
+	var x1 := -INF
+	for v in pts:
+		if v.z > edge - 0.35 and v.y > 1.2:
+			min_y = minf(min_y, v.y)
+			x0 = minf(x0, v.x)
+			x1 = maxf(x1, v.x)
+	if min_y == INF:
+		return {}
+	var depth := 1.05
+	return {"local": Vector3((x0 + x1) / 2.0, min_y + 0.1, edge - depth / 2.0), "width": clampf(x1 - x0, 1.2, 6.0), "depth": depth}
+
+
 static func _meshes(node: Node) -> Array[MeshInstance3D]:
 	var out: Array[MeshInstance3D] = []
 	if node is MeshInstance3D and (node as MeshInstance3D).mesh:
