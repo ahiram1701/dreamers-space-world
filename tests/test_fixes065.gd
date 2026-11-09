@@ -65,8 +65,7 @@ func _run() -> void:
 	# La linterna se ve en la mano y la luz sale de ella
 	var player = town.get("_player")
 	player.set_light(true)
-	for i in 10:
-		await process_frame
+	await create_timer(0.8).timeout  # (el brazo tarda un momento en subir la linterna; en CI, más lento)
 	var rig = player.get("_rig")
 	var held: Node3D = rig.get("_held")
 	_expect(held != null and held.visible, "con la linterna encendida, la llevas en la mano")
