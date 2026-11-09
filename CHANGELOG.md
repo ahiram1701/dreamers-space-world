@@ -3,6 +3,11 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.11.1] - 2026-11-09
+
+### Corregido
+- La publicación de la 0.11.0 no llegó a generar el instalador: una prueba de la linterna esperaba demasiado poco en el servidor. Esta versión es la 0.11.0 completa, con esa prueba arreglada.
+
 ## [0.11.0] - 2026-11-09
 
 ### Corregido
