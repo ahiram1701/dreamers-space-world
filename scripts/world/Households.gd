@@ -286,7 +286,7 @@ func ensure_staff(door: String, kind: String) -> String:
 	var name := Names.full(fem, rng)
 	var jobs: Array = STAFF.get(kind, Shops.info(kind).get("staff", ["dependienta", "dependiente"]))
 	var job: String = "%s de %s" % [jobs[0 if fem else 1], Shops.label(kind)] if not STAFF.has(kind) else jobs[0 if fem else 1]
-	var id := Actions.build_npc(name, job, "Trabaja aquí de 9:00 a 20:00 y conoce a medio pueblo.", "¡Hola! Pasa, pasa. ¿Qué buscas?",
+	var id := Actions.build_npc(name, job, "Trabaja aquí de 9 de la mañana a 8 de la noche y conoce a medio pueblo.", "¡Hola! Pasa, pasa. ¿Qué buscas?",
 		_look(rng, fem, ["slim", "average"][rng.randi() % 2]).merged({"outfit": "formal" if kind == "clothes" else "casual"}, true))
 	here[door] = id
 	all[place] = here

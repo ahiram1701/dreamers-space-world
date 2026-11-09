@@ -143,7 +143,7 @@ func _show_saves() -> void:
 		info.fit_content = true
 		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var progress := "Acto 0" if not w.awakened \
-			else ("Final alcanzado" if not str(w.ending).is_empty() else "Coordenadas %d/%d" % [w.fragments, GameState.FRAGMENTS_NEEDED])
+			else ("Final alcanzado" if not str(w.ending).is_empty() else "Rumbo a casa: faltan %d" % maxi(0, GameState.FRAGMENTS_NEEDED - int(w.fragments)))
 		info.text = "[b]%s[/b]\n[color=#9fd8ff]%s · %s[/color]  [color=#888]%s[/color]" % [
 			w.name, w.place, progress, str(w.created_at).replace("T", " ").left(16)]
 		row.add_child(info)

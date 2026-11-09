@@ -67,8 +67,26 @@ func add_event(npc_id: String, text: String, relationship_delta: int = 0, rumor:
 	recent.append(e)
 	while recent.size() > MAX_RECENT:
 		recent.pop_front()
-	set_fields(npc_id, {"recent": recent, "met": true,
-		"relationship": clampi(int(m.relationship) + relationship_delta, -100, 100)})
+	# Un rumor (te lo contaron, o encontraste rastros sin ver a nadie) no es conocer al jugador
+	var fields := {"recent": recent, "relationship": clampi(int(m.relationship) + relationship_delta, -100, 100)}
+	if not rumor:
+		fields["met"] = true
+	set_fields(npc_id, fields)
+
+
+## ¿Sabe cómo se llama el jugador? Los vecinos de siempre de la Bahía, sí; los demás solo si
+## se lo dijo (se presentó, se lo contó alguien de confianza…).
+func knows_name(npc_id: String) -> bool:
+	if bool(get_mem(npc_id).get("knows_name", false)):
+		return true
+	return str(WorldDB.get_entity("npc", npc_id).get("origin", "")).begins_with("act0")
+
+
+## El jugador acaba de decir su nombre (o alguien se lo presentó).
+func learn_name(npc_id: String) -> void:
+	if not knows_name(npc_id):
+		set_fields(npc_id, {"knows_name": true})
+		add_facts(npc_id, ["El jugador se llama %s." % PlayerProfile.player_name()])
 
 
 ## "hace 5 min: te dio un puñetazo" (para el prompt).
@@ -159,7 +177,8 @@ func add_bond(a: String, b: String, note: String) -> void:
 func describe(npc_id: String) -> String:
 	var m := get_mem(npc_id)
 	if not m.met:
-		return "Nunca has hablado con esta persona."
+		var rumors := describe_recent(npc_id, true)
+		return "Nunca has hablado con esta persona." + (("\nLo que te han contado otros (rumores: tú NO lo viviste ni lo viste):\n" + rumors) if not rumors.is_empty() else "")
 	var facts := "ninguno" if m.facts.is_empty() else "- " + "\n- ".join(PackedStringArray(m.facts))
 	var out := "Relación con el jugador: %d (de -100 a 100). Conversaciones anteriores: %d.\nLo que recuerdas:\n%s" % [
 		int(m.relationship), int(m.conversations), facts]

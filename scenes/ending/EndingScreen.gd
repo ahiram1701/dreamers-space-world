@@ -6,9 +6,9 @@ signal continue_requested
 
 const MENU := "res://scenes/main_menu/MainMenu.tscn"
 const ENDING_NAMES := {
-	"close_the_loop": "Final: El bucle cerrado",
-	"return_home": "Final: Bahía de las Horas",
-	"keep_traveling": "Final: Ramas sin nombre",
+	"stay_home": "Final: En casa",
+	"go_back_for_someone": "Final: Nadie se queda atrás",
+	"keep_traveling": "Final: Por gusto",
 }
 
 var title := ""
@@ -53,8 +53,7 @@ func _ready() -> void:
 	tw.tween_callback(func(): _buttons.visible = true)
 
 	_button("Volver al menú principal", func(): get_tree().change_scene_to_file(MENU))
-	if ending != "return_home":
-		_button("Seguir explorando el multiverso", _continue)
+	_button("Seguir jugando", _continue)
 
 
 func _continue() -> void:

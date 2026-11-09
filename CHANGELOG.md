@@ -3,6 +3,69 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.11.0] - 2026-11-09
+
+### Corregido
+- **Textos cortados a mitad de palabra** (el Ancla, las opciones, los objetos del Cuaderno). El juego cortaba lo que escribía la IA en un número fijo de letras. Ahora corta al final de una frase, la IA sabe cuánto puede escribir y los límites de las historias son más amplios.
+- **Textos que se salían o desaparecían antes de leerlos:**
+  - Las opciones hacen salto de línea.
+  - La misión del HUD tiene ancho máximo.
+  - La historia de un objeto en el Cuaderno se desplaza.
+  - Avisos, subtítulos y bocadillos duran según lo largos que sean y la «velocidad de lectura» de Ajustes. Todo queda en el Registro del Cuaderno.
+- **El Despertar empezaba a cualquier hora.** Ahora solo ocurre si estás en la puerta del faro entre las 3:15 y las 3:45 de la madrugada. Fuera de esa hora, el objetivo te dice que vuelvas a las 3:33 a. m.
+- **La historia hablaba de sitios que no existen** (el «cuarto de aparejos» del faro). Las frases que mencionan cuartos, sótanos o laboratorios que no están en el juego se quitan, y la IA recibe lo que de verdad hay.
+- **Un faro que era una antena** y **una consola que era un montón de cajas** («un mojón de piedras»). Cada sitio de un lugar generado tiene un tipo y se construye con su forma:
+  - el faro, con puerta y su sala redonda;
+  - la consola, con pantallas;
+  - también archivo, cabaña, templo, muelle, mina, mercado e invernadero.
+  - Si la descripción del lugar nombra algo, se construye. Al examinar se lee su nombre real.
+- **Personas donde no deberían estar:** quien trabaja en un sitio está allí (la ingeniera, delante de su consola). Solo dice que está junto a algo si de verdad lo está.
+- **Desconocidos que sabían tu nombre o te escribían:**
+  - Solo saben tu nombre tus vecinos de siempre o quien te ha oído decirlo.
+  - Encontrar su cama deshecha no hace que alguien te conozca.
+  - Solo te escriben quienes te conocen y te dieron su número.
+- **Encargos que no aparecían o no se cumplían:**
+  - Si alguien te pide algo en voz alta, queda apuntado aunque la IA olvide registrarlo.
+  - Una persona puede pedirte hasta tres cosas.
+  - Entregar el objeto con «Dar objeto» cumple el encargo.
+  - Quien te lo pidió lo recuerda.
+- **La choza del pescador** ya se puede abrir, y **las barcas del lago y de la playa** están en el agua y se usan.
+
+### Cambiado
+- **Una historia nueva: naufragio y vuelta a casa.**
+  - A las 3:33 la grieta junto al faro te arrastra lejos de la Bahía.
+  - Tu Ancla es una brújula que siempre apunta a casa. En cada mundo, ayudar a alguien te acerca un tramo («Rumbo a casa: faltan N saltos»).
+  - El último salto te devuelve a la Bahía, donde eliges: quedarte, volver a por alguien que te ayudó o seguir viajando.
+- **Escenas en el motor en lugar de páginas de texto:**
+  - El Despertar y la vuelta a casa se cuentan con la cámara, los personajes y subtítulos cortos que avanzan con clic, E o espacio. Esc salta la escena.
+  - Al llegar a un mundo hay un plano de presentación.
+  - Al cumplir una misión, quien te la pidió te entrega lo prometido.
+  - Lo contado queda en el Diario.
+- **Misiones de quien conoces:** la misión de un lugar no aparece hasta que la persona te la pide en persona.
+- **Formato de 12 horas** en todo el juego («3:33 a. m.», «de 9:00 a. m. a 8:00 p. m.»). La IA también lo usa, y «a las 3» se entiende como la próxima 3.
+- **Necesidades más claras:**
+  - Las barras se llaman Comida, Agua, Energía e Higiene, y llenas significan bien.
+  - Muestran su porcentaje y se colorean de verde a ámbar y rojo.
+  - Se ven en cuanto bajan del 60 %, y al pasar el ratón explican qué son.
+- **Diálogo:** el oficio largo no empuja la cabecera, las respuestas no se aplastan y el historial guarda 40 líneas.
+
+### Añadido
+- **Encargos con hora y sitio** («estar en el muelle a las 3 de la madrugada»). Se cumplen si estás allí a tiempo y se pierden si no. El Cuaderno los separa en pendientes, cumplidos y perdidos, con quién, dónde, cuándo y qué ganas.
+- **Necesidades con efecto real:**
+  - Sin comer o beber te mareas y pierdes salud poco a poco.
+  - Con hambre, sed o agotamiento no puedes correr.
+  - Agotado del todo, te quedas dormido donde estés.
+- **Animaciones:**
+  - El paso va al ritmo de la velocidad real, así que los pies no patinan.
+  - El cuerpo se inclina al arrancar, al frenar y en las curvas, y da pasitos al girar parado.
+  - En un escalón o una cuesta, los pies se apoyan en el suelo.
+- **Mundos mejor generados:**
+  - Cada sitio está donde tiene sentido: el faro y el muelle en la orilla; la mina, la torre y el templo en lo alto.
+  - Senderos llevan a cada sitio.
+  - Lo salvaje tiene rastros de paso (hogueras viejas, mojones, muros caídos).
+  - Los objetos de los puestos avanzados se pueden examinar.
+  - Cada lugar tiene un problema concreto del que nace su misión.
+
 ## [0.10.0] - 2026-11-08
 
 ### Corregido

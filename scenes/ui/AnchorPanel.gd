@@ -80,15 +80,15 @@ func _rebuild() -> void:
 		c.queue_free()
 	var anchor_id: String = WorldDB.get_state("awakening", {}).get("anchor_id", "")
 	_title.text = WorldDB.get_entity("item", anchor_id).get("name", "El Ancla")
-	_info.text = "Energía: %d · Inestabilidad: %d · Ramas recorridas: %d · Coordenadas: %d/%d" % [
+	_info.text = "Energía: %d · Inestabilidad: %d · Mundos recorridos: %d · Rumbo a casa: faltan %d saltos" % [
 		GameState.get_stat("energy"), GameState.get_stat("instability"), TimelineManager.depth(),
-		GameState.fragments(), GameState.FRAGMENTS_NEEDED]
+		maxi(0, GameState.FRAGMENTS_NEEDED - GameState.fragments())]
 	if GameState.has_free_jump():
 		_info.text += "\nCoordenadas grabadas: el próximo salto no gasta energía."
 	if Travel.is_pregenerating():
 		_info.text += "\nCalculando el siguiente destino en segundo plano…"
 	if GameState.has_all_fragments() and GameState.ending().is_empty():
-		_add_option("Seguir la señal hasta su origen", GameState.travel_cost("finale"), "finale")
+		_add_option("Volver a casa: el último salto", GameState.travel_cost("finale"), "finale")
 	_add_option("Saltar a una rama desconocida", GameState.travel_cost("new"), "new")
 	for d in Travel.known_destinations():
 		_add_option("Volver a %s" % d.name, d.cost, d.location_id)
@@ -111,8 +111,8 @@ func _travel(target: String) -> void:
 			_loading.show_loading("Saltando a lo desconocido", PackedStringArray([
 				"Calculando trayectoria", "Estabilizando el Ancla", "Buscando una rama compatible", "Midiendo la decoherencia"]), true)
 		"finale":
-			_loading.show_loading("Siguiendo la señal", PackedStringArray([
-				"Triangulando las cinco coordenadas", "Todas las ramas convergen", "La transmisión se hace más fuerte"]), true)
+			_loading.show_loading("Volviendo a casa", PackedStringArray([
+				"La aguja de la brújula se queda quieta", "Huele a sal", "Se oye el mar de la Bahía"]), true)
 		_:
 			_loading.show_loading("Recorriendo una ruta conocida", PackedStringArray(["Sincronizando el Ancla"]), true)
 	var r: Dictionary

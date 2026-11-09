@@ -49,6 +49,27 @@ func scene_context() -> String:
 	return ""
 
 
+## Agotado: te quedas dormido donde estás, unas horas (con fundido); al despertar, te duele todo.
+func _on_collapsed() -> void:
+	if not is_inside_tree() or _player == null or not _player.controls_enabled:
+		return
+	if _ui:
+		_ui.toast("Estás agotado. Los ojos se te cierran solos…", "warn")
+	_player.play_gesture("yawn", 1.5)
+	await get_tree().create_timer(1.5).timeout
+	if is_inside_tree():
+		_interiors.rest(240.0, null, true)
+
+
+## Sin comer o sin beber: la vista se tambalea y se te escapa un paso.
+func _on_starving(need: String) -> void:
+	if _player == null:
+		return
+	_player.shake(0.6, 0.05)
+	if _ui and randf() < 0.35:
+		_ui.toast("Te mareas: necesitas %s ya." % ("comer algo" if need == "hunger" else "beber agua"), "warn")
+
+
 ## Nombre del sitio con nombre más cercano a una posición (o "").
 func place_near(pos: Vector3) -> String:
 	var best := ""
@@ -101,6 +122,8 @@ func _pick_up(_p: Pickup) -> void:
 
 func _setup_common() -> void:
 	_player.interact_requested.connect(_on_interact)
+	Body.collapsed.connect(_on_collapsed)
+	Body.starving.connect(_on_starving)
 	_interiors.player = _player
 	for entry in Actions.placed_here(GameState.current_location()):
 		Decor.build_placed(self, entry, ground_at, _water_level, _on_placed_use)
@@ -804,7 +827,7 @@ func _add_work_spot() -> void:
 	var spot: Vector3 = _interiors.npc_spot(1) if _interiors.npc_spot(1) != Vector3.INF else _player.global_position + Vector3(0, 0, -2)
 	var root: Node3D = _interiors.get("_interior").root
 	var it := Interactable.create(root, spot - root.global_position + Vector3(0, 1.0, 0), 1.8,
-		"Trabajar: %s (%02d:00–%02d:00)" % [j.title, j.start_hour, j.end_hour], func(_p): _work())
+		"Trabajar: %s (%s)" % [j.title, WorldClock.span(j.start_hour, j.end_hour)], func(_p): _work())
 	_work_spot = it
 
 
@@ -1132,8 +1155,18 @@ func dialogue_context(npc_id: String) -> String:
 	if _interiors.is_inside():
 		where = "dentro de %s" % _interiors.current_label()
 	else:
-		var near := place_near(_player.global_position)
-		where = ("fuera, cerca de: %s" % near) if not near.is_empty() else "fuera, al aire libre"
+		# «junto a» solo si de verdad está al lado; si no, a qué distancia (no dice que está en la consola a 25 m)
+		var near := place_near(npc.global_position if npc else _player.global_position)
+		var d := INF
+		if not near.is_empty() and _places.has(near):
+			var p: Vector3 = _places[near]
+			d = Vector2(p.x - (npc.global_position.x if npc else _player.global_position.x), p.z - (npc.global_position.z if npc else _player.global_position.z)).length()
+		if d < 4.5:
+			where = "fuera, junto a: %s" % near
+		elif d < 30.0:
+			where = "fuera, a unos %d m de %s (no estás en ese sitio)" % [int(d), near]
+		else:
+			where = "fuera, al aire libre"
 	var state := "TU SITUACIÓN FÍSICA AHORA MISMO: estás %s, de pie, cara a cara con el jugador (a %.0f m), hablando con él/ella." % [
 		where, npc.global_position.distance_to(_player.global_position) if npc else 1.5]
 	if NPCMemory.is_following(npc_id):

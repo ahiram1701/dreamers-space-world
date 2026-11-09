@@ -40,15 +40,55 @@ static func build(parent: Node3D, def: Dictionary, height_at: Callable, rng: Ran
 			_floating_rocks(parent, rng, biome)
 		"planet_surface":
 			_outpost(parent, def, height_at, rng, avoid)
+		"wilderness":
+			_wild_traces(parent, height_at, rng, avoid)
 	if biome == "urban" and kind != "town" and kind != "city":
 		_settlement(parent, def, height_at, rng, avoid, 14)
 	_nature(parent, biome, height_at, rng, avoid, 0.5 if kind in ["town", "city", "ruins"] else 1.0)
+
+
+## Lo salvaje no está vacío: alguien pasó por aquí (una hoguera vieja, un refugio de piedra,
+## mojones que marcan el camino). Todo examinable.
+static func _wild_traces(parent: Node3D, height_at: Callable, rng: RandomNumberGenerator, avoid: Array) -> void:
+	var stone := Color("#7d7468")
+	for i in 3:
+		var p := _free_spot(rng, avoid, Vector2(rng.randf_range(-25, 25), rng.randf_range(-25, 25)), 8.0, 40.0)
+		if p == Vector3.INF:
+			continue
+		p.y = height_at.call(p.x, p.z)
+		var root := Node3D.new()
+		parent.add_child(root)
+		root.position = p
+		root.rotation.y = rng.randf() * TAU
+		var kind: String = ["camp", "marker", "ruins_small"][i % 3]
+		match kind:
+			"camp":
+				var fire := AssetLibrary.instance("survival_pack", "Bonfire")
+				if fire:
+					AssetLibrary.place(root, fire, Vector3.ZERO, 0.45, 0.0, false)
+				for k in 4:
+					var a := k * TAU / 4.0
+					_box(root, Vector3(cos(a) * 1.4, 0.2, sin(a) * 1.4), Vector3(0.7, 0.4, 0.4), Color("#6b4a2b"), true).rotation.y = a
+				Decor.landmark(parent, p, "una hoguera vieja, con troncos alrededor para sentarse", "trace")
+			"marker":
+				PoiCatalog.build(root, "marker", rng, stone)
+				Decor.landmark(parent, p, "un mojón de piedras apiladas que marca el camino", "trace")
+			"ruins_small":
+				for k in 3:
+					_box(root, Vector3(k * 1.1 - 1.1, 0.5 + rng.randf() * 0.4, 0), Vector3(1.0, 1.0 + rng.randf() * 0.8, 0.5), stone, true)
+				Decor.landmark(parent, p, "un muro de piedra derrumbado, de un refugio antiguo", "trace")
+		avoid.append(Vector3(p.x, 3.0, p.z))
 
 
 # --- Asentamientos --------------------------------------------------------------------
 
 ## En un planeta: un puesto avanzado (módulos con puerta, cajas, contenedores, una antena y una
 ## terminal), no solo naturaleza. Aquí vive y trabaja la gente del lugar.
+const OUTPOST_LABELS := {"Props_Crate": "unas cajas de carga", "Props_CrateLong": "una caja de carga alargada",
+	"Props_ContainerFull": "un contenedor lleno", "Props_Vessel": "un tanque de agua", "Props_Vessel_Tall": "un depósito alto",
+	"Props_Computer": "una computadora del puesto", "Props_Pod": "una cápsula de suministros", "Column_1": "un pilar metálico"}
+
+
 static func _outpost(parent: Node3D, def: Dictionary, height_at: Callable, rng: RandomNumberGenerator, avoid: Array) -> void:
 	var d := def.duplicate()
 	# En otro planeta, lo que hay lo trajo alguien de fuera: módulos de una época avanzada
@@ -60,10 +100,12 @@ static func _outpost(parent: Node3D, def: Dictionary, height_at: Callable, rng: 
 		if p == Vector3.INF:
 			continue
 		p.y = height_at.call(p.x, p.z)
-		var m := AssetLibrary.instance("modular_sci_fi", str(props[rng.randi() % props.size()]))
+		var model := str(props[rng.randi() % props.size()])
+		var m := AssetLibrary.instance("modular_sci_fi", model)
 		if m:
 			AssetLibrary.place(parent, m, p, rng.randf_range(0.9, 2.2), rng.randf() * TAU, true)
 			avoid.append(Vector3(p.x, 2.0, p.z))
+			Decor.landmark(parent, p, OUTPOST_LABELS.get(model, "material del puesto"), "prop")
 
 static func _settlement(parent: Node3D, def: Dictionary, height_at: Callable, rng: RandomNumberGenerator, avoid: Array, count: int) -> void:
 	var style: Dictionary = ERA_STYLE.get(def.get("era", "present"), ERA_STYLE["present"])

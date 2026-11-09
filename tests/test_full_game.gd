@@ -35,7 +35,11 @@ func _run() -> void:
 			first_location = j.location_id
 			_expect(loc.item_ids.size() == 2, "el lugar tiene 2 objetos")
 			var q0: Dictionary = quests.for_location(j.location_id)
-			_expect(not q0.is_empty() and q0.status == "active", "el lugar tiene una misión activa: %s" % quests.objective_text(q0))
+			_expect(not q0.is_empty() and q0.status == "offered", "el lugar tiene una misión, pero nadie te la ha pedido aún")
+			quests.notify("visit_poi", "0")
+			_expect(quests.get_quest(q0.id).status == "offered", "sin aceptarla, ir a un sitio no la cumple")
+			quests.notify("talk_npc", q0.giver)
+			_expect(quests.get_quest(q0.id).status == "active", "al hablar con quien la pide, queda aceptada: %s" % quests.objective_text(q0))
 			# Recoger y usar un objeto
 			inventory.add(loc.item_ids[0])
 			_expect(inventory.has(loc.item_ids[0]), "objeto recogido")
@@ -76,11 +80,11 @@ func _run() -> void:
 	_expect(game.get_stat("energy") == quests.BONUS_ENERGY, "con todos los fragmentos, la recompensa es energía")
 	game.recharge()
 
-	# El origen de la señal y el final
+	# La vuelta a casa y el final
 	var fin: Dictionary = await travel.jump_finale()
-	_expect(fin.ok and db.get_entity("location", fin.location_id).get("finale", false), "salto al origen de la señal")
+	_expect(fin.ok and fin.location_id == game.HOME and db.get_state("homecoming", false), "el último salto te lleva a casa")
 	var finale: Dictionary = await story.generate_finale()
-	_expect(finale.choices.size() == 3, "tres finales")
+	_expect(finale.choices.size() == 3 and finale.beats.size() >= 4, "la escena de la vuelta y tres finales")
 	var ending: Dictionary = story.apply_ending(finale, 0)
 	_expect(game.ending() == ending.ending and not ending.epilogue.is_empty(), "final aplicado: %s" % ending.ending)
 
@@ -95,6 +99,8 @@ func _run() -> void:
 ## Cumple la misión del lugar como lo haría un jugador.
 func _complete_quest(quests, inventory, location_id: String) -> void:
 	var q: Dictionary = quests.for_location(location_id)
+	if q.status == "offered":
+		quests.notify("talk_npc", q.giver)
 	match q.objective:
 		"visit_poi":
 			quests.notify("visit_poi", q.target)

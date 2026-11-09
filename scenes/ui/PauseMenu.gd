@@ -92,7 +92,7 @@ func open() -> void:
 	var where := Travel.location_name(GameState.current_location())
 	_info.text = "%s · %s\n%s, %s" % [WorldDB.get_state("profile", {}).get("name", ""), where, WorldClock.weekday().capitalize(), WorldClock.text()]
 	if GameState.is_awakened():
-		_info.text += "\nCoordenadas %d/%d · Ramas recorridas: %d" % [GameState.fragments(), GameState.FRAGMENTS_NEEDED, TimelineManager.depth()]
+		_info.text += "\nRumbo a casa: faltan %d saltos · Mundos recorridos: %d" % [maxi(0, GameState.FRAGMENTS_NEEDED - GameState.fragments()), TimelineManager.depth()]
 	WorldDB.flush()  # al pausar, todo queda escrito
 	_info.text += "\nPartida guardada."
 	_controls.visible = false

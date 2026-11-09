@@ -543,7 +543,7 @@ func _physics_process(delta: float) -> void:
 		velocity.y -= _gravity * gravity_scale * delta
 
 	var dir := Vector3.ZERO
-	var running := controls_enabled and Input.is_action_pressed("run")
+	var running := controls_enabled and Input.is_action_pressed("run") and Body.can_run()
 	if _auto_target != Vector3.INF:
 		dir = _auto_direction(delta)
 		running = _flat_distance(_auto_target) > 8.0 if _auto_target != Vector3.INF else false

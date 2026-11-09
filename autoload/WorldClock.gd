@@ -76,8 +76,24 @@ func absolute_minutes() -> float:
 	return _day * 24.0 * 60.0 + _minutes
 
 
+## La hora de ahora en formato de 12 horas: «3:33 a. m.», «12:05 p. m.».
 func text() -> String:
-	return "%02d:%02d" % [int(_minutes / 60.0), int(_minutes) % 60]
+	return fmt(_minutes / 60.0)
+
+
+## Una hora (3.5 = 3:30) en formato de 12 horas, como se dice en México.
+static func fmt(h: float) -> String:
+	var total := int(round(fposmod(h, 24.0) * 60.0)) % 1440
+	var h24 := total / 60
+	var h12 := h24 % 12
+	if h12 == 0:
+		h12 = 12
+	return "%d:%02d %s" % [h12, total % 60, "a. m." if h24 < 12 else "p. m."]
+
+
+## Un intervalo de horas enteras: «de 9:00 a. m. a 8:00 p. m.».
+static func span(from_h: float, to_h: float) -> String:
+	return "de %s a %s" % [fmt(from_h), fmt(to_h)]
 
 
 ## Altura del sol: 1 a mediodía, 0 al amanecer/atardecer (6:00 y 20:00), negativa de noche.

@@ -231,7 +231,7 @@ class RuleRunner extends Node:
 					Sfx.at(root, str(val) if str(val) in ["knock", "door", "hit", "chop", "splash", "whoosh"] else "knock", root.global_position + Vector3(0, 1, 0), 0.05)
 				"say":
 					if scene and scene.get("_ui") and scene.get("_ui").has_method("toast"):
-						scene.get("_ui").toast(str(val).left(120))
+						scene.get("_ui").toast(ContentValidator.fit_text(str(val), 240))
 				"color":
 					if Color.html_is_valid(str(val)):
 						for m in root.find_children("Part_*", "MeshInstance3D", true, false):

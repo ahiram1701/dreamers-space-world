@@ -93,6 +93,11 @@ var _held_shape := {}
 var _held_len := 0.0
 var _held_grip := 0.0
 var _held_w := 0.0    # cuánto pesa la pose de sujetarlo (0 mientras un gesto usa la mano)
+var _last_speed := 0.0
+var _accel := 0.0     # aceleración suavizada (m/s²): el cuerpo se inclina al arrancar y al frenar
+var _last_yaw := NAN
+var _turn := 0.0      # giro suavizado (rad/s): inclinación en las curvas y pasitos al girar parado
+var _foot_t := 0.0
 
 
 func setup(model: Node3D) -> bool:
@@ -171,7 +176,10 @@ func _process(delta: float) -> void:
 				delta = _acc
 		_acc = 0.0
 	_t += delta
+	_track_motion(delta)
 	var target := _locomotion(delta)
+	if speed < 0.4 and not airborne and not swimming and _gesture_w < 0.5:
+		_foot_ik(target, delta)
 	var hand_busy := _tool != null and _gesture_w > 0.05
 	_held_w = move_toward(_held_w, 1.0 if (_held and not hand_busy) else 0.0, delta * 5.0)
 	if _held_w > 0.0:  # el brazo derecho adelante, alumbrando (el braceo de andar se nota menos)
@@ -227,7 +235,9 @@ func _locomotion(delta: float) -> Dictionary:
 	var walk := clampf(speed / 4.0, 0.0, 1.0)
 	var run := clampf((speed - 4.8) / 3.0, 0.0, 1.0)
 	var before := sin(_phase)
-	_phase += delta * (1.8 + speed * 1.45)
+	# Cadencia según el paso real: cada zancada avanza lo que mide la pierna (los pies no patinan)
+	var stride := 0.62 + 0.32 * run
+	_phase += delta * maxf(1.8, TAU * speed / (2.0 * stride))
 	if walk > 0.3 and not swimming and not airborne and signf(sin(_phase)) != signf(before):
 		footstep.emit(speed > 5.0)
 	var s := sin(_phase)
@@ -292,7 +302,73 @@ func _locomotion(delta: float) -> Dictionary:
 		_add(p, "Torso", Vector3(4 + 14 * run, 0, 0) * walk)
 		_add(p, "Head", Vector3(-(2 + 8 * run), -s * 2, 0) * walk)
 		p["_y"] = -absf(c) * 0.04 * walk - 0.05 * run
+		# Al arrancar se echa adelante, al frenar atrás; en las curvas se inclina hacia dentro
+		_add(p, "Torso", Vector3(clampf(_accel * 2.2, -9.0, 12.0), 0, clampf(-_turn * speed * 1.6, -12.0, 12.0)) * walk)
+		_add(p, "Hips", Vector3(0, 0, clampf(-_turn * speed * 0.8, -6.0, 6.0)) * walk)
+	elif absf(_turn) > 0.9:
+		# Girar parado: pasitos en el sitio, no patinar sobre los talones
+		var k := clampf((absf(_turn) - 0.9) / 2.5, 0.0, 1.0)
+		var st := sin(_t * 10.0)
+		_add(p, "UpperLeg.L", Vector3(maxf(0.0, st) * 22.0, 0, 0) * k)
+		_add(p, "LowerLeg.L", Vector3(-maxf(0.0, st) * 40.0, 0, 0) * k)
+		_add(p, "UpperLeg.R", Vector3(maxf(0.0, -st) * 22.0, 0, 0) * k)
+		_add(p, "LowerLeg.R", Vector3(-maxf(0.0, -st) * 40.0, 0, 0) * k)
+		_add(p, "Hips", Vector3(0, -signf(_turn) * 6.0 * k, 0))
 	return p
+
+
+## Cuánto acelera y gira el cuerpo (del movimiento del personaje, suavizado).
+func _track_motion(delta: float) -> void:
+	if delta <= 0.0:
+		return
+	var a := (speed - _last_speed) / delta
+	_last_speed = speed
+	_accel = lerpf(_accel, clampf(a, -8.0, 8.0), 1.0 - exp(-5.0 * delta))
+	var body := get_parent() as Node3D
+	if body == null:
+		return
+	var yaw := body.global_rotation.y
+	if is_nan(_last_yaw):
+		_last_yaw = yaw
+	var w := wrapf(yaw - _last_yaw, -PI, PI) / delta
+	_last_yaw = yaw
+	_turn = lerpf(_turn, clampf(w, -5.0, 5.0), 1.0 - exp(-6.0 * delta))
+
+
+## Parado en un escalón o una cuesta: el pie de abajo baja hasta el suelo y la rodilla del de
+## arriba se dobla (antes, un pie quedaba flotando). Dos rayos cortos, solo de pie y quieto.
+var _ik := {"L": 0.0, "R": 0.0, "drop": 0.0}
+func _foot_ik(target: Dictionary, delta: float) -> void:
+	_foot_t -= delta
+	if _foot_t <= 0.0:
+		_foot_t = 0.1
+		var body := get_parent() as Node3D
+		if body == null or not body.is_inside_tree() or not _idx.has("Foot.L") or not _idx.has("Foot.R"):
+			return
+		var space := body.get_world_3d().direct_space_state
+		var exclude: Array[RID] = []
+		if body is CollisionObject3D:
+			exclude.append((body as CollisionObject3D).get_rid())
+		var base_y := body.global_position.y
+		var h := {}
+		for side in ["L", "R"]:
+			var foot := _sk.global_transform * _sk.get_bone_global_pose(_idx["Foot." + side]).origin
+			var q := PhysicsRayQueryParameters3D.create(Vector3(foot.x, base_y + 0.45, foot.z), Vector3(foot.x, base_y - 0.45, foot.z))
+			q.exclude = exclude
+			var hit := space.intersect_ray(q)
+			h[side] = (float(hit.position.y) - base_y) if not hit.is_empty() else 0.0
+		var low := minf(h.L, h.R)
+		_ik.drop = clampf(low, -0.3, 0.0)
+		_ik.L = clampf(h.L - low, 0.0, 0.35)
+		_ik.R = clampf(h.R - low, 0.0, 0.35)
+	for side in ["L", "R"]:
+		var d: float = _ik[side]
+		if d > 0.02:
+			_add(target, "UpperLeg." + side, Vector3(d * 120.0, 0, 0))
+			_add(target, "LowerLeg." + side, Vector3(-d * 230.0, 0, 0))
+			_add(target, "Foot." + side, Vector3(d * 60.0, 0, 0))
+	if _ik.drop < -0.02:
+		target["_y"] = float(target.get("_y", 0.0)) + _ik.drop
 
 
 # --- Capa 2: gestos ------------------------------------------------------------------

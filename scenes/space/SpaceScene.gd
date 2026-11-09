@@ -500,7 +500,7 @@ func toast(text: String, seconds: float = 4.0) -> void:
 	if _toast == null:
 		return
 	_toast.text = text
-	_toast_t = seconds
+	_toast_t = maxf(seconds, Settings.read_time(text))
 
 
 ## Lo que la IA sabe al pulsar F en el espacio.

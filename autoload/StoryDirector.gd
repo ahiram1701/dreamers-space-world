@@ -37,6 +37,18 @@ func talk(npc_id: String, player_input: String, scene_context: String) -> Dictio
 		if not dropped.is_empty():
 			print_debug("[ropa] quitado de %s: %s" % [npc_id, dropped])
 		make_consistent(turn)
+	# Se presenta: a partir de ahora sabe su nombre. Si no lo sabe, no puede usarlo.
+	var pname := PlayerProfile.player_name()
+	var said_low := said.to_lower()
+	if pname.length() >= 2 and (said_low.contains(pname.to_lower()) or said_low.contains("me llamo") or said_low.contains("mi nombre es")):
+		NPCMemory.learn_name(npc_id)
+	if res.ok and not NPCMemory.knows_name(npc_id):
+		turn.line = strip_name(str(turn.line), pname)
+	if res.ok:
+		var fixed := check_places(str(turn.line), scene_context)
+		if not fixed.dropped.is_empty() and not str(fixed.text).strip_edges().is_empty():
+			print_debug("[sitios inventados] %s" % [fixed.dropped])
+			turn.line = fixed.text
 	# Lo que el PNJ hace (dar, acompañar, curar, irse…) ocurre de verdad, no solo se dice
 	turn["notes"] = Actions.execute(npc_id, turn.get("actions", [])) if res.ok else []
 
@@ -47,6 +59,24 @@ func talk(npc_id: String, player_input: String, scene_context: String) -> Dictio
 		PlayerProfile.apply_signals(turn.get("trait_signals", []))
 	turn_finished.emit(npc_id, turn)
 	return turn
+
+
+## Quita el nombre del jugador de una frase de alguien que no lo sabe («Hola, Ana, pasa» → «Hola, pasa»).
+static func strip_name(line: String, pname: String) -> String:
+	if pname.length() < 2 or not line.to_lower().contains(pname.to_lower()):
+		return line
+	var re := RegEx.create_from_string("(?i),?\\s*\\b" + _escape_re(pname) + "\\b")
+	var out := re.sub(line, "", true)
+	out = out.replace(" ,", ",").replace(",,", ",").replace(",.", ".").replace(",!", "!").replace(",?", "?").replace("¿,", "¿").replace("¡,", "¡")
+	out = out.strip_edges().trim_prefix(",").strip_edges()
+	return (out.substr(0, 1).to_upper() + out.substr(1)) if not out.is_empty() else line
+
+
+static func _escape_re(s: String) -> String:
+	var out := ""
+	for c in s:
+		out += ("\\" + c) if c in ".^$*+?()[]{}|\\" else c
+	return out
 
 
 ## Lo que el jugador escribe entre asteriscos es lo que HACE, no lo que dice: «*le doy un abrazo*».
@@ -201,6 +231,22 @@ static func make_consistent(turn: Dictionary) -> void:
 			var a := {"type": "go_inside" if inside else "leave", "target": _place_in(low)}
 			actions.append(a)
 			types.append(a.type)
+	# Un favor que pide en voz alta queda apuntado aunque se le olvide la acción give_quest
+	var said: String = str(turn.get("line", ""))
+	if not "give_quest" in types and REQUEST_WORDS.any(func(w): return low.contains(w)):
+		var sentence := _sentence_with(said, REQUEST_WORDS)
+		if not sentence.is_empty():
+			var q := {"type": "give_quest", "target": ContentValidator.fit_text(sentence.trim_prefix("¿").trim_suffix("?"), 60), "text": sentence}
+			if ["tráeme", "traeme", "me traes", "me traerías", "me consigues", "consígueme", "consigueme", "me puedes traer", "llévale"].any(func(w): return low.contains(w)):
+				q["quest_kind"] = "bring_item"
+			actions.append(q)
+			types.append("give_quest")
+	# La hora que dijo («a las 3 de la mañana») va en el encargo aunque la IA no la pusiera
+	var at := parse_at_hour(low)
+	if at >= 0.0:
+		for a in actions:
+			if a.get("type", "") == "give_quest" and a.get("at_hour") == null:
+				a["at_hour"] = at
 	turn["actions"] = actions
 	var leaving: bool = types.any(func(t): return t in LEAVING_TYPES)
 	turn["leaving"] = leaving
@@ -211,6 +257,54 @@ static func make_consistent(turn: Dictionary) -> void:
 			for a in actions:
 				if a.get("type", "") == "go_inside":
 					a["locked"] = true
+
+
+## La frase de `text` que contiene alguna de `words` (o "").
+static func _sentence_with(text: String, words: Array) -> String:
+	var low := text.to_lower()
+	for w in words:
+		var i := low.find(w)
+		if i < 0:
+			continue
+		var start := 0
+		for mark in [". ", "! ", "? ", "\n"]:
+			var j := low.rfind(mark, i)
+			if j >= 0:
+				start = maxi(start, j + mark.length())
+		var end := text.length()
+		for mark in [".", "!", "?", "\n"]:
+			var j := text.find(mark, i)
+			if j >= 0:
+				end = mini(end, j + 1)
+		return text.substr(start, end - start).strip_edges()
+	return ""
+
+
+## «a las 3 de la mañana» → 3.0, «a las 5:30 p. m.» → 17.5, «a las 3» → la próxima 3 (de
+## madrugada o de tarde, la que llegue antes). -1 si no dice hora.
+static func parse_at_hour(low: String) -> float:
+	var re := RegEx.create_from_string("a las? (\\d{1,2})(?:[:.](\\d{2}))?\\s*(a\\. ?m\\.|am|p\\. ?m\\.|pm|de la mañana|de la madrugada|de la tarde|de la noche|del mediodía)?")
+	var m := re.search(low)
+	if m == null:
+		return -1.0
+	var h := float(m.get_string(1))
+	if h > 24.0:
+		return -1.0
+	var mins := float(m.get_string(2)) if not m.get_string(2).is_empty() else 0.0
+	var suffix := m.get_string(3)
+	if suffix.begins_with("p") or suffix.contains("tarde") or suffix.contains("noche"):
+		if h < 12.0:
+			h += 12.0
+	elif suffix.begins_with("a") or suffix.contains("mañana") or suffix.contains("madrugada"):
+		if h == 12.0:
+			h = 0.0
+	elif suffix.is_empty() and h <= 12.0:
+		var now := WorldClock.hour()
+		var am := fposmod(h - now, 24.0)
+		var pm := fposmod(h + 12.0 - now, 24.0)
+		if pm < am:
+			h += 12.0
+	return fmod(h + mins / 60.0, 24.0)
 
 
 ## Lugar mencionado en una frase ("me voy a la cafetería" → "cafetería"), o "".
@@ -231,6 +325,11 @@ static func truthful_facts(facts: Array) -> Array:
 		var low := " " + str(f).to_lower()
 		return not MOVEMENT_FACT.any(func(w): return low.contains(w)))
 
+
+## Pedidos en voz alta: si el PNJ los dice, el encargo queda apuntado.
+const REQUEST_WORDS := ["tráeme", "traeme", "¿me traes", "¿me traerías", "¿me consigues", "consígueme", "consigueme",
+	"¿me puedes traer", "¿me puedes conseguir", "necesito que me traigas", "necesito que me consigas",
+	"necesito que vayas", "llévale", "te encargo", "hazme el favor de", "búscame", "encuéntrame"]
 
 ## Pasos que tienen sentido en una acción del jugador (tecla F).
 const WORLD_STEPS := ["go_to", "play", "use", "npc_react", "give_to_npc", "give_item", "change_stat", "journal",
@@ -360,6 +459,29 @@ static func check_world_claims(text: String, people: Array, places: Array = []) 
 	return {"text": " ".join(kept), "dropped": dropped}
 
 
+## Partes de un edificio que la IA tiende a inventar («bajas al cuarto de aparejos»).
+const ROOM_WORDS := ["cuarto de", "sótano", "sotano", "laboratorio", "pasadizo", "túnel", "tunel", "bodega",
+	"trastienda", "ático", "desván", "desvan", "cámara secreta", "habitación secreta", "pasaje secreto",
+	"búnker", "bunker", "subterráneo", "subterraneo", "cripta", "trampilla del suelo"]
+
+
+## Quita las frases que llevan al jugador (o hablan de) sitios que no existen: un cuarto, un
+## sótano, un laboratorio… que no aparecen en `known` (lo que de verdad hay: nombres y
+## descripciones de la escena). Devuelve {text, dropped: [frases]}.
+static func check_places(text: String, known: String) -> Dictionary:
+	var known_low := known.to_lower()
+	var kept := PackedStringArray()
+	var dropped := []
+	for sentence in _sentences(text):
+		var low := sentence.to_lower()
+		var bad := ROOM_WORDS.any(func(w): return low.contains(w) and not known_low.contains(w))
+		if bad:
+			dropped.append(sentence)
+		else:
+			kept.append(sentence)
+	return {"text": " ".join(kept), "dropped": dropped}
+
+
 ## El jugador hace algo libre en el mundo (tecla F). La IA lo convierte en pasos (ir, gesto, usar,
 ## reacciones, cambios) que el ActionPerformer representa en orden. Aquí no se ejecuta nada.
 ## Devuelve { ok, narration, steps, minutes, error }.
@@ -393,6 +515,10 @@ func act(what: String, scene_context: String) -> Dictionary:
 			if s is Dictionary and s.has("narration"):
 				var cs := check_world_claims(str(s.narration), people, places)
 				s["narration"] = cs.text
+	# Ni cuartos ni sótanos que no existen
+	var cp := check_places(str(data.narration), scene_context)
+	if not cp.dropped.is_empty() and not str(cp.text).strip_edges().is_empty():
+		data["narration"] = cp.text
 	var steps := plan_steps(data)
 	if steps.is_empty() and data.has("_dropped"):  # usó pasos que no existen: una vez más, con la lista buena
 		messages.append({"role": "assistant", "content": JSON.stringify(data)})
@@ -502,13 +628,12 @@ static func _ensure_distinct(choices: Array, field: String, allowed: Array) -> v
 # --- El Despertar ---------------------------------------------------------------------
 
 const ACT0_NEIGHBORS := ["npc_marina", "npc_teo", "npc_samir"]
-const ORIGIN_GUIDE := """ORÍGENES POSIBLES (elige UNO según quién es el jugador y con quién conectó):
-- future_probe: una sonda enviada desde el año 2190 está enterrada bajo el faro; su núcleo emite el pulso.
-- failed_experiment: bajo el faro hay un laboratorio sellado de un proyecto de física de los años 80 que abrió la brecha.
-- branch_transmission: otra versión del jugador, desde otra rama, transmite por la frecuencia que capta Samir los planos del Ancla.
-- alien_artifact: un objeto de origen no humano estabiliza una brecha natural bajo el faro.
-- natural_anomaly: una microbrecha natural que la lente del faro amplifica por accidente.
-Pistas: escépticos → explicaciones de laboratorio o naturales; curiosos → sonda o artefacto; quien conectó con Samir → transmisión; con Marina → el faro; con Teo → las filtraciones de memoria."""
+const ORIGIN_GUIDE := """LA HISTORIA (es la misma para todos; tú la cuentas para ESTE jugador):
+- Junto a la puerta del faro hay una grieta en el aire, natural y diminuta; la lente del faro la amplifica cada noche a las 3:33. Esta noche se abre del todo y arrastra al jugador lejos de casa, a otro mundo.
+- Lo que le queda es su Ancla: una brújula de bolsillo hecha con algo del pueblo ("base"), que siempre apunta a casa. Pero le falta fuerza para un salto tan largo: tendrá que volver tramo a tramo, con ayuda de la gente que encuentre.
+- Si un vecino está con él, le agarra la mano en el último segundo ("companion_line": lo que le grita).
+- TODO pasa FUERA, delante de la puerta del faro: no entra, no hay sótanos, cuartos, laboratorios ni pasadizos. Nada de jerga (cuántico, coherencia, espacio-tiempo, frecuencia).
+TOMAS QUE EXISTEN ("shot"): lighthouse (el faro entero, de noche), lamp (la lámpara de arriba, que se enciende sola), door (la puerta del faro y tú delante), crack (la grieta en el aire junto a la puerta), breach (la grieta abierta, enorme, tirando de todo), sea (el mar, quieto, como congelado), sky (el cielo), town (las luces del pueblo a lo lejos), player (tu cara, de cerca), companion (el vecino que corre hacia ti), watch (la brújula en tu mano)."""
 
 
 ## Pide a la IA el Despertar de ESTE jugador. Siempre devuelve uno válido (IA o respaldo).
@@ -519,31 +644,54 @@ func generate_awakening() -> Dictionary:
 		if not npc.is_empty():
 			neighbors.append("%s (%s): %s" % [npc.name, npc.occupation, NPCMemory.describe(id)])
 	var messages := [
-		{"role": "system", "content": ContentGenerator.world_rules_prompt() + "\n\nEres el narrador de EL DESPERTAR: el momento en que el jugador descubre la brecha bajo el faro y obtiene el Ancla. Escribe en segunda persona, con detalle sensorial y explicaciones físicas creíbles. Nada sobrenatural."},
-		{"role": "user", "content": """Son las 3:33. El jugador entra en el faro durante el pulso.
+		{"role": "system", "content": ContentGenerator.world_rules_prompt() + "\n\nEres el guionista de EL DESPERTAR, una escena de cine corta: el momento en que la brecha arrastra al jugador lejos de casa. Segunda persona, frases cortas y concretas: qué se ve, qué se oye, qué hace. Que se entienda a la primera."},
+		{"role": "user", "content": """Son las 3:33 de la madrugada. El jugador está fuera, delante de la puerta del faro.
 
 QUIÉN ES EL JUGADOR: %s
 
 LO QUE RECUERDA CADA VECINO DE ÉL:
 %s
 
+EL FARO (lo único que hay): %s
+
 %s
 
-Crea su Despertar:
-- "narration": lo que vive (el pulso, la dilatación temporal alrededor del faro, el descubrimiento de la fuente).
-- "anchor": el dispositivo que le permite viajar; "base" es el objeto del pueblo sobre el que se construye (o "none").
-- "canon_facts": 2-3 hechos que serán verdad para siempre en este mundo.
-- "choices": exactamente una opción por consecuencia (jump_alone, jump_with_companion, seal_behind), escritas para esta historia.
-- "destination_hint": a qué tipo de lugar o época le llevará su primer salto.""" % [
-			PlayerProfile.describe(), "\n".join(neighbors), ORIGIN_GUIDE]},
+Escribe:
+- "beats": de 5 a 8 tomas en orden, cada una con "shot" (de la lista) y "line" (una o dos frases, máx. 130 caracteres). Empieza por el faro y la lámpara, sigue con la grieta, termina con la brecha tirando de ti.
+- "anchor": la brújula que te queda; "name" corto y "description" de 1-2 frases (de qué está hecha y qué hace: apunta a casa); "base" es el objeto del pueblo del que sale.
+- "companion_line": lo que te grita el vecino que más te aprecia al agarrarte la mano.
+- "canon_facts": 2-3 hechos que serán verdad para siempre.
+- "destination_hint": a qué tipo de lugar te arrastra la brecha.""" % [
+			PlayerProfile.describe(), "\n".join(neighbors), InteriorBuilder.DESCRIPTIONS.get("lighthouse", ""), ORIGIN_GUIDE]},
 	]
 	var res := await ContentGenerator.request_valid("awakening", messages)
 	var data: Dictionary = res.data if res.ok else ContentGenerator.load_fallback("awakening")
 	data["source"] = "ai" if res.ok else "fallback"
-	_ensure_distinct(data.choices, "consequence", ContentValidator.archetypes().awakening_consequence)
+	_clean_beats(data)
+	# La decisión es concreta y sale de lo que pasa: agarrar o no la mano de quien llega corriendo
+	var friend := _closest_neighbor()
+	var first := str(WorldDB.get_entity("npc", friend).get("name", "")).get_slice(" ", 0)
+	data["companion"] = friend
+	data["choices"] = [
+		{"text": "Agarrar la mano de %s" % first, "consequence": "jump_with_companion"},
+		{"text": "Soltarte: que %s no se arriesgue por ti" % first, "consequence": "jump_alone"},
+	] if not first.is_empty() else [{"text": "Dejarte llevar", "consequence": "jump_alone"}]
+	data["narration"] = "\n".join(PackedStringArray(data.beats.map(func(b): return str(b.line))))
 	if not res.ok:
 		push_warning("El Despertar usó respaldo: %s" % [res.errors])
 	return data
+
+
+## Quita de una escena las frases que hablan de sitios que no existen (cuartos, sótanos…).
+func _clean_beats(data: Dictionary) -> void:
+	var known: String = InteriorBuilder.DESCRIPTIONS.get("lighthouse", "") + " faro puerta lámpara galería mar muelle pueblo"
+	var keep := []
+	for b in data.get("beats", []):
+		var c := check_places(str(b.get("line", "")), known)
+		if not str(c.text).strip_edges().is_empty():
+			b["line"] = c.text
+			keep.append(b)
+	data["beats"] = keep
 
 
 ## Aplica la decisión: canon, Ancla, compañero, stats y raíz del árbol temporal.
@@ -551,7 +699,7 @@ Crea su Despertar:
 func apply_awakening(data: Dictionary, choice_index: int) -> Dictionary:
 	var choice: Dictionary = data.choices[clampi(choice_index, 0, data.choices.size() - 1)]
 	var consequence: String = choice.consequence
-	var companion := _closest_neighbor() if consequence == "jump_with_companion" else ""
+	var companion := str(data.get("companion", _closest_neighbor())) if consequence == "jump_with_companion" else ""
 	GameState.awaken(companion, consequence == "seal_behind")
 
 	for fact in data.canon_facts:
@@ -588,8 +736,8 @@ func generate_finale() -> Dictionary:
 			quests.append(q.title)
 	var companion := WorldDB.get_entity("npc", GameState.companion())
 	var messages := [
-		{"role": "system", "content": ContentGenerator.world_rules_prompt() + "\n\nEres el narrador del FINAL. Cierra la historia de este jugador con coherencia total con el canon, en segunda persona, con emoción contenida y física creíble."},
-		{"role": "user", "content": """El jugador ha reunido las coordenadas completas de la transmisión de radio que Samir captaba cada noche a las 3:33 en Bahía de las Horas, y ha llegado a su origen.
+		{"role": "system", "content": ContentGenerator.world_rules_prompt() + "\n\nEres el guionista del FINAL: la vuelta a casa, una escena de cine corta. Segunda persona, frases cortas y concretas, emoción contenida. Coherencia total con el canon."},
+		{"role": "user", "content": """Después de muchos saltos, la brújula del jugador por fin tiene fuerza para el último: vuelve a Bahía de las Horas, al muelle, de madrugada, junto al faro.
 
 Origen de su Ancla: %s (%s)
 Decisión en El Despertar: %s
@@ -599,15 +747,15 @@ Misiones completadas: %s
 Quién es: %s
 
 Escribe:
-- "revelation": qué es realmente el origen de la señal y por qué el jugador. Debe encajar con el origen del Ancla y el canon.
-- "source_voice": lo que dice la propia señal (o quien la emite) al jugador.
-- "choices": exactamente tres, una por final: close_the_loop (convertirse en el emisor y cerrar el bucle causal), return_home (volver a Bahía de las Horas y apagar el Ancla), keep_traveling (dejar el emisor y seguir explorando). Cada una con su "epilogue": cómo termina la historia, mencionando detalles de su viaje.""" % [
+- "beats": de 5 a 8 tomas de la llegada, cada una con "shot" (breach: la grieta que se cierra detrás; pier: el muelle; lighthouse: el faro; town: las luces del pueblo; sea; sky; player: tu cara; neighbor: un vecino que te reconoce; watch: la brújula que por fin se queda quieta) y "line" (máx. 130 caracteres). Recuerda a dos o tres personas concretas que te ayudaron por el camino.
+- "choices": exactamente tres, una por final, con "text" corto (máx. 90 caracteres): stay_home (quedarte en casa para siempre), go_back_for_someone (volver a por alguien que te ayudó y traerle o quedarte con él), keep_traveling (guardar la brújula y seguir viajando, ahora por gusto). Cada una con su "epilogue": cómo termina, nombrando a la gente y los sitios de su viaje.""" % [
 			awakening.get("origin", "?"), awakening.get("title", ""), awakening.get("choice", "?"),
 			companion.get("name", "nadie"), ", ".join(places), ", ".join(quests), PlayerProfile.describe()]},
 	]
 	var res := await ContentGenerator.request_valid("finale", messages)
 	var data: Dictionary = res.data if res.ok else ContentGenerator.load_fallback("finale")
 	data["source"] = "ai" if res.ok else "fallback"
+	_clean_beats(data)
 	_ensure_distinct(data.choices, "ending", ContentValidator.archetypes().ending)
 	return data
 
@@ -647,6 +795,9 @@ Secreto (no lo reveles a la ligera; solo si hay mucha confianza o motivo): %s
 TU MEMORIA SOBRE EL JUGADOR:
 %s
 
+ENCARGOS QUE LE HAS HECHO AL JUGADOR (recuérdalos; si ya cumplió uno pendiente, usa complete_quest):
+%s
+
 OBJETOS:
 %s
 El jugador lleva encima: %s.
@@ -680,10 +831,11 @@ CÓMO RESPONDER (JSON):
 		"; ".join(PackedStringArray(npc.goals)),
 		npc.secret,
 		NPCMemory.describe(npc.id),
+		Quests.describe_for_npc(npc.id),
 		NPCMemory.describe_possessions(npc.id),
 		_inventory_text(),
 		"Ahora mismo vas caminando con el jugador (le acompañas)." if NPCMemory.is_following(npc.id) else "",
-		PlayerProfile.describe(),
+		PlayerProfile.describe(npc.id),
 		scene_context,
 		ACTIONS_GUIDE,
 	]
@@ -707,8 +859,8 @@ const ACTIONS_GUIDE := """  Tipos de acción ("type") y sus campos:
   · guide_player: le llevas tú a un sitio de este lugar ("llévame al faro", "¿me enseñas dónde está la panadería?"). "target": el sitio. Terminas la conversación y echas a andar delante; si se queda atrás, le esperas. Solo a sitios que existen aquí, o con una persona de aquí ("target": "con Marina", "con las vecinas"). Si no sabes dónde está, dilo.
   · change_stat: le curas, le cansas… "target": health, energy o instability; "amount": de -30 a 30.
   · reveal_place: le hablas de un lugar que puede visitar. "target": nombre, "text": cómo es o cómo llegar.
-  · give_quest: le pides un favor o un trabajo. "target": título corto, "text": qué tiene que hacer; "price": lo que pagarás al terminar (0 si es un favor).
-  · complete_quest: das por cumplido el favor que le pediste.
+  · give_quest: le pides un favor o un trabajo. SIEMPRE que en "line" le pidas algo, inclúyelo; si no, no queda apuntado. "target": título corto, "text": qué tiene que hacer; "price": lo que pagarás al terminar (0 si es un favor); "quest_kind": bring_item (traerte un objeto: "item_name"), go_to (ir a un sitio: "place"), be_there (estar en "place" a una hora: "at_hour") o custom; "at_hour" si dijiste una hora (3 = 3 de la mañana, 15 = 3 de la tarde) y dila igual en "line".
+  · complete_quest: das por cumplido un favor que le pediste y que ya hizo. "target": su título.
   · refuse_contact: estás tan molesto/a que no quieres hablarle durante un rato. "amount": minutos.
   · journal: algo que el jugador debería apuntar (pista, cita, dirección). "text".
   · update_item: arreglas o cambias algo que el jugador lleva encima. "target": nombre actual, "item_name": nombre nuevo, "item_description": cómo queda.

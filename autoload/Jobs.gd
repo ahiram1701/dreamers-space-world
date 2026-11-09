@@ -27,10 +27,10 @@ func hire(employer: String, title: String, wage: int, start_hour: int, end_hour:
 		end_hour = (start_hour + 6) % 24
 	var j := {"employer": employer, "title": title.left(60), "wage": clampi(wage, 1, Wallet.MAX_PER_ACTION),
 		"start_hour": clampi(start_hour, 0, 23), "end_hour": clampi(end_hour, 0, 23), "days": [0, 1, 2, 3, 4],
-		"place": place, "place_label": place_label, "location": GameState.current_location(), "text": text.left(200),
+		"place": place, "place_label": place_label, "location": GameState.current_location(), "text": ContentValidator.fit_text(text, 300),
 		"missed": 0, "worked": 0, "last_day": int(WorldClock.absolute_minutes() / 1440.0) - 1}
 	WorldDB.set_state("job", j)
-	NPCMemory.add_event(employer, "Contrataste al jugador como %s (%s, de %02d:00 a %02d:00, $%d por turno)." % [j.title, place_label, j.start_hour, j.end_hour, j.wage])
+	NPCMemory.add_event(employer, "Contrataste al jugador como %s (%s, %s, $%d por turno)." % [j.title, place_label, WorldClock.span(j.start_hour, j.end_hour), j.wage])
 	hired.emit(j)
 	return j
 
@@ -129,7 +129,7 @@ func describe() -> String:
 	if j.is_empty():
 		return "No tienes trabajo."
 	var boss: String = WorldDB.get_entity("npc", j.employer).get("name", "alguien")
-	var d := "Trabajas de %s en %s para %s, de %02d:00 a %02d:00 de lunes a viernes, por $%d el turno." % [j.title, j.place_label, boss, j.start_hour, j.end_hour, j.wage]
+	var d := "Trabajas de %s en %s para %s, %s de lunes a viernes, por $%d el turno." % [j.title, j.place_label, boss, WorldClock.span(j.start_hour, j.end_hour), j.wage]
 	if int(j.missed) > 0:
 		d += " Llevas %d falta(s) seguidas." % j.missed
 	var until := hours_until_shift()

@@ -99,13 +99,20 @@ func _run() -> void:
 	db.set_state("act0", p)
 	town.call("_update_objective")
 	var faro: Vector3 = interiors.door_position("faro")
+	clock.set_hour(4.0)
+	town.call("_update_objective")
 	player.global_position = faro + Vector3(-3, 0.3, 3)
 	for i in 10:
 		await physics_frame
 	player.global_position = faro + Vector3(0, 0.3, 0)
-	for i in 30:
+	for i in 40:
 		await physics_frame
-	_expect(town.get("_awakening") != null, "al llegar a la puerta del faro, empieza El Despertar")
+	_expect(town.get("_awakening") == null, "a las 4 a. m. la puerta del faro no hace nada")
+	_expect(str(town.get("_ui").hud.get("_objective").text).contains("3:33 a. m."), "y el objetivo te dice que vuelvas a las 3:33 a. m.: %s" % town.get("_ui").hud.get("_objective").text)
+	clock.set_hour(3.5)
+	for i in 40:
+		await physics_frame
+	_expect(town.get("_awakening") != null, "a las 3:30 a. m., en la puerta del faro, empieza El Despertar")
 	town.queue_free()
 	await process_frame
 

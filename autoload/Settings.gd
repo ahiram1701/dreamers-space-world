@@ -40,6 +40,12 @@ var vsync: bool = true
 var show_fps: bool = false
 
 
+## Cuánto tiempo dejar un texto en pantalla para leerlo con calma: ~13 caracteres por
+## segundo más un margen, ajustado por la «velocidad de lectura» de Ajustes.
+func read_time(text: String, min_time: float = 3.0) -> float:
+	return maxf(min_time, 1.2 + text.length() / 13.0) / clampf(text_speed, 0.25, 4.0)
+
+
 func _ready() -> void:
 	load_settings()
 	_check_weak_gpu.call_deferred()

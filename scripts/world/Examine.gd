@@ -39,14 +39,14 @@ static func read(player: Node, title: String, text: String) -> void:
 	panel.queue_free()
 	if ui:
 		ui.block(false)
-	Journal.log_event("Leíste «%s»: %s" % [title, text.left(160)], "info")
+	Journal.log_event("Leíste «%s»: %s" % [title, text], "info")
 
 
 ## Cualquier cosa catalogada: «Examinar: una farola».
 static func attach(parent: Node3D, pos: Vector3, label: String, kind: String) -> void:
 	if kind in SKIP_KINDS or label.length() < 3:
 		return
-	var short := label.get_slice(",", 0).get_slice(":", 0)
+	var short := label.get_slice(" — ", 0).get_slice(",", 0).get_slice(":", 0)
 	if short.length() > 30:
 		short = short.left(28) + "…"
 	var it := Interactable.create(parent, pos + Vector3(0, 1.0, 0), 1.3, "Examinar: %s" % short, func(p): examine(p, label, pos))

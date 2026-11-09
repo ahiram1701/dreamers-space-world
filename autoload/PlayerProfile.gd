@@ -67,7 +67,9 @@ func learn(skill: String, from: String = "") -> bool:
 	return true
 
 
-func describe() -> String:
+## Cómo es el jugador. Con `for_npc`, el nombre solo aparece si esa persona lo sabe (para
+## los demás es alguien que no se ha presentado); con "?" nunca aparece.
+func describe(for_npc: String = "") -> String:
 	var p := get_profile()
 	var parts: PackedStringArray = []
 	for t in TRAITS:
@@ -76,5 +78,8 @@ func describe() -> String:
 			parts.append("%s (%+d)" % [LABELS[t][1 if v > 0 else 0], v])
 	var traits := "aún no se sabe mucho de su carácter" if parts.is_empty() else ", ".join(parts)
 	var known := skills().map(func(x): return str(x.get("skill", "")))
-	return "%s. Carácter observado: %s. Decisiones tomadas: %d.%s" % [player_name(), traits, int(p.decisions),
+	var who := player_name()
+	if for_npc == "?" or (not for_npc.is_empty() and not NPCMemory.knows_name(for_npc)):
+		who = "Una persona que NO te ha dicho su nombre (no sabes cómo se llama: no le llames por ningún nombre)"
+	return "%s. Carácter observado: %s. Decisiones tomadas: %d.%s" % [who, traits, int(p.decisions),
 		(" Sabe hacer: %s." % ", ".join(PackedStringArray(known))) if not known.is_empty() else ""]

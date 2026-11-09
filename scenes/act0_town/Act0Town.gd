@@ -7,6 +7,8 @@ const NPCS_PATH := "res://data/act0/npcs.json"
 const TOWN_SEED := 3330333
 const SPAWN := Vector3(-6, 0.5, -4)
 const LIGHTHOUSE_POS := Vector3(44, 0, -30)
+const AWAKE_FROM := 3.25  # 3:15 a. m.
+const AWAKE_TO := 3.75  # 3:45 a. m.
 const TRACKS_Z := 37.0
 const WATER_Y := -0.45
 ## Sitios con nombre: a dónde pueden ir los vecinos (rutinas, "acompáñame al muelle") y qué
@@ -28,6 +30,8 @@ var _sun: DirectionalLight3D
 var _env: Environment
 var _sky_mat: ProceduralSkyMaterial
 var _awakening: AwakeningSequence
+var _hour_hint := false
+var _was_awake_hour := false
 var _fx: EnvironmentFX
 var _noise: FastNoiseLite
 var _boats: Array = []
@@ -98,6 +102,8 @@ func _ready() -> void:
 	_follow_schedules(true)
 	_shop_hours()
 	_update_windows.call_deferred()
+	if GameState.is_awakened() and WorldDB.get_state("homecoming", false) and GameState.ending().is_empty():
+		_homecoming.call_deferred()
 	var waves := AmbientAudio.new()
 	waves.kind = AmbientAudio.Kind.WAVES
 	add_child(waves)
@@ -113,7 +119,9 @@ func _process(_delta: float) -> void:
 	if _awakening != null:
 		_beacon_glass.emission_energy_multiplier = _beacon.light_energy * 0.4
 		return  # la secuencia controla el faro
-	# Si ya estabas junto al faro cuando quedó todo listo (tu última charla fue allí), empieza igual
+	if not GameState.is_awakened() and Engine.get_process_frames() % 30 == 0 and _progress().get("awakening_ready", false):
+		_watch_awakening_hour()
+	# Si ya estabas junto al faro cuando llegó la hora, empieza igual
 	if not GameState.is_awakened() and not _interiors.is_inside() and Engine.get_process_frames() % 30 == 0 			and Vector2(_player.global_position.x - LIGHTHOUSE_POS.x, _player.global_position.z - LIGHTHOUSE_POS.z).length() < 5.5 			and _progress().get("awakening_ready", false):
 		_on_lighthouse_entered(_player)
 		return
@@ -126,8 +134,8 @@ func _process(_delta: float) -> void:
 ## cuando el Despertar está cerca el pulso empieza antes y es más fuerte.
 static func beacon_energy(hour: float, t: float, ready: bool) -> float:
 	var start := 3.0 + 33.0 / 60.0
-	var lead := 3.0 / 60.0 if ready else 0.0
-	if hour < start - lead or hour > start + 2.0 / 60.0:
+	var lead := 18.0 / 60.0 if ready else 0.0  # listo para el Despertar: parpadea desde las 3:15
+	if hour < start - lead or hour > start + (12.0 if ready else 2.0) / 60.0:
 		return 0.0
 	var flick := absf(sin(t * 9.0) * sin(t * 2.3))
 	return (6.0 + 6.0 * flick) if ready else (4.0 * flick if flick > 0.3 else 0.0)
@@ -168,7 +176,7 @@ func _shop_hours() -> void:
 	var h := WorldClock.hour()
 	var open := h >= 7.0 and h < 22.0
 	if not NPCMemory.is_locked_in("npc_teo"):
-		_interiors.set_locked("cafe", "" if open else "La cafetería está cerrada. Abre a las 7:00.")
+		_interiors.set_locked("cafe", "" if open else "La cafetería está cerrada. Abre a las 7:00 a. m.")
 	var shop_open := h >= 9.0 and h < 20.0
 	for id in _interiors.doors():
 		var kind: String = _interiors.doors()[id].kind
@@ -176,7 +184,7 @@ func _shop_hours() -> void:
 			var label := _interiors.door_label(id)
 			label = label.left(1).to_upper() + label.substr(1)
 			var is_open := Shops.is_open(kind, h) if Shops.is_shop(kind) else shop_open
-			var hours := Shops.hours_text(kind) if Shops.is_shop(kind) else "de 9:00 a 20:00"
+			var hours := Shops.hours_text(kind) if Shops.is_shop(kind) else WorldClock.span(9, 20)
 			_interiors.set_locked(id, "" if is_open else "%s: cerrado. Abre %s." % [label, hours])
 
 
@@ -197,7 +205,7 @@ func home_door_of(npc_id: String) -> String:
 
 
 func navigation_area() -> AABB:
-	return AABB(Vector3(-100, -6, -90), Vector3(150, 40, 180))  # el pueblo, la playa y el muelle
+	return AABB(Vector3(-100, -6, -90), Vector3(150, 40, 290))  # el pueblo, la playa, el muelle y la cabaña del pescador
 
 
 func ground_at(x: float, z: float) -> float:
@@ -234,7 +242,10 @@ func _update_objective() -> void:
 	if GameState.is_awakened():
 		_set_objective("Bahía de las Horas · Pulsa T para usar el Ancla")
 	elif p.awakening_ready:
-		_set_objective("Ve a la puerta del faro (allí siempre son las 3:33).")
+		if is_awakening_hour(WorldClock.hour()):
+			_set_objective("Son las %s: ve a la puerta del faro, ya." % WorldClock.text())
+		else:
+			_set_objective("Ve a la puerta del faro a las 3:33 a. m. (puedes dormir o esperar hasta esa hora)")
 	else:
 		var left := PackedStringArray()
 		for id in _schedules:
@@ -248,21 +259,70 @@ func _base_talked(p: Dictionary) -> int:
 	return p.talked.filter(func(id): return _schedules.has(id)).size()
 
 
+## La vuelta a casa: la brecha te deja delante del faro y se juega el final.
+func _homecoming() -> void:
+	await get_tree().create_timer(0.5).timeout
+	var door: Vector3 = _interiors.door_position("faro")
+	var out := (door - LIGHTHOUSE_POS)
+	out.y = 0.0
+	out = out.normalized() if out.length() > 0.1 else Vector3.BACK
+	var spot := door + out * 5.0
+	spot.y = maxf(door.y, 0.0)
+	_player.global_position = spot + Vector3(0, 0.3, 0)
+	var finale := FinaleSequence.new()
+	finale.player = _player
+	finale.center = spot
+	finale.tower_position = LIGHTHOUSE_POS
+	finale.town_position = SPAWN
+	finale.npcs = _npcs
+	add_child(finale)
+	finale.play()
+
+
+## El Despertar solo ocurre de verdad a las 3:33 de la madrugada (con un margen para llegar).
+static func is_awakening_hour(h: float) -> bool:
+	return h >= AWAKE_FROM and h <= AWAKE_TO
+
+
+## Lleva el objetivo al día con la hora y, si te pilla dentro del faro, te saca a la puerta.
+func _watch_awakening_hour() -> void:
+	var now := is_awakening_hour(WorldClock.hour())
+	if now != _was_awake_hour:
+		_was_awake_hour = now
+		_update_objective()
+		if now and _ui:
+			_ui.toast("Son las %s. El faro parpadea solo, sin corriente." % WorldClock.text())
+	var near := Vector2(_player.global_position.x - LIGHTHOUSE_POS.x, _player.global_position.z - LIGHTHOUSE_POS.z).length()
+	if near > 14.0:
+		_hour_hint = false  # al volver otra vez se avisa de nuevo
+	if now and _interiors.is_inside() and _interiors.current_door() == "faro" and _awakening == null:
+		_interiors.leave()
+
+
 func _on_lighthouse_entered(body: Node3D) -> void:
 	if not (body is Player) or _awakening != null or GameState.is_awakened():
 		return
 	if not _progress().get("awakening_ready", false):
 		return
-	_set_objective("3:33")
+	if not is_awakening_hour(WorldClock.hour()):
+		if not _hour_hint:
+			_hour_hint = true
+			if _ui:
+				_ui.toast("El faro está apagado y en silencio. Marina dijo que el pulso llega a las 3:33 de la madrugada; ahora son las %s. Vuelve a esa hora." % WorldClock.text())
+		return
+	_set_objective("3:33 a. m.")
 	_fx.frozen = true  # la secuencia controla el cielo
-	WorldClock.set_hour(3.55)
 	_awakening = AwakeningSequence.new()
 	_awakening.player = _player
 	_awakening.sun = _sun
 	_awakening.env = _env
 	_awakening.sky_mat = _sky_mat
 	_awakening.beacon = _beacon
-	_awakening.breach_position = LIGHTHOUSE_POS + Vector3(-3.5, 1.6, 3.5)  # junto a la puerta del faro
+	var door: Vector3 = _interiors.door_position("faro")
+	_awakening.breach_position = door + (door - LIGHTHOUSE_POS).normalized() * 1.5 + Vector3(0, 1.4, 0) if door != Vector3.ZERO 		else LIGHTHOUSE_POS + Vector3(-3.5, 1.6, 3.5)  # junto a la puerta del faro
+	_awakening.tower_position = LIGHTHOUSE_POS
+	_awakening.town_position = SPAWN
+	_awakening.npcs = _npcs
 	add_child(_awakening)
 	_awakening.play()
 

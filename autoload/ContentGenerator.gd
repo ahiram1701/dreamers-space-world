@@ -75,6 +75,20 @@ func _extract_json(text: String) -> Variant:
 
 
 ## Reglas fijas del multiverso + canon de ESTE mundo. Base de todos los prompts de sistema.
+## Reglas extra por tipo: lo que se describe tiene que poder construirse.
+const EXTRA_RULES := {
+	"location": """
+REGLAS DEL LUGAR:
+- "points_of_interest": de 3 a 5 sitios concretos, cada uno con "name" (nombre propio corto) y "kind" (qué es, de la lista). El juego construye cada uno con esa forma: si dices "lighthouse" habrá un faro con puerta; si dices "console", una consola.
+- "description": solo puede mencionar cosas que estén en points_of_interest o en el paisaje (bioma, cielo, edificios genéricos). Nada de salas, sótanos ni aparatos que no estén en la lista.
+- "problem": qué le pasa a la gente de aquí, concreto y humano (se rompió algo, falta algo, alguien se perdió), con lo que el jugador puede ayudar.""",
+	"npc": """
+REGLAS DE LA PERSONA:
+- "workplace": el nombre EXACTO de uno de los puntos de interés del lugar (contexto: puntos_de_interes) donde trabaja o pasa el día. Su oficio debe encajar con ese sitio.
+- "greeting": cómo saluda a un desconocido que no ha visto nunca: no sabe su nombre ni de dónde viene.""",
+}
+
+
 func world_rules_prompt() -> String:
 	if _bible.is_empty():
 		_bible = FileAccess.get_file_as_string(BIBLE_PATH)
@@ -83,6 +97,8 @@ func world_rules_prompt() -> String:
 	return """Trabajas para un videojuego que crece con cada jugador.
 Respondes SIEMPRE con un único objeto JSON válido, sin texto adicional.
 Escribe los textos en idioma: %s. Usa ESPAÑOL LATINOAMERICANO NEUTRO: "ustedes" (nunca "vosotros", ni "os", "vuestro", "habéis"), "celular", "computadora", "carro", "manejar", "agarrar", "platicar", "enojado", "lentes", "jugo", "departamento"; nunca "vale", "coger", "móvil", "ordenador", "coche", "conducir", "tío", "mola", "guay", "enfadado". Sin modismos de un país concreto.
+HORAS: siempre en formato de 12 horas y sin ambigüedad: «a las 3 de la mañana», «a las 3:33 a. m.», «a las 5 de la tarde»; nunca «15:00» ni «a las 3» a secas.
+ESTILO: concreto y cotidiano; frases cortas; di qué se ve, qué pasa y qué está en juego. Nada de jerga técnica o mística (cuántico, coherencia, espacio-tiempo, frecuencia, resonancia, nodo, singularidad).
 
 REGLAS DEL MULTIVERSO:
 %s
@@ -96,10 +112,14 @@ func load_fallback(spec_type: String) -> Dictionary:
 	if not FileAccess.file_exists(path):
 		return {}
 	var parsed = JSON.parse_string(FileAccess.get_file_as_string(path))
-	return parsed if typeof(parsed) == TYPE_DICTIONARY else {}
+	if typeof(parsed) != TYPE_DICTIONARY:
+		return {}
+	return PoiCatalog.normalize_location(parsed) if spec_type == "location" else parsed
 
 
 func _finish(type: String, data: Dictionary, origin: String, source: String, errors: Array) -> Dictionary:
+	if type == "location":
+		data = PoiCatalog.normalize_location(data)
 	var id := WorldDB.add_entity(type, data, origin)
 	var result := {"ok": true, "id": id, "entity": WorldDB.get_entity(type, id), "source": source, "errors": errors}
 	generation_finished.emit(result)
@@ -112,5 +132,5 @@ func _user_prompt(type: String, hint: String, context: Dictionary) -> String:
 	return """Crea %s para este mundo.
 Petición: %s
 Contexto actual: %s
-Nombres que YA existen (no los repitas): %s""" % [
-		TYPE_NAMES.get(type, type), hint, JSON.stringify(context), ", ".join(PackedStringArray(existing))]
+Nombres que YA existen (no los repitas): %s%s""" % [
+		TYPE_NAMES.get(type, type), hint, JSON.stringify(context), ", ".join(PackedStringArray(existing)), EXTRA_RULES.get(type, "")]

@@ -139,17 +139,22 @@ func jump_new() -> Dictionary:
 	return _arrive_new(location_id, GameState.travel_cost("new"))
 
 
-## El salto final: solo con todas las coordenadas. Lleva al origen de la señal.
+## El salto final: cuando la brújula tiene fuerza suficiente, te lleva a casa (a Bahía de las
+## Horas), y allí se juega la escena de la vuelta.
 func jump_finale() -> Dictionary:
 	if not GameState.has_all_fragments():
-		return _fail("Faltan fragmentos de coordenadas.")
+		return _fail("La brújula aún no tiene fuerza para llegar a casa.")
 	if not GameState.can_travel("finale"):
 		return _fail("El Ancla no tiene energía suficiente para un salto tan largo.")
 	travel_started.emit("finale")
-	var bundle := await _generate_bundle(FINALE_HINT, true)
-	if not bundle.ok:
-		return bundle
-	return _arrive_new(bundle.location_id, GameState.travel_cost("finale"))
+	GameState.travel(GameState.HOME, GameState.travel_cost("finale"), false)
+	WorldDB.set_state("homecoming", true)
+	for n in TimelineManager.visited_locations():
+		if n.location_id == GameState.HOME:
+			TimelineManager.move_to(n.id)
+			break
+	travel_finished.emit(GameState.HOME)
+	return {"ok": true, "location_id": GameState.HOME, "error": ""}
 
 
 ## Volver a un lugar ya visitado (o a casa). No genera nada nuevo.
@@ -216,7 +221,7 @@ func _generate_bundle(hint: String, finale: bool) -> Dictionary:
 		"viene_de": from,
 		"saltos_realizados": TimelineManager.depth(),
 		"fragmentos_de_coordenadas": GameState.fragments(),
-		"jugador": PlayerProfile.describe(),
+		"jugador": PlayerProfile.describe("?"),
 	}
 	var loc := await ContentGenerator.generate("location", hint, "jump_from:" + from, context)
 	if not loc.ok:
@@ -225,7 +230,8 @@ func _generate_bundle(hint: String, finale: bool) -> Dictionary:
 		WorldDB.update_entity("location", loc.id, {"finale": true, "kind": "anomaly_zone", "biome": "void"})
 		return {"ok": true, "location_id": loc.id, "error": ""}
 
-	var where := {"lugar": loc.entity.name, "descripcion": loc.entity.description, "epoca": loc.entity.era}
+	var where := {"lugar": loc.entity.name, "descripcion": loc.entity.description, "epoca": loc.entity.era,
+		"puntos_de_interes": loc.entity.get("points_of_interest", []), "problema": loc.entity.get("problem", "")}
 	var npc_ids: Array = []
 	for i in NPCS_PER_LOCATION:
 		var npc := await ContentGenerator.generate("npc",

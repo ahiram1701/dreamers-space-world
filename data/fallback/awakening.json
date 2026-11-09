@@ -1,22 +1,50 @@
 {
 	"origin": "natural_anomaly",
-	"title": "La lente del faro",
-	"narration": "A las 3:33 el pulso llega más fuerte que nunca. Las farolas se apagan una tras otra, tu celular muere en tu mano y el mar se queda inmóvil a medio romper: no se ha detenido, se mueve tan despacio que tus ojos no lo notan. En la base del faro, donde la luz se concentra, el aire se curva como el cristal de una lupa. Es una brecha: un punto diminuto donde esta realidad toca otra. Lleva años ahí. La lente del faro, por puro accidente óptico y eléctrico, la ha estado amplificando cada noche.",
-	"source_description": "Una microbrecha natural de pocos milímetros, amplificada por la lente de Fresnel del faro. A su alrededor, la luz llega desplazada al rojo y el tiempo corre más despacio.",
+	"title": "La noche que el faro se encendió solo",
+	"beats": [
+		{
+			"shot": "lighthouse",
+			"line": "Son las 3:33. El faro lleva años apagado, y aun así su lámpara parpadea."
+		},
+		{
+			"shot": "lamp",
+			"line": "Arriba, la luz gira sola. No hay corriente; nadie ha subido."
+		},
+		{
+			"shot": "sea",
+			"line": "El mar se queda quieto a medio romper. Las olas no caen."
+		},
+		{
+			"shot": "crack",
+			"line": "Junto a la puerta, el aire se dobla como el vidrio de una lupa. Es una grieta del tamaño de una moneda."
+		},
+		{
+			"shot": "breach",
+			"line": "La grieta se abre de golpe. Tira de la arena, de las hojas, de ti."
+		},
+		{
+			"shot": "companion",
+			"line": "Alguien grita tu nombre y corre por el muelle."
+		},
+		{
+			"shot": "watch",
+			"line": "En tu mano, el reloj del faro gira como una brújula. Apunta hacia aquí, hacia casa."
+		},
+		{
+			"shot": "player",
+			"line": "Todo se vuelve blanco."
+		}
+	],
 	"anchor": {
-		"name": "Ancla de cuarzo",
-		"description": "El reloj de Marina, abierto y reconectado a una bobina improvisada. Su cristal vibra a la frecuencia de la brecha y mantiene tu estado coherente al cruzar.",
+		"name": "Brújula del faro",
+		"description": "El reloj de bolsillo del faro, con la aguja suelta. Ya no da la hora: siempre apunta a Bahía de las Horas.",
 		"base": "marina_watch"
 	},
+	"companion_line": "¡No te sueltes! ¡Agárrate de mí!",
 	"canon_facts": [
-		"Bajo el faro de Bahía de las Horas existe una microbrecha natural amplificada por su lente.",
-		"El pulso de las 3:33 es la brecha abriéndose al máximo durante unos segundos cada noche.",
-		"El Ancla del jugador está construida a partir del reloj de cuarzo de Marina Ortega."
+		"Junto a la puerta del faro de Bahía de las Horas hay una grieta natural que la lente del faro amplifica a las 3:33.",
+		"La brecha arrastró al jugador lejos de casa; su brújula siempre apunta a Bahía de las Horas.",
+		"Para volver, el jugador necesita la ayuda de la gente de cada mundo por el que pasa."
 	],
-	"choices": [
-		{"text": "Cruzar ahora, solo, antes de que se cierre.", "consequence": "jump_alone"},
-		{"text": "Pedirle a quien más confía en ti que venga contigo.", "consequence": "jump_with_companion"},
-		{"text": "Sobrecargar la lente al cruzar para sellar la brecha detrás de ti.", "consequence": "seal_behind"}
-	],
-	"destination_hint": "Una rama donde la Tierra fue abandonada hace siglos y solo quedan estaciones de investigación en planetas lejanos."
+	"destination_hint": "Un puesto lejano en otro planeta, donde alguien tiene un problema y una pieza que te acercaría a casa."
 }

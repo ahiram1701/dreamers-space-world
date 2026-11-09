@@ -160,5 +160,5 @@ func _chat(a: String, b: String) -> void:
 			var npc: TownNPC = scene._npcs[who]
 			npc.face(scene._npcs[other].global_position)
 			npc.say(str(line.text), 4.0)
-			await get_tree().create_timer(clampf(str(line.text).length() * 0.06, 2.5, 5.0)).timeout
+			await get_tree().create_timer(Settings.read_time(str(line.text), 2.5) * 0.8).timeout
 	_chatting = false

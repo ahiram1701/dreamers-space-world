@@ -301,7 +301,7 @@ func say(text: String, seconds: float = 4.0) -> void:
 	if not players.is_empty() and players[0].global_position.distance_to(global_position) < 20.0:
 		var who := _display_name.capitalize() if _display_name != "alguien" else "Alguien"
 		Journal.log_event("%s: «%s»" % [who, text], "say")
-	_bubble_t = seconds
+	_bubble_t = maxf(seconds, Settings.read_time(text))
 
 
 ## Está en la escena (false: se metió en un edificio y no se le ve fuera).

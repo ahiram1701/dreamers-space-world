@@ -57,7 +57,7 @@ func _ready() -> void:
 	Inventory.light_toggled.connect(func(on): if player: player.set_light(on))
 	Inventory.look_changed.connect(func(): if player: player.rebuild_look())
 	Jobs.fired.connect(func(_r): toast("Te han despedido del trabajo.", "warn"))
-	Jobs.hired.connect(func(j): toast("Trabajo nuevo: %s (%02d:00–%02d:00)" % [j.title, j.start_hour, j.end_hour], "quest"))
+	Jobs.hired.connect(func(j): toast("Trabajo nuevo: %s (%s)" % [j.title, WorldClock.span(j.start_hour, j.end_hour)], "quest"))
 
 	var glitch_layer := CanvasLayer.new()
 	glitch_layer.layer = 4
@@ -89,6 +89,14 @@ func _ready() -> void:
 
 	GameState.stat_changed.connect(_on_stat_changed)
 	Quests.quest_completed.connect(_on_quest_completed)
+	Quests.quest_failed.connect(func(_q, text): toast(text, "warn"); refresh_tracker())
+	Quests.quest_accepted.connect(func(q): toast("Nuevo encargo de %s: %s" % [WorldDB.get_entity("npc", q.giver).get("name", "?"), q.title], "quest"); refresh_tracker())
+	# Los encargos que llegan por mensaje (o fuera de una conversación) también se avisan
+	Quests.quest_added.connect(func(q):
+		var talking = get_tree().current_scene.get("_dialogue") if get_tree().current_scene else null
+		if q.get("objective", "") == "custom" and not (talking and talking.visible):
+			toast("Apuntado en el Cuaderno: %s" % q.title, "quest")
+		refresh_tracker())
 	Inventory.changed.connect(refresh_tracker)
 	refresh_tracker()
 	_update_glitch()
@@ -109,16 +117,22 @@ func toast(text: String, kind: String = "info") -> void:
 func refresh_tracker() -> void:
 	var lines := PackedStringArray()
 	var q := Quests.for_location(GameState.current_location())
-	if not q.is_empty():
+	if not q.is_empty() and q.status != "offered":
 		lines.append("Misión: " + Quests.objective_text(q))
-	var at_origin: bool = WorldDB.get_entity("location", GameState.current_location()).get("finale", false)
-	if at_origin:
-		lines.append("El origen de la señal" if GameState.ending().is_empty() else "Has cerrado esta historia. El multiverso sigue abierto.")
-	elif GameState.is_awakened():
-		if GameState.has_all_fragments() and GameState.ending().is_empty():
-			lines.append("Coordenadas completas — usa el Ancla (T) para seguir la señal hasta su origen")
-		elif GameState.ending().is_empty():
-			lines.append("Coordenadas de la transmisión: %d/%d" % [GameState.fragments(), GameState.FRAGMENTS_NEEDED])
+	# El encargo con hora más próximo (lo demás, en el Cuaderno)
+	var soon := Quests.next_timed()
+	if not soon.is_empty():
+		lines.append("Encargo: %s — %s" % [soon.title, Quests.when_text(soon)])
+	var at_home: bool = GameState.current_location() == GameState.HOME and WorldDB.get_state("homecoming", false)
+	if at_home:
+		lines.append("De vuelta en casa" if GameState.ending().is_empty() else "Has vuelto a casa. Puedes seguir viajando cuando quieras.")
+	elif GameState.is_awakened() and GameState.ending().is_empty():
+		if GameState.has_all_fragments():
+			lines.append("La brújula apunta firme a casa — usa el Ancla (T) para el último salto")
+		else:
+			var left := GameState.FRAGMENTS_NEEDED - GameState.fragments()
+			var hint := " · habla con la gente del lugar" if not q.is_empty() and q.status == "offered" else ""
+			lines.append("Rumbo a casa: faltan %d %s%s" % [left, "salto" if left == 1 else "saltos", hint])
 	hud.set_tracker("\n".join(lines))
 
 
@@ -192,7 +206,8 @@ func _on_stat_changed(stat: String, value: int) -> void:
 
 
 func _on_quest_completed(q: Dictionary, reward: String) -> void:
-	toast("%s\n%s" % [q.completion_text, reward], "quest")
+	var text := str(q.get("completion_text", "")).strip_edges()
+	toast(("%s\n%s" % [text, reward]) if not text.is_empty() else "Cumpliste «%s». %s" % [q.title, reward], "quest")
 	refresh_tracker()
 
 

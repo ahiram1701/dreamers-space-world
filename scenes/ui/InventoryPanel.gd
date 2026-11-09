@@ -204,10 +204,14 @@ func _build_detail() -> void:
 	lore.text = item.get("lore", "")
 	lore.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	lore.add_theme_color_override("font_color", UITheme.TEXT)
-	_detail.add_child(lore)
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_detail.add_child(spacer)
+	lore.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Una historia larga se desplaza; los botones de abajo siempre se ven
+	var lore_scroll := ScrollContainer.new()
+	lore_scroll.name = "LoreScroll"
+	lore_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	lore_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	lore_scroll.add_child(lore)
+	_detail.add_child(lore_scroll)
 	var row := HFlowContainer.new()
 	row.add_theme_constant_override("h_separation", 8)
 	row.add_theme_constant_override("v_separation", 8)
@@ -250,16 +254,42 @@ func _ask(text: String) -> void:
 
 func _build_errands() -> void:
 	_clear(_errands)
-	var list := Quests.active_custom()
-	var main := Quests.for_location(GameState.current_location())
-	if not main.is_empty() and main.status == "active":
-		_entry(_errands, main.title, "%s\n%s" % [main.description, Quests.objective_text(main)], UITheme.WARN)
-	for q in list:
-		var reward := int(q.get("reward", 0))
-		_entry(_errands, q.title, "%s — te lo pidió %s%s" % [q.description, WorldDB.get_entity("npc", q.giver).get("name", "?"),
-			(". Paga %s." % Wallet.text(reward)) if reward > 0 else "."], UITheme.WARN)
+	# Pendientes (de cualquier lugar), y debajo lo que ya cumpliste o perdiste
+	var groups := {"active": [], "done": [], "failed": []}
+	for q in Quests.all_quests():
+		if groups.has(q.status):
+			groups[q.status].append(q)
+	var titles := {"active": "Pendientes", "done": "Cumplidos", "failed": "Perdidos"}
+	var colors := {"active": UITheme.WARN, "done": UITheme.GOOD, "failed": UITheme.DANGER}
+	for status in ["active", "done", "failed"]:
+		if groups[status].is_empty():
+			continue
+		var head := _muted(titles[status])
+		head.add_theme_font_size_override("font_size", 15)
+		_errands.add_child(head)
+		for q in groups[status]:
+			_entry(_errands, q.title, _errand_text(q), colors[status])
 	if _errands.get_child_count() == 0:
 		_errands.add_child(_muted("Nadie te ha pedido nada todavía."))
+
+
+## Qué, quién, dónde, cuándo y qué ganas.
+func _errand_text(q: Dictionary) -> String:
+	var parts := PackedStringArray([str(q.description)])
+	var who: String = WorldDB.get_entity("npc", q.giver).get("name", "?")
+	var where := Travel.location_name(str(q.get("location_id", ""))) if q.get("location_id", "") != GameState.current_location() else "aquí"
+	parts.append("Te lo pidió %s (%s)." % [who, where])
+	if q.objective != "custom" and q.status == "active":
+		parts.append(Quests.objective_text(q))
+	var when := Quests.when_text(q)
+	if not when.is_empty() and q.status == "active":
+		parts.append("Cuándo: " + when + ".")
+	var reward := int(q.get("reward", 0))
+	if reward > 0:
+		parts.append("Paga %s." % Wallet.text(reward))
+	elif q.objective != "custom":
+		parts.append("A cambio: un tramo más de rumbo a casa.")
+	return "\n".join(parts)
 
 
 func _build_journal() -> void:
@@ -310,10 +340,10 @@ func _build_log() -> void:
 		row.add_theme_constant_override("separation", 12)
 		_log.add_child(row)
 		var when := Label.new()
-		when.text = "%s %02d:%02d" % [WorldClock.WEEKDAYS[(m / 1440 + 3) % 7].left(3).capitalize(), (m % 1440) / 60, m % 60]
+		when.text = "%s %s" % [WorldClock.WEEKDAYS[(m / 1440 + 3) % 7].left(3).capitalize(), WorldClock.fmt((m % 1440) / 60.0)]
 		when.add_theme_color_override("font_color", UITheme.MUTED)
 		when.add_theme_font_size_override("font_size", 13)
-		when.custom_minimum_size.x = 80
+		when.custom_minimum_size.x = 118
 		row.add_child(when)
 		var text := Label.new()
 		text.text = str(e.get("text", ""))

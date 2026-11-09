@@ -3,10 +3,28 @@
 	"kind": "planet_surface",
 	"biome": "barren",
 	"era": "far_future",
-	"description": "Una llanura de polvo rojizo bajo un cielo color cobre. Restos de una estación de investigación asoman entre dunas bajas, y en el horizonte parpadea la baliza de una brecha estable.",
+	"description": "Una llanura de polvo rojizo bajo un cielo color cobre. Un viejo faro de señales vigila la llanura, y junto a él una estación de investigación con su consola de control y un archivo de registros.",
 	"gravity": 0.8,
 	"seed": 4420442,
 	"sky_color": "#c9774a",
-	"points_of_interest": ["Estación de investigación abandonada", "Baliza de la brecha", "Campo de paneles solares rotos"],
-	"tags": ["respaldo", "planeta", "futuro"]
+	"points_of_interest": [
+		{
+			"name": "Faro de señales de Hesperia",
+			"kind": "lighthouse"
+		},
+		{
+			"name": "Consola de control",
+			"kind": "console"
+		},
+		{
+			"name": "Archivo de registros",
+			"kind": "archive"
+		}
+	],
+	"tags": [
+		"respaldo",
+		"planeta",
+		"futuro"
+	],
+	"problem": "La consola de control se apagó en la última tormenta de polvo y nadie puede llamar al carguero que trae agua."
 }

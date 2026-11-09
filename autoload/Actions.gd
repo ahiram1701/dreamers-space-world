@@ -87,12 +87,17 @@ func execute(npc_id: String, actions: Array) -> Array:
 				note = _reveal_place(npc_id, a)
 			"give_quest":
 				if not npc_id.is_empty():
-					var title := str(a.get("target", a.get("text", "Un encargo"))).left(60)
+					var title := ContentValidator.fit_text(str(a.get("target", a.get("text", "Un encargo"))), 60)
 					var reward := int(a.get("price", 0))
-					if not Quests.create_custom(npc_id, title, str(a.get("text", title)), reward).is_empty():
-						note = "Nuevo encargo de %s: %s%s" % [_name(npc_id), title, (" (paga %s)" % Wallet.text(reward)) if reward > 0 else ""]
+					var opts := {"kind": str(a.get("quest_kind", "custom")), "item": str(a.get("item_name", "")),
+						"place": str(a.get("place", "")), "at_hour": float(a.get("at_hour", -1.0))}
+					var q := Quests.create_custom(npc_id, title, str(a.get("text", title)), reward, opts)
+					if not q.is_empty():
+						var when := Quests.when_text(q)
+						note = "Nuevo encargo de %s: %s%s%s" % [_name(npc_id), title, (" — " + when) if not when.is_empty() else "",
+							(" (paga %s)" % Wallet.text(reward)) if reward > 0 else ""]
 			"complete_quest":
-				if not npc_id.is_empty() and not Quests.complete_custom(npc_id).is_empty():
+				if not npc_id.is_empty() and not Quests.complete_custom(npc_id, str(a.get("target", ""))).is_empty():
 					note = "Encargo cumplido."
 			"refuse_contact":
 				if not npc_id.is_empty():
@@ -162,7 +167,7 @@ func execute(npc_id: String, actions: Array) -> Array:
 					var j := Jobs.hire(npc_id, str(a.get("target", "Ayudante")), wage, int(a.get("start_hour", 9)), int(a.get("end_hour", 15)),
 						str(wp.get("place", "")), str(wp.get("label", "su negocio")), str(a.get("text", "")))
 					Phone.add_contact(npc_id)
-					note = "Trabajo nuevo: %s en %s, de %02d:00 a %02d:00, %s el turno." % [j.title, j.place_label, j.start_hour, j.end_hour, Wallet.text(j.wage)]
+					note = "Trabajo nuevo: %s en %s, %s, %s el turno." % [j.title, j.place_label, WorldClock.span(j.start_hour, j.end_hour), Wallet.text(j.wage)]
 			"quit_job":
 				if Jobs.has_job() and (npc_id.is_empty() or Jobs.job().employer == npc_id):
 					Jobs.quit("El jugador dejó el trabajo." if npc_id.is_empty() else "Despediste al jugador.")
@@ -255,7 +260,7 @@ func _spawn_npc(a: Dictionary) -> String:
 	var id := build_npc(full_name, job, str(a.get("text", "")).strip_edges(), line)
 	if id.is_empty():
 		return ""
-	Phone.add_contact(id)  # lo llamaste tú: tienes su número
+	# (no te da su número por llegar: eso solo si te lo da en una conversación)
 	var spot: Dictionary = arrival_spot.call() if arrival_spot.is_valid() else {"from": Vector3.ZERO, "to": Vector3.ZERO}
 	var to: Vector3 = spot.get("to", Vector3.ZERO)
 	var entry := add_resident(id, spot.get("home", to))  # donde vive (fuera, aunque llegue a un interior)
@@ -291,12 +296,12 @@ func build_npc(full_name: String, job: String, desc: String, line: String, look:
 		"name": full_name.left(40), "age": age, "occupation": job.left(80),
 		"personality": traits.slice(0, 3) if not traits.is_empty() else ["natural"],
 		"goals": ["Hacer bien su trabajo de %s" % job.to_lower()], "secret": "Nada especial, de momento.",
-		"greeting": line.left(240), "appearance": appearance, "tags": ["vecino"],
+		"greeting": ContentValidator.fit_text(line, 240), "appearance": appearance, "tags": ["vecino"],
 	}
 	var check := ContentValidator.validate("npc", data)
 	if not check.ok:
 		return ""
-	check.data["description"] = desc.left(300)
+	check.data["description"] = ContentValidator.fit_text(desc, 500)
 	return WorldDB.add_entity("npc", check.data, "world:%s" % place)
 
 
@@ -328,7 +333,7 @@ func _create_place(a: Dictionary) -> String:
 	if lot.is_empty():
 		return "No hay sitio libre para %s." % label
 	var pos: Vector3 = lot.pos
-	var entry := {"name": label.left(50), "kind": kind, "interior": INTERIOR_OF.get(kind, "house"), "text": str(a.get("text", "")).left(200),
+	var entry := {"name": label.left(50), "kind": kind, "interior": INTERIOR_OF.get(kind, "house"), "text": ContentValidator.fit_text(str(a.get("text", "")), 300),
 		"pos": [snappedf(pos.x, 0.01), snappedf(pos.y, 0.01), snappedf(pos.z, 0.01)], "yaw": float(lot.get("yaw", 0.0)),
 		"seed": hash(label + place)}
 	here.append(entry)
@@ -413,7 +418,7 @@ func _npc_react(who: String, a: Dictionary) -> String:
 	if memory.is_empty():
 		memory = str(a.get("narration", "")).strip_edges()
 	if not memory.is_empty():
-		NPCMemory.add_event(who, memory.left(200), delta)
+		NPCMemory.add_event(who, ContentValidator.fit_text(memory, 200), delta)
 	elif delta != 0:
 		NPCMemory.add_event(who, "Algo que hizo el jugador te afectó.", delta)
 	var line := str(a.get("line", "")).strip_edges()
@@ -495,7 +500,7 @@ func _update_item(npc_id: String, a: Dictionary) -> String:
 		fields["name"] = new_name.left(70)
 	var lore := str(a.get("item_description", "")).strip_edges()
 	if lore.length() >= 5:
-		fields["lore"] = lore.left(300)
+		fields["lore"] = ContentValidator.fit_text(lore, 500)
 	var effect: String = a.get("item_effect", "none")
 	if effect != "none" and effect != item.get("effect", "none"):
 		fields["effect"] = effect
@@ -618,7 +623,8 @@ func _hand_over(npc_id: String, item_id: String) -> String:
 	owned.append(item_id)
 	NPCMemory.set_fields(npc_id, {"possessions": owned})
 	NPCMemory.add_facts(npc_id, ["El jugador te dio %s." % item.name], 3)
-	return "Le das %s a %s." % [item.name, _name(npc_id)]
+	var done := Quests.on_item_given(npc_id, str(item.name))
+	return "Le das %s a %s.%s" % [item.name, _name(npc_id), " ¡Encargo cumplido!" if not done.is_empty() else ""]
 
 
 func _change_stat(a: Dictionary) -> String:

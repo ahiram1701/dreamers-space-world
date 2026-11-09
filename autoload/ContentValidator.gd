@@ -20,13 +20,13 @@ const ARCHETYPES_PATH := "res://data/archetypes.json"
 const ACTION := {"t": "object", "fields": {
 	"type": {"t": "enum", "from": "npc_action"},
 	"item_name": {"t": "string", "min": 2, "max": 70, "opt": true},
-	"item_description": {"t": "string", "min": 5, "max": 300, "opt": true},
+	"item_description": {"t": "string", "min": 5, "max": 500, "opt": true},
 	"item_effect": {"t": "enum", "from": "item_effect", "default": "none"},
 	"lent": {"t": "bool", "default": false},
 	"target": {"t": "string", "min": 1, "max": 80, "opt": true},
 	"verb": {"t": "string", "min": 2, "max": 20, "opt": true},
 	"amount": {"t": "int", "min": -30, "max": 30, "default": 0},
-	"text": {"t": "string", "min": 3, "max": 300, "opt": true},
+	"text": {"t": "string", "min": 3, "max": 500, "opt": true},
 	# Reacción de una persona a lo que hace el jugador (npc_react) e irse encerrado (go_inside)
 	"gesture": {"t": "enum", "from": "gesture", "opt": true},
 	"emotion": {"t": "enum", "from": "emotion", "opt": true},
@@ -56,8 +56,12 @@ const ACTION := {"t": "object", "fields": {
 	"until_hour": {"t": "float", "min": 0.0, "max": 24.0, "opt": true},
 	"hours": {"t": "float", "min": 0.1, "max": 16.0, "opt": true},
 	"floor": {"t": "bool", "default": false},
+	# Encargos (give_quest): de qué tipo, dónde y a qué hora del día (3.0 = 3 a. m., 15.0 = 3 p. m.)
+	"quest_kind": {"t": "enum", "from": "quest_kind", "opt": true},
+	"place": {"t": "string", "min": 2, "max": 80, "opt": true},
+	"at_hour": {"t": "float", "min": 0.0, "max": 24.0, "opt": true},
 	# Frase de narración de este paso (world_action.steps)
-	"narration": {"t": "string", "min": 2, "max": 300, "opt": true},
+	"narration": {"t": "string", "min": 2, "max": 400, "opt": true},
 }}
 
 const SPECS := {
@@ -77,6 +81,8 @@ const SPECS := {
 			"secondary_color": {"t": "color", "default": "#c9b48a"},
 		}},
 		"tags": {"t": "array", "min": 0, "max": 6, "opt": true, "lenient": true, "items": {"t": "string", "min": 2, "max": 24}},
+		# Dónde trabaja o vive: el nombre exacto de un punto de interés del lugar (allí se le encuentra)
+		"workplace": {"t": "string", "min": 2, "max": 80, "opt": true},
 	},
 	"location": {
 		"name": {"t": "string", "min": 2, "max": 80},
@@ -87,7 +93,13 @@ const SPECS := {
 		"gravity": {"t": "float", "min": 0.1, "max": 3.0, "default": 1.0},
 		"seed": {"t": "int", "min": 0, "max": 2147483647, "default": 7},
 		"sky_color": {"t": "color", "default": "#7090c0"},
-		"points_of_interest": {"t": "array", "min": 1, "max": 6, "lenient": true, "items": {"t": "string", "min": 2, "max": 200}},
+		# Cada punto, con su tipo de un catálogo de cosas que el juego sabe construir
+		"points_of_interest": {"t": "array", "min": 1, "max": 6, "lenient": true, "items": {"t": "object", "fields": {
+			"name": {"t": "string", "min": 2, "max": 80},
+			"kind": {"t": "enum", "from": "poi_kind", "default": "marker"},
+		}}},
+		# El problema concreto que tiene la gente de aquí (de él sale la misión del lugar)
+		"problem": {"t": "string", "min": 10, "max": 300, "opt": true},
 		"tags": {"t": "array", "min": 0, "max": 6, "opt": true, "lenient": true, "items": {"t": "string", "min": 2, "max": 24}},
 	},
 	"item": {
@@ -95,7 +107,7 @@ const SPECS := {
 		"kind": {"t": "enum", "from": "item_kind", "default": "artifact"},
 		"effect": {"t": "enum", "from": "item_effect", "default": "none"},
 		"power": {"t": "int", "min": 0, "max": 100, "default": 20},
-		"lore": {"t": "string", "min": 5, "max": 300},
+		"lore": {"t": "string", "min": 5, "max": 500},
 		"tags": {"t": "array", "min": 0, "max": 6, "opt": true, "lenient": true, "items": {"t": "string", "min": 2, "max": 24}},
 	},
 	# No es una entidad del mundo: es la respuesta de un PNJ en una conversación.
@@ -135,23 +147,23 @@ const SPECS := {
 			"text": {"t": "string", "min": 2, "max": 160},
 		}}},
 	},
-	# El momento en que el jugador descubre la brecha. Una vez por partida.
+	# El momento en que la brecha arrastra al jugador lejos de casa. Una vez por partida.
+	# Es una escena de cine: "beats" son tomas (de una lista de tomas que existen) con una frase.
 	"awakening": {
 		"origin": {"t": "enum", "from": "awakening_origin", "default": "natural_anomaly"},
 		"title": {"t": "string", "min": 2, "max": 60},
-		"narration": {"t": "string", "min": 80, "max": 1500},
-		"source_description": {"t": "string", "min": 20, "max": 400},
+		"beats": {"t": "array", "min": 4, "max": 9, "lenient": true, "items": {"t": "object", "fields": {
+			"shot": {"t": "enum", "from": "awakening_shot", "default": "breach"},
+			"line": {"t": "string", "min": 3, "max": 160},
+		}}},
 		"anchor": {"t": "object", "fields": {
 			"name": {"t": "string", "min": 2, "max": 40},
 			"description": {"t": "string", "min": 10, "max": 300},
 			"base": {"t": "enum", "from": "anchor_base", "default": "none"},
 		}},
+		"companion_line": {"t": "string", "min": 3, "max": 140, "opt": true},
 		"canon_facts": {"t": "array", "min": 2, "max": 3, "lenient": true, "items": {"t": "string", "min": 10, "max": 200}},
-		"choices": {"t": "array", "min": 2, "max": 3, "lenient": true, "items": {"t": "object", "fields": {
-			"text": {"t": "string", "min": 5, "max": 140},
-			"consequence": {"t": "enum", "from": "awakening_consequence", "default": ""},
-		}}},
-		"destination_hint": {"t": "string", "min": 10, "max": 300, "default": "Un lugar en otra rama del multiverso."},
+		"destination_hint": {"t": "string", "min": 10, "max": 300, "default": "Un lugar lejano, en otra rama del multiverso."},
 	},
 	# Misión local. El motor resuelve target_index contra las listas reales del lugar
 	# (puntos de interés, PNJs u objetos), así la IA no puede inventar objetivos imposibles.
@@ -162,13 +174,15 @@ const SPECS := {
 		"target_index": {"t": "int", "min": 0, "max": 5, "default": 0},
 		"completion_text": {"t": "string", "min": 5, "max": 300},
 	},
-	# El origen de la señal: revelación final y los tres finales con su epílogo.
+	# La vuelta a casa: la escena de llegada y los tres finales con su epílogo.
 	"finale": {
 		"title": {"t": "string", "min": 2, "max": 60},
-		"revelation": {"t": "string", "min": 80, "max": 1500},
-		"source_voice": {"t": "string", "min": 10, "max": 400},
+		"beats": {"t": "array", "min": 4, "max": 9, "lenient": true, "items": {"t": "object", "fields": {
+			"shot": {"t": "enum", "from": "finale_shot", "default": "town"},
+			"line": {"t": "string", "min": 3, "max": 160},
+		}}},
 		"choices": {"t": "array", "min": 3, "max": 3, "lenient": true, "items": {"t": "object", "fields": {
-			"text": {"t": "string", "min": 5, "max": 140},
+			"text": {"t": "string", "min": 5, "max": 110},
 			"ending": {"t": "enum", "from": "ending", "default": ""},
 			"epilogue": {"t": "string", "min": 40, "max": 900},
 		}}},
@@ -300,6 +314,8 @@ func _describe(spec: Dictionary) -> String:
 	var opt := " (opcional)" if spec.get("opt", false) else ""
 	match spec.t:
 		"string":
+			if spec.has("max") and spec.max < 2000:
+				return "texto en español de máx. %d caracteres, frases completas%s" % [int(spec.max * 0.8), opt]
 			return "texto en español" + opt
 		"int":
 			return "número entero entre %d y %d%s" % [spec.min, spec.max, opt]
@@ -331,7 +347,7 @@ func _check(spec: Dictionary, value: Variant, path: String, errors: Array[String
 			var s: String = value.strip_edges()
 			if s.length() < spec.get("min", 0):
 				return _fallback(spec, path, "texto demasiado corto", errors, warnings)
-			return s.left(spec.get("max", 10000))
+			return fit_text(s, spec.get("max", 10000))
 		"int", "float":
 			if typeof(value) == TYPE_STRING and (value as String).is_valid_float():
 				value = (value as String).to_float()
@@ -384,6 +400,8 @@ func _check(spec: Dictionary, value: Variant, path: String, errors: Array[String
 			# Muchos modelos devuelven "opción" como texto en lugar de {"text": "opción", ...}
 			if typeof(value) == TYPE_STRING and spec.fields.has("text"):
 				value = {"text": value}
+			elif typeof(value) == TYPE_STRING and spec.fields.has("name"):
+				value = {"name": value}
 			if typeof(value) != TYPE_DICTIONARY:
 				return _fallback(spec, path, "se esperaba un objeto", errors, warnings)
 			var out := {}
@@ -400,6 +418,25 @@ func _check(spec: Dictionary, value: Variant, path: String, errors: Array[String
 			return out  # las claves desconocidas se descartan a propósito
 	errors.append("%s: spec con tipo desconocido '%s'" % [path, spec.t])
 	return null
+
+
+## Acorta un texto sin cortarlo a mitad de palabra: hasta el último final de frase que quepa
+## (si deja al menos la mitad) o, si no, hasta la última palabra entera con «…».
+static func fit_text(s: String, max_len: int) -> String:
+	if s.length() <= max_len:
+		return s
+	var cut := s.left(max_len)
+	var best := -1
+	for mark in [". ", "! ", "? ", ".\n", "» ", "\n"]:
+		best = maxi(best, cut.rfind(mark))
+	if cut.ends_with(".") or cut.ends_with("!") or cut.ends_with("?"):
+		best = max_len - 1
+	if best >= max_len / 2:
+		return cut.left(best + 1).strip_edges()
+	var sp := cut.rfind(" ")
+	if sp > max_len / 3:
+		cut = cut.left(sp)
+	return cut.strip_edges().trim_suffix(",").trim_suffix(";").trim_suffix(":") + "…"
 
 
 ## Un valor inválido: si el campo tiene "default" se repara (aviso); si no, es un error.

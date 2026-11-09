@@ -4,9 +4,14 @@ extends Node
 ## `change_need`, o dormir en una cama). Efectos suaves: nunca matan, solo ralentizan y se notan.
 
 signal need_changed(need: String, value: float)
+## Agotado del todo: te quedas dormido donde estés (lo resuelve la escena).
+signal collapsed
+## Sin comer o sin beber: el cuerpo se resiente (la escena lo nota: mareo).
+signal starving(need: String)
 
 const NEEDS := ["hunger", "thirst", "rest", "hygiene"]
-const LABELS := {"hunger": "Hambre", "thirst": "Sed", "rest": "Descanso", "hygiene": "Higiene"}
+const LABELS := {"hunger": "Comida", "thirst": "Agua", "rest": "Energía", "hygiene": "Higiene"}
+const STARVE_EVERY := 15.0  # minutos de juego entre cada punto de salud que se pierde sin comer o beber
 ## Horas de juego en vaciarse del todo.
 const HOURS_TO_EMPTY := {"hunger": 16.0, "thirst": 10.0, "rest": 18.0, "hygiene": 30.0}
 const LOW := 25.0
@@ -24,6 +29,8 @@ var _values := {"hunger": 85.0, "thirst": 85.0, "rest": 90.0, "hygiene": 90.0}
 var _last_minutes := -1.0
 var _loaded_world := ""
 var _since_save := 0.0
+var _starve_min := 0.0
+var _collapsed := false
 
 
 func _process(delta: float) -> void:
@@ -73,6 +80,22 @@ func _decay(minutes: float) -> void:
 		if n == "hygiene":
 			rate *= 1.0 + dirt * 2.0  # sucio, la higiene se va antes
 		_store(n, _values[n] - rate * minutes)
+	# A cero de comida o agua: mareo y, poco a poco, salud (te desmayas a 0, nunca mueres)
+	for n in ["hunger", "thirst"]:
+		if _values[n] <= 0.0:
+			_starve_min += minutes
+			if _starve_min >= STARVE_EVERY:
+				_starve_min = 0.0
+				starving.emit(n)
+				if GameState.is_awakened():
+					GameState.change_stat("health", -1)
+			break
+	# Agotado: te duermes donde estés (una vez; vuelve a poder pasar cuando descanses)
+	if _values.rest <= 0.0 and not _collapsed:
+		_collapsed = true
+		collapsed.emit()
+	elif _values.rest > 20.0:
+		_collapsed = false
 	# El cuerpo cambia despacio (semanas de juego): bien comido y sin moverte, te ensanchas; moverte
 	# mucho o pasar hambre te afina. Muy poco por hora.
 	var fed := 1.0 if get_need("hunger") > 75.0 else (-1.0 if get_need("hunger") < 25.0 else 0.0)
@@ -150,10 +173,17 @@ func _store(n: String, v: float) -> void:
 func speed_factor() -> float:
 	var f := 1.0
 	if get_need("rest") < 15.0:
-		f -= 0.2
+		f -= 0.25
 	if get_need("hunger") < LOW or get_need("thirst") < LOW:
-		f -= 0.1
-	return maxf(f, 0.7)
+		f -= 0.15
+	if get_need("hunger") <= 0.0 or get_need("thirst") <= 0.0:
+		f -= 0.15
+	return maxf(f, 0.5)
+
+
+## Con hambre, sed o agotamiento no se puede correr.
+func can_run() -> bool:
+	return get_need("rest") >= 10.0 and get_need("hunger") >= LOW * 0.6 and get_need("thirst") >= LOW * 0.6
 
 
 ## Lo que siente el cuerpo, en palabras (para la IA y los avisos).

@@ -32,7 +32,7 @@ static func is_open(kind: String, hour: float) -> bool:
 
 static func hours_text(kind: String) -> String:
 	var i := info(kind)
-	return "de %d:00 a %d:00" % [int(i.get("open", 9)), int(i.get("close", 20))]
+	return WorldClock.span(int(i.get("open", 9)), int(i.get("close", 20)))
 
 
 ## Cómo se llama ese tipo de local en esta época ("la taberna" en la Antigüedad…).

@@ -7,7 +7,7 @@ extends CanvasLayer
 ## Nada de listas de controles: eso está en la pausa (y en los consejos de la primera vez).
 
 const FADE_AFTER := 8.0
-const SHOW_WHEN_BELOW := 40.0
+const SHOW_WHEN_BELOW := 60.0
 const RECENT := 6.0
 const KIND_COLOR := {"info": Color("#73d9ff"), "item": Color("#7ee08a"), "money": Color("#ffd27a"), "quest": Color("#f2c14e"),
 	"memory": Color("#c9a7ff"), "warn": Color("#ef6b6b")}
@@ -77,12 +77,17 @@ func _ready() -> void:
 	_objective = _label(_top_left, 21, UITheme.TEXT)
 	_objective.add_theme_font_override("font", UITheme.font_bold)
 	_tracker = _label(_top_left, 15, Color("#ffd9a0"))
+	# Ancho máximo: la misión larga salta de línea en vez de salirse de la pantalla
+	_top_left.custom_minimum_size.x = 560
+	for l in [_place, _objective, _tracker]:
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.max_lines_visible = 3
 
 	# Arriba a la derecha
 	var right := VBoxContainer.new()
 	right.anchor_left = 1.0
 	right.anchor_right = 1.0
-	right.offset_left = -330
+	right.offset_left = -400
 	right.offset_right = -22
 	right.offset_top = 16
 	right.add_theme_constant_override("separation", 10)
@@ -108,10 +113,15 @@ func _ready() -> void:
 	_vitals.offset_bottom = -22
 	_vitals.add_theme_constant_override("separation", 6)
 	add_child(_vitals)
-	for s in [["health", "Salud", UITheme.DANGER], ["energy", "Ancla", UITheme.ACCENT], ["instability", "Inestabilidad", Color("#c77dff")],
-			["hunger", "Hambre", Color("#e7a35b")], ["thirst", "Sed", Color("#5fb8e8")], ["rest", "Descanso", Color("#a5b4fc")],
-			["hygiene", "Higiene", Color("#8fd6b4")]]:
-		_add_row(s[0], s[1], s[2])
+	# Llenas = bien (menos la inestabilidad, que es mala cuanto más sube); con su valor en número
+	for s in [["health", "Salud", UITheme.DANGER, "Tu salud. A cero te desmayas."],
+			["energy", "Carga del Ancla", UITheme.ACCENT, "La energía de la brújula para saltar. Se recarga en los puntos de recarga."],
+			["instability", "Inestabilidad", Color("#c77dff"), "Cuánto te afecta saltar entre mundos. Baja con el tiempo y durmiendo; muy alta, hace daño."],
+			["hunger", "Comida", Color("#e7a35b"), "Llena: comiste bien. Vacía: tienes hambre."],
+			["thirst", "Agua", Color("#5fb8e8"), "Llena: bebiste. Vacía: tienes sed."],
+			["rest", "Energía", Color("#a5b4fc"), "Llena: descansado. Vacía: agotado (te quedarás dormido)."],
+			["hygiene", "Higiene", Color("#8fd6b4"), "Llena: limpio. Vacía: hueles mal y la gente lo nota."]]:
+		_add_row(s[0], s[1], s[2], s[3])
 
 	GameState.stat_changed.connect(func(stat, _v): _touch(stat))
 	Body.need_changed.connect(func(n, _v): _touch(n))
@@ -131,23 +141,31 @@ func _label(parent: Node, size: int, color: Color) -> Label:
 	return l
 
 
-func _add_row(key: String, text: String, color: Color) -> void:
+func _add_row(key: String, text: String, color: Color, tip: String = "") -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	row.modulate.a = 0.0
 	row.visible = false
+	row.tooltip_text = tip
 	_vitals.add_child(row)
-	var name := _label(row, 13, UITheme.MUTED)
+	var name := _label(row, 13, UITheme.TEXT)
 	name.text = text
-	name.custom_minimum_size.x = 92
+	name.custom_minimum_size.x = 112
 	var bar := ProgressBar.new()
-	bar.custom_minimum_size = Vector2(150, 8)
+	bar.custom_minimum_size = Vector2(150, 10)
 	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	bar.show_percentage = false
 	bar.max_value = 100
-	bar.add_theme_stylebox_override("fill", UITheme.box(color, Color(0, 0, 0, 0), 4, 0))
+	var fill := UITheme.box(color, Color(0, 0, 0, 0), 4, 0)
+	bar.add_theme_stylebox_override("fill", fill)
+	# El fondo se ve: así una barra medio vacía se lee como medio vacía, no como un trazo suelto
+	var back := UITheme.box(Color(1, 1, 1, 0.12), Color(1, 1, 1, 0.28), 4, 0)
+	back.set_border_width_all(1)
+	bar.add_theme_stylebox_override("background", back)
 	row.add_child(bar)
-	_rows[key] = {"row": row, "bar": bar, "t": -INF}
+	var num := _label(row, 13, UITheme.TEXT)
+	num.custom_minimum_size.x = 40
+	_rows[key] = {"row": row, "bar": bar, "t": -INF, "fill": fill, "num": num, "color": color}
 
 
 # --- API ------------------------------------------------------------------------------
@@ -176,7 +194,7 @@ func notify(text: String, kind: String = "info") -> void:
 	if text.strip_edges().is_empty():
 		return
 	Journal.log_event(text, kind)
-	while _notes.get_child_count() >= 3:
+	while _notes.get_child_count() >= 4:
 		var old := _notes.get_child(0)
 		_notes.remove_child(old)
 		old.queue_free()
@@ -188,12 +206,12 @@ func notify(text: String, kind: String = "info") -> void:
 	var l := Label.new()
 	l.text = text
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	l.custom_minimum_size.x = 280
+	l.custom_minimum_size.x = 340
 	l.add_theme_font_size_override("font_size", 15)
 	card.add_child(l)
 	_notes.add_child(card)
 	UIAnim.show(card, Vector2(24, 0))
-	var life := clampf(text.length() * 0.06, 3.5, 8.0)
+	var life := Settings.read_time(text, 4.0)
 	var tw := card.create_tween()
 	tw.tween_interval(life)
 	tw.tween_property(card, "modulate:a", 0.0, 0.6)
@@ -273,6 +291,10 @@ func _refresh(first: bool) -> void:
 			r.bar.value = value
 		else:
 			r.bar.value = lerpf(r.bar.value, value, 0.35)
+		r.num.text = "%d %%" % roundi(value)
+		# Bien: su color; regular: ámbar; mal: rojo
+		var good := (100.0 - value) if key == "instability" else value
+		r.fill.bg_color = r.color if good >= 50.0 else (Color("#f2b84b") if good >= 25.0 else Color("#e5533d"))
 		# Inestabilidad: importa cuando SUBE; el resto, cuando baja
 		var worrying := (value > 100.0 - SHOW_WHEN_BELOW) if key == "instability" else (value < SHOW_WHEN_BELOW)
 		var want := (awake or not is_stat) and (worrying or now - float(r.t) < RECENT)

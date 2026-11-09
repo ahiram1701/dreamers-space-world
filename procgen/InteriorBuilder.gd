@@ -35,7 +35,7 @@ const ROOMS := {
 
 ## Cómo es cada sitio por dentro (lo que la IA puede dar por cierto; lo demás no existe).
 const DESCRIPTIONS := {
-	"lighthouse": "una torre con UNA sola puerta, la delantera (no hay puerta trasera, sótano ni pasadizos a la vista). Dentro, en una sola sala: la mesa y la cama de Marina, estanterías, libros y una escalera de caracol que sube hacia la lámpara",
+	"lighthouse": "una torre redonda con UNA sola puerta, la delantera (no hay puerta trasera): dentro hay UNA sola sala redonda (ninguna otra habitación, ni abajo ni detrás) con la mesa y la cama de quien cuida el faro, estanterías, libros y una escalera de caracol en el centro que sube a una trampilla; arriba, la galería y la lámpara",
 	"cafe": "una sola puerta delantera; barra, mesas y sillas, y la cocina detrás de la barra",
 	"station": "estación de tren cerrada; una puerta delantera, sala de espera con bancos y la ventanilla, y una escalera a la oficina de arriba",
 	"house": "casa con una puerta delantera; sala-comedor, cocina, baño y recámara (las de dos plantas, con las recámaras arriba)",

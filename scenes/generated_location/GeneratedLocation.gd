@@ -14,6 +14,8 @@ var _env: Environment
 var _fx: EnvironmentFX
 var _placed: Array = []  # posiciones ocupadas (balizas, objetos) para que la decoración no las tape
 var _extras := {"features": [], "buildings": [], "removed": []}  # lo que decora PropsBuilder
+var _poi_kinds := {}   # nombre del punto → tipo construido (faro, consola…)
+var _poi_stands := {}  # nombre del punto → dónde se pone quien trabaja allí
 
 
 func _ready() -> void:
@@ -25,6 +27,8 @@ func _ready() -> void:
 		_def = ContentGenerator.load_fallback("location")  # vista previa sin partida (editor / smoke test)
 		_location_id = ""
 
+	if (_def.get("points_of_interest", []) as Array).any(func(p): return p is Dictionary) or not _def.has("poi_kinds"):
+		_def = PoiCatalog.normalize_location(_def.duplicate(true))  # mundos de antes: los tipos se deducen
 	_extras.removed = Actions.removed_here(GameState.current_location())
 	_interiors = InteriorManager.new()
 	add_child(_interiors)
@@ -72,6 +76,7 @@ func _ready() -> void:
 	_setup_common()
 	add_child(AmbientAudio.for_location(_def))
 	GameState.stat_changed.connect(func(_s, _v): _apply_instability())
+	Quests.quest_completed.connect(_quest_scene)
 	_apply_instability()
 
 	if _def.get("finale", false) and GameState.ending().is_empty():
@@ -81,8 +86,64 @@ func _ready() -> void:
 		add_child(finale)
 		finale.play()
 	else:
-		_ui.toast("Llegada: %s" % _def.get("name", "?"))
+		_arrival_shot()
 		Travel.pregenerate()  # el siguiente destino se prepara mientras exploras
+
+
+## Cumplir la misión del lugar se ve: quien te la pidió se acerca, te da lo prometido y la
+## brújula gana rumbo (una escena corta; clic para seguir, Esc la salta).
+func _quest_scene(q: Dictionary, reward: String) -> void:
+	if q.get("objective", "") == "custom" or q.get("location_id", "") != _location_id:
+		return
+	var npc: TownNPC = _npcs.get(q.giver)
+	if npc == null or not is_instance_valid(npc) or _interiors.is_inside():
+		return
+	var cut := Cutscene.new()
+	add_child(cut)
+	await cut.begin(_player)
+	npc.global_position = _player.global_position + (npc.global_position - _player.global_position).normalized() * 1.4
+	npc.face(_player.global_position)
+	var mid := (npc.global_position + _player.global_position) / 2.0 + Vector3(0, 1.5, 0)
+	var side := (npc.global_position - _player.global_position).cross(Vector3.UP).normalized()
+	await cut.shot(mid + side * 2.6 + Vector3(0, 0.2, 0), mid, 0.8)
+	npc.play_gesture("give", 2.0)
+	var text := str(q.get("completion_text", "")).strip_edges()
+	if not text.is_empty():
+		await cut.say(npc, text)
+	await cut.line(reward)
+	await cut.finish("Misión cumplida: %s" % q.title)
+
+
+## Al llegar: un plano general del lugar con su nombre (unos segundos; clic o Esc lo salta).
+func _arrival_shot() -> void:
+	if _location_id.is_empty() or _def.get("arrived_once", false):
+		_ui.toast("Llegada: %s" % _def.get("name", "?"))
+		return
+	WorldDB.update_entity("location", _location_id, {"arrived_once": true})
+	var cut := Cutscene.new()
+	add_child(cut)
+	await cut.begin(_player)
+	var p := _player.global_position
+	var look := p + Vector3(0, 1.0, 0)
+	var far := Vector3(0, 0, 0)
+	for pos in _places.values():  # mirando hacia el sitio más llamativo
+		far = pos
+		break
+	var dir := (far - p)
+	dir.y = 0.0
+	dir = dir.normalized() if dir.length() > 1.0 else Vector3.FORWARD
+	await cut.shot(p - dir * 14.0 + Vector3(0, 9.0, 0), p + dir * 20.0, 0.0)
+	cut.shot(p - dir * 5.0 + Vector3(0, 2.6, 0), look + dir * 6.0, 3.0)
+	var who := WorldDB.get_entity("location", _location_id)
+	await cut.line("%s\n[color=#9fd8ff][font_size=16]%s[/font_size][/color]" % [who.get("name", "?"), _rumbo_text()])
+	await cut.finish()
+
+
+func _rumbo_text() -> String:
+	if GameState.has_all_fragments():
+		return "La brújula apunta firme a casa."
+	var left := GameState.FRAGMENTS_NEEDED - GameState.fragments()
+	return "La brújula apunta a casa: faltan %d %s. Alguien de aquí podría ayudarte." % [left, "salto" if left == 1 else "saltos"]
 
 
 func _process(_delta: float) -> void:
@@ -136,16 +197,86 @@ func _build_points_of_interest() -> void:
 	var rng := _rng(2)
 	var names: Array = _def.get("points_of_interest", []).duplicate()
 	names.append("Punto de recarga del Ancla")
+	var kinds: Array = _def.get("poi_kinds", [])
 	var max_r := minf(55.0, _limit - 6.0)
 	for i in names.size():
-		var angle := TAU * i / names.size() + rng.randf_range(-0.3, 0.3)
-		var dist := rng.randf_range(POI_MIN, max_r)
-		var pos := Vector3(cos(angle) * dist, 0, sin(angle) * dist)
-		pos.y = _height_at.call(pos.x, pos.z)
+		# Cada sitio donde tiene sentido: el faro y el muelle en lo más bajo (la orilla), la mina,
+		# la torre y el templo en lo alto, el resto en lo llano. Se prueban varios sitios del sector.
+		var kind := str(kinds[i]) if i < kinds.size() else ""
+		var best := Vector3.INF
+		var best_score := -INF
+		for k in 10:
+			var angle := TAU * i / names.size() + rng.randf_range(-0.45, 0.45)
+			var dist := rng.randf_range(POI_MIN, max_r)
+			var cand := Vector3(cos(angle) * dist, 0, sin(angle) * dist)
+			cand.y = _height_at.call(cand.x, cand.z)
+			var score := _site_score(kind, cand)
+			for other in _placed:
+				if Vector2(other.x - cand.x, other.z - cand.z).length() < 12.0:
+					score -= 50.0
+			if score > best_score:
+				best = cand
+				best_score = score
+		var pos := best
 		var is_recharge := i == names.size() - 1
 		_beacon(pos, names[i], Color("#4fc3f7") if is_recharge else Color("#f2a65a"), -1 if is_recharge else i)
 		_places[str(names[i])] = pos
 		_placed.append(pos)
+	_trails()
+
+
+## Qué tan bien le va a un tipo de sitio esta posición (altura y llano).
+func _site_score(kind: String, p: Vector3) -> float:
+	var slope := 0.0
+	for o in [Vector2(2, 0), Vector2(-2, 0), Vector2(0, 2), Vector2(0, -2)]:
+		slope += absf(_height_at.call(p.x + o.x, p.z + o.y) - p.y)
+	var dry := 0.0 if p.y > _water_level + 0.3 else -30.0
+	match kind:
+		"dock", "lighthouse":
+			# En la orilla: abajo, pero en seco
+			return -p.y * 2.0 + dry - slope
+		"mine", "tower", "temple", "antenna":
+			return p.y * 1.5 + dry - slope * 0.5
+	return -slope * 3.0 + dry
+
+
+## Senderos de tierra del centro a cada sitio: se ve por dónde ir.
+func _trails() -> void:
+	if StationBuilder.is_space(_def):
+		return
+	var spots := []
+	var center := Vector3.ZERO
+	for name in _places:
+		var to: Vector3 = _places[name]
+		var d := Vector2(to.x, to.z).length()
+		var n := int(d / 1.6)
+		for k in range(3, n - 2):
+			var t := float(k) / n
+			var x := lerpf(center.x, to.x, t) + sin(t * 9.0 + d) * 0.6
+			var z := lerpf(center.z, to.z, t) + cos(t * 7.0 + d) * 0.6
+			var y: float = _height_at.call(x, z)
+			if y < _water_level:
+				continue
+			spots.append(Transform3D(Basis(Vector3.UP, atan2(to.x, to.z)), Vector3(x, y + 0.02, z)))
+	if spots.is_empty():
+		return
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	var quad := PlaneMesh.new()
+	quad.size = Vector2(1.3, 1.9)
+	mm.mesh = quad
+	mm.instance_count = spots.size()
+	for i in spots.size():
+		mm.set_instance_transform(i, spots[i])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = "Senderos"
+	mmi.multimesh = mm
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(TerrainBuilder.palette(_def.get("biome", "barren")).low).darkened(0.25)
+	mat.roughness = 1.0
+	mmi.material_override = mat
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mmi)
 
 
 ## Cada punto de interés es algo de verdad según lo que es (una antena, unos restos, un
@@ -157,25 +288,16 @@ func _beacon(pos: Vector3, label: String, _color: Color, poi_index: int) -> void
 	add_child(root)
 	root.global_position = pos
 	root.rotation.y = float(hash(label) % 628) / 100.0
-	var low := label.to_lower()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(label)
-	var kind := "cairn"
-	if poi_index < 0:
-		kind = "terminal"
-	elif ["baliza", "antena", "señal", "senal", "transmis", "radio", "faro", "emisor"].any(func(w): return low.contains(w)):
-		kind = "antenna"
-	elif ["restos", "naufrag", "nave", "chatarra", "pecio", "estrell", "accidente", "expedición", "expedicion"].any(func(w): return low.contains(w)):
-		kind = "wreck"
-	elif ["cráter", "crater", "impacto", "pozo", "fuente", "charco", "lago", "manantial", "géiser", "geiser"].any(func(w): return low.contains(w)):
-		kind = "crater"
-	elif ["campamento", "refugio", "tienda", "hoguera", "puesto"].any(func(w): return low.contains(w)):
-		kind = "camp"
-	elif ["ruina", "templo", "columna", "estatua", "altar", "torre"].any(func(w): return low.contains(w)):
-		kind = "ruins"
-	elif ["roca", "piedra", "monolito", "obelisco", "cristal", "megalito"].any(func(w): return low.contains(w)):
-		kind = "monolith"
+	# El tipo lo eligió la IA de un catálogo de cosas construibles (o, en mundos de antes, se deduce)
+	var kinds: Array = _def.get("poi_kinds", [])
+	var kind := "terminal" if poi_index < 0 else (str(kinds[poi_index]) if poi_index < kinds.size() else PoiCatalog.classify(label))
+	if not PoiCatalog.KINDS.has(kind):
+		kind = PoiCatalog.classify(label)
+	_poi_kinds[label] = kind
 	var stone := Color(TerrainBuilder.palette(_def.get("biome", "barren")).high).darkened(0.35)
+	var built := {"stand": Vector3(0, 0, 1.6)}
 	match kind:
 		"terminal":  # una consola con pantalla: aquí se recarga el Ancla
 			PropsBuilder._box(root, Vector3(0, 0.55, 0), Vector3(0.9, 1.1, 0.6), Color("#3a3f46"), true)
@@ -256,9 +378,17 @@ func _beacon(pos: Vector3, label: String, _color: Color, poi_index: int) -> void
 				_static_cylinder(root, 0.35, h, Vector3(cos(a) * 2.6, 0, sin(a) * 2.6))
 		"monolith":
 			PropsBuilder._box(root, Vector3(0, 1.9, 0), Vector3(1.0, 3.8, 0.45), stone.darkened(0.3), true)
-		_:  # un mojón de piedras apiladas
-			for k in 4:
-				PropsBuilder._box(root, Vector3(rng.randf_range(-0.05, 0.05), 0.2 + k * 0.33, 0), Vector3(0.8 - k * 0.15, 0.32, 0.7 - k * 0.12), stone.lightened(k * 0.05), k == 0)
+		_:  # faro, consola, archivo, cabaña, templo, muelle… (y el mojón, con piedras de verdad)
+			built = PoiCatalog.build(root, kind, rng, stone)
+	# Donde se pone quien trabaja aquí (delante de la consola, junto a la puerta del faro…)
+	_poi_stands[label] = root.to_global(built.get("stand", Vector3(0, 0, 1.6)))
+	if built.has("door") and poi_index >= 0:
+		var door: Dictionary = built.door
+		var dpos := root.to_global(door.offset)
+		var id := "poi_%d" % poi_index
+		_interiors.add_door(id, dpos, root.rotation.y, str(door.kind), int(_def.get("seed", 1)) * 31 + poi_index, label.get_slice(":", 0).strip_edges())
+		_interiors.set_building(id, root.global_position, door.size, root.rotation.y)
+		_interiors.set_door_option(id, "shape", str(door.shape))
 	# Letrero de madera a un lado, con el nombre (solo se lee de cerca)
 	var post := _cylinder_at(root, Vector3(2.4, 0.6, 2.4), 0.05, 1.2, Color("#6b4a2b"))
 	post.rotation.y = 0.0
@@ -279,9 +409,8 @@ func _beacon(pos: Vector3, label: String, _color: Color, poi_index: int) -> void
 	l.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 	root.add_child(l)
 	Examine.sign(root, Vector3(2.4, 1.0, 2.4), label.get_slice(":", 0).strip_edges(), label if label.contains(":") else "%s.\n\nUn letrero de madera, escrito a mano." % label)
-	Decor.landmark(self, pos, {"terminal": "una terminal (punto de recarga del Ancla)", "antenna": "una antena con una luz roja: %s" % label,
-		"wreck": "restos de una nave: %s" % label, "crater": "un cráter: %s" % label, "camp": "un campamento: %s" % label,
-		"ruins": "unas ruinas: %s" % label, "monolith": "una piedra alta: %s" % label}.get(kind, "un mojón de piedras: %s" % label), "poi")
+	# Al examinar se ve el nombre de verdad («Examinar: Consola de recepción») y la IA sabe qué es
+	Decor.landmark(self, pos, PoiCatalog.label(label.get_slice(":", 0).strip_edges(), kind) if poi_index >= 0 else PoiCatalog.KINDS.terminal, "poi")
 	var area := Area3D.new()
 	Layers.zone(area)
 	var zone := CollisionShape3D.new()
@@ -358,10 +487,42 @@ func _spawn_npcs() -> void:
 		var is_companion: bool = ids[i] == companion
 		var offset := Vector3(2.5, 0, 2.0) if is_companion \
 			else Vector3(rng.randf_range(-10, 10), 0, rng.randf_range(6, 12)).rotated(Vector3.UP, rng.randf() * TAU)
-		npc.position = offset + Vector3(0, _height_at.call(offset.x, offset.z), 0)
+		# Quien trabaja en un sitio está allí: la ingeniera, delante de su consola
+		var work := "" if is_companion else _workplace_of(entity)
+		var look_at := Vector3.ZERO
+		if not work.is_empty():
+			var stand: Vector3 = _poi_stands[work]
+			offset = stand + Vector3(rng.randf_range(-0.3, 0.3), 0, rng.randf_range(-0.3, 0.3))
+			look_at = _places.get(work, stand)
+		npc.position = offset + Vector3(0, _height_at.call(offset.x, offset.z), 0) if work.is_empty() \
+			else Vector3(offset.x, maxf(offset.y, _height_at.call(offset.x, offset.z)), offset.z)
 		npc.setup(entity)
-		npc.face(Vector3.ZERO)
+		npc.face(look_at)
+		if not work.is_empty():
+			npc.set_meta("workplace", work)
+			if _poi_kinds.get(work, "") in ["console", "archive"]:
+				npc.play_gesture("write", 4.0)
 		_npcs[ids[i]] = npc
+
+
+## El punto de interés donde trabaja una persona (por su "workplace", o por su oficio si encaja
+## con el tipo de un sitio), o "".
+func _workplace_of(entity: Dictionary) -> String:
+	var want := str(entity.get("workplace", ""))
+	if not want.is_empty():
+		for name in _poi_stands:
+			if Quests._same_title(str(name), want):
+				return name
+	var job := (str(entity.get("occupation", "")) + " " + str(entity.get("description", ""))).to_lower()
+	var by_kind := {"lighthouse": ["farer"], "console": ["ingenier", "técnic", "tecnic", "operador", "control"],
+		"archive": ["archiv", "bibliotec", "historiador"], "dock": ["pescador", "barquer", "marin"],
+		"greenhouse": ["botánic", "botanic", "jardiner", "agricult"], "mine": ["miner"], "market": ["comerciante", "vendedor", "mercader"],
+		"temple": ["sacerdot", "monje", "guardián del templo"], "camp": ["explorador", "nómada", "nomada"]}
+	for name in _poi_stands:
+		for w in by_kind.get(_poi_kinds.get(name, ""), []):
+			if job.contains(w):
+				return name
+	return ""
 
 
 ## Cosas que se encuentran por el suelo según el planeta (vuelven a salir al día siguiente).
@@ -453,11 +614,29 @@ func _apply_instability() -> void:
 func _scene_context() -> String:
 	var ctx := "%s (%s, %s). %s El jugador llegó a través de una brecha con su Ancla; aquí es un forastero de otra rama del multiverso." % [
 		_def.get("name", ""), _def.get("kind", ""), _era_label(_def.get("era", "")), _def.get("description", "")]
+	# Lo que existe de verdad aquí (construido): la descripción de arriba es ambiente, esto manda
+	var built := PackedStringArray()
+	for name in _poi_kinds:
+		built.append("%s (%s)" % [name, PoiCatalog.KINDS.get(_poi_kinds[name], "")])
+	if not built.is_empty():
+		ctx += "\nLO QUE EXISTE AQUÍ (lo único que hay; no hables de otros sitios, salas o aparatos): " + "; ".join(built) + "."
+	var who_where := PackedStringArray()
+	for id in _npcs:
+		if _npcs[id].has_meta("workplace"):
+			who_where.append("%s trabaja en %s" % [WorldDB.get_entity("npc", id).get("name", "?"), _npcs[id].get_meta("workplace")])
+	if not who_where.is_empty():
+		ctx += " " + "; ".join(who_where) + "."
+	if not str(_def.get("problem", "")).is_empty():
+		ctx += "\nLo que preocupa a la gente de aquí: %s" % _def.problem
 	var q := Quests.for_location(_location_id)
 	if not q.is_empty():
 		var giver: String = WorldDB.get_entity("npc", q.giver).get("name", "?")
-		ctx += "\nMisión de este lugar (%s): «%s» — %s. La pidió %s. Objetivo: %s." % [
-			"completada" if q.status == "done" else "en curso", q.title, q.description, giver, Quests.objective_text(q)]
+		if q.status == "offered":
+			ctx += "\nUn problema de este lugar: %s necesita ayuda con «%s» — %s. Aún NO se lo ha pedido al forastero: si eres %s, pídeselo con tus palabras en esta conversación (explica por qué te importa y qué le darás a cambio que le sirva para volver a casa). Los demás no saben que el forastero vaya a ayudar." % [
+				giver, q.title, q.description, giver]
+		else:
+			ctx += "\nMisión de este lugar (%s): «%s» — %s. La pidió %s al forastero. Objetivo: %s." % [
+				"completada" if q.status == "done" else "en curso", q.title, q.description, giver, Quests.objective_text(q)]
 	return ctx
 
 

@@ -40,7 +40,7 @@ func _run() -> void:
 	_expect(body.get_need("hunger") > before + 80.0 or body.get_need("hunger") == 100.0, "comer quita el hambre (%.0f → %.0f)" % [before, body.get_need("hunger")])
 	body.set_need("rest", 5.0)
 	body.set_need("hunger", 5.0)
-	_expect(body.speed_factor() >= 0.7 and body.speed_factor() < 1.0, "con sueño y hambre vas más despacio, pero nunca menos del 70 %% (%.2f)" % body.speed_factor())
+	_expect(body.speed_factor() >= 0.5 and body.speed_factor() < 1.0, "con sueño y hambre vas más despacio, pero nunca menos del 50 %% (%.2f)" % body.speed_factor())
 	_expect(body.describe().contains("sueño") and body.describe().contains("famélico"), "la IA sabe cómo estás: %s" % body.describe())
 	_expect(game.get_stat("health") == 100 or not game.is_awakened(), "el cuerpo nunca quita salud")
 

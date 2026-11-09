@@ -98,6 +98,7 @@ func _ready() -> void:
 	_subtitle.anchor_bottom = 1.0
 	_subtitle.offset_top = -150
 	_subtitle.offset_bottom = -60
+	_subtitle.grow_vertical = Control.GROW_DIRECTION_BEGIN  # un texto largo crece hacia arriba, no se sale
 	_subtitle.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_subtitle.modulate.a = 0.0
 	var style := StyleBoxFlat.new()
@@ -257,7 +258,7 @@ func _do() -> void:
 
 func _finish() -> void:
 	_busy = false
-	await get_tree().create_timer(clampf(_subtitle_text.get_parsed_text().length() * 0.06, 4.0, 10.0)).timeout
+	await get_tree().create_timer(Settings.read_time(_subtitle_text.get_parsed_text(), 4.0)).timeout
 	if not _busy:
 		var tw := create_tween()
 		tw.tween_property(_subtitle, "modulate:a", 0.0, 0.8)

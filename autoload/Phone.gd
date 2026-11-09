@@ -120,7 +120,13 @@ func call_refusal(npc_id: String) -> String:
 
 ## Contexto de una llamada o un chat: no estás con esa persona.
 func remote_context(npc_id: String, call: bool) -> String:
-	var lines := PackedStringArray([str(scene_context.call()) if scene_context.is_valid() else "", WorldClock.describe()])
+	# Lo que ve quien escribe es SU sitio, no el del jugador (salvo que esté en el mismo lugar)
+	var same_place := Actions.residents_here(GameState.current_location()).any(func(r): return str(r.get("id", r)) == npc_id) \
+		or (WorldDB.get_entity("location", GameState.current_location()).get("npc_ids", []) as Array).has(npc_id) \
+		or (GameState.current_location() == GameState.HOME and str(WorldDB.get_entity("npc", npc_id).get("origin", "")).begins_with("act0"))
+	var where := str(scene_context.call()) if scene_context.is_valid() and same_place \
+		else "Estás en tu lugar de siempre. El jugador está lejos, en otro sitio: no sabes dónde ni qué hace salvo lo que te cuente."
+	var lines := PackedStringArray([where, WorldClock.describe()])
 	lines.append("TU SITUACIÓN: NO estás con el jugador. %s No puedes darle ni recibir objetos ahora; si quieres verle, quedan en un sitio (go_to) o vas hacia él (approach)." % (
 		"Hablan por teléfono (llamada de voz)." if call else "Se escriben por mensajes de texto del celular: contesta como en un chat, corto y natural (1 a 3 frases, sin acotaciones)."))
 	if not call:
@@ -222,6 +228,9 @@ func _maybe_text_first() -> void:
 		return
 	for id in contacts():
 		if _asleep(id) or _busy.get(id, false) or now - float(NPCMemory.get_mem(id).get("texted_at", -1e9)) < PER_CONTACT_EVERY:
+			continue
+		# Solo te escribe quien te conoce de verdad: habló contigo y sabe cómo te llamas
+		if not NPCMemory.get_mem(id).met or not NPCMemory.knows_name(id):
 			continue
 		if is_near.call(id) or now - float(NPCMemory.get_mem(id).get("last_talk", -1e9)) < RECENT_TALK:
 			continue  # está contigo o acabáis de hablar

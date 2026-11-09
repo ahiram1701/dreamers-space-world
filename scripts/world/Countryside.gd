@@ -30,6 +30,7 @@ static var _centers := {}          # id -> altura del terreno en el centro (ante
 static var _ready_noise := false
 
 var scene: Node3D
+var _ground: Callable
 var _animals: Array = []
 var _birds: Node3D
 var _bird_t := 0.0
@@ -134,6 +135,7 @@ static func keep_clear(x: float, z: float) -> bool:
 
 func build(s: Node3D, ground: Callable, places: Dictionary) -> void:
 	scene = s
+	_ground = ground
 	name = "Campo"
 	for spot in SPOTS:
 		var p2: Vector2 = spot.pos
@@ -182,6 +184,42 @@ func _sign(at: Vector3, text: String) -> void:
 	l.visibility_range_end = 16.0
 	add_child(l)
 	Examine.sign(self, at + Vector3(0, 1.0, 0), text, {"Granja": "Granja. Huevos, leche y verdura de temporada. Se vende en la puerta.", "Lago": "Lago. Se permite pescar con caña. Prohibido tirar basura.", "Campamento": "Campamento. Apaga el fuego antes de irte.", "Ruinas": "Ruinas. Nadie sabe bien quién las levantó. Cuidado con las piedras sueltas.", "Mirador": "Mirador. Desde aquí se ve todo Bahía de las Horas y el mar.", "Cabaña": "Cabaña del pescador. Si tomas la caña, devuélvela."}.get(text, text))
+
+
+## Un edificio del campo con puerta de verdad (se entra con E), redondo por dentro si lo es fuera.
+func _enterable(root: Node3D, id: String, label: String) -> void:
+	if scene == null or not scene.has_method("_add_door") or scene.get("_interiors") == null:
+		return
+	root.set_meta("size", AssetLibrary.bounds(root).size)
+	scene.call("_add_door", root, "house", id, label)
+	scene.get("_interiors").set_door_option(id, "shape", "round")
+
+
+## Una barca que se usa (Subir con E), en el agua: si donde se pidió hay tierra, la más cercana orilla adentro.
+func _real_boat(near: Vector3, model: String, length: float) -> void:
+	var water := float(scene.get("_water_level")) if scene and scene.get("_water_level") != null else -0.45
+	var spot := Vector3.INF
+	for r in [0.0, 3.0, 5.0, 8.0, 11.0, 15.0, 20.0, 26.0, 34.0, 44.0, 56.0]:
+		for k in 12:
+			var a := k * TAU / 12.0
+			var p: Vector3 = near + Vector3(cos(a), 0, sin(a)) * r
+			if _ground.call(p.x, p.z) < water - 0.5:
+				spot = p
+				break
+		if spot != Vector3.INF:
+			break
+	if spot == Vector3.INF:
+		_model("ships_pack", model, near, 1.2, 0.4, true)  # sin agua cerca: se queda varada (y lo dice)
+		return
+	var boat := Boat.new()
+	boat.water_level = water
+	boat.ground_at = _ground
+	add_child(boat)
+	boat.position = Vector3(spot.x, water, spot.z)
+	boat.rotation.y = randf() * TAU
+	boat.setup("ships_pack", model, length)
+	if scene and scene.get("_boats") != null:
+		scene.get("_boats").append(boat)
 
 
 func _model(pack: String, model: String, at: Vector3, height: float, yaw: float, collide: Variant = true) -> Node3D:
@@ -261,7 +299,7 @@ func _lake(at: Vector3, rng: RandomNumberGenerator, _ground: Callable) -> void:
 	for i in [0, 5]:
 		for sx in [-0.75, 0.75]:
 			PropsBuilder._box(self, Vector3(at.x + sx, -0.6, at.z + 30 - i * 1.2), Vector3(0.14, 1.6, 0.14), Color("#5a4029"), true)
-	_model("ships_pack", "Lifeboat", Vector3(at.x + 3, -0.35, at.z + 24), 1.0, 0.4, true)
+	_real_boat(Vector3(at.x + 3, 0, at.z + 24), "Lifeboat", 3.6)
 	_fishing_spot(Vector3(at.x, 0.3, at.z + 24.5), "el lago")
 	Decor.landmark(self, at, "el lago: agua dulce y tranquila, un embarcadero de madera y una barca", "lake")
 	_sign(shore + Vector3(3, 0, 2), "Lago")
@@ -314,9 +352,11 @@ func _lookout(at: Vector3) -> void:
 
 
 func _hut(at: Vector3, rng: RandomNumberGenerator) -> void:
-	_model("buildings_pack_3", "1Story_RoundRoof_Mat", at + Vector3(-3, 0, 0), 4.2, PI / 2)
-	_model("ships_pack", "Boat", at + Vector3(6, 0, 3), 1.2, 1.2, true)
-	Decor.landmark(self, at, "la cabaña del pescador en la playa, con una barca varada y una caña vieja apoyada en la pared", "hut")
+	var hut := _model("buildings_pack_3", "1Story_RoundRoof_Mat", at + Vector3(-3, 0, 0), 4.2, PI / 2)
+	if hut:
+		_enterable.call_deferred(hut, "choza", "la cabaña del pescador")
+	_real_boat(at + Vector3(6, 0, 3), "Boat", 4.0)
+	Decor.landmark(self, at, "la cabaña del pescador en la playa (se puede entrar), con su barca en la orilla y una caña vieja apoyada en la pared", "hut")
 	_sign(at + Vector3(2, 0, -4), "Cabaña")
 	var rod := Interactable.create(self, at + Vector3(0.5, 1.0, 2.0), 1.6, "Tomar la caña vieja", func(_p): _take_rod())
 	rod.name = "Cana"

@@ -53,7 +53,7 @@ func call_tool(tool: String, args: Dictionary) -> String:
 		"spawn_npc":
 			return spawn_npc(args)
 		"remember":
-			var fact := str(args.get("fact", "")).strip_edges().left(200)
+			var fact := ContentValidator.fit_text(str(args.get("fact", "")).strip_edges(), 200)
 			if fact.length() < 5:
 				return "ERROR: el hecho está vacío."
 			WorldDB.add_canon(fact)
@@ -328,7 +328,7 @@ func create_item(args: Dictionary) -> String:
 	if not effect in ["none", "heal", "nourish", "hydrate", "light", "tool", "warmth", "signal"]:
 		effect = "none"
 	var data := {"name": name, "kind": "tool" if effect in ["tool", "light"] else "consumable", "effect": effect, "power": 15,
-		"lore": str(args.get("description", "")).left(200), "tags": ["creado"]}
+		"lore": ContentValidator.fit_text(str(args.get("description", "")), 500), "tags": ["creado"]}
 	if not Creations.model_info(str(args.get("model", ""))).is_empty():
 		data["model"] = str(args.model)
 	var id := WorldDB.add_entity("item", data, "agent")
@@ -341,7 +341,7 @@ func spawn_npc(args: Dictionary) -> String:
 	var job := str(args.get("occupation", "vecino del barrio"))
 	if name.split(" ").size() < 1 or name.length() < 3:
 		return "ERROR: dale nombre y apellido."
-	var id := Actions.build_npc(name, job, str(args.get("description", "")).left(300), str(args.get("greeting", "Hola.")).left(200))
+	var id := Actions.build_npc(name, job, ContentValidator.fit_text(str(args.get("description", "")), 500), ContentValidator.fit_text(str(args.get("greeting", "Hola.")), 240))
 	if id.is_empty():
 		return "ERROR: no se pudo crear a esa persona."
 	Actions.add_resident(id, _where(args))

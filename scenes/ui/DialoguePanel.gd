@@ -90,10 +90,10 @@ func _ready() -> void:
 	_role.add_theme_color_override("font_color", UITheme.MUTED)
 	_role.add_theme_font_size_override("font_size", 15)
 	_role.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_role.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_role.text_overrun_behavior = TextServer.OVERRUN_TRIM_WORD_ELLIPSIS  # el oficio largo se ve entero al pasar el ratón
+	_role.mouse_filter = Control.MOUSE_FILTER_PASS
 	head.add_child(_role)
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(spacer)
 	_mood = Label.new()
 	_mood.add_theme_font_size_override("font_size", 14)
 	_mood.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -129,6 +129,7 @@ func _ready() -> void:
 	box.add_child(_line)
 	var choices_scroll := ScrollContainer.new()  # opciones largas: se desplazan en vez de salirse
 	choices_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	choices_scroll.custom_minimum_size.y = 92  # una frase larga no puede aplastar las respuestas
 	choices_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	box.add_child(choices_scroll)
 	var grid := GridContainer.new()  # respuestas en dos columnas: ocupan la mitad de alto
@@ -186,6 +187,7 @@ func _refresh_header() -> void:
 	var met: bool = NPCMemory.get_mem(_npc.id).met
 	_speaker.text = ("En llamada · " if call_mode else "") + (_npc.name if met else "Desconocido/a")
 	_role.text = str(_npc.get("occupation", "")) if met else ""
+	_role.tooltip_text = _role.text
 	var t := treatment(int(NPCMemory.get_mem(_npc.id).relationship))
 	_mood.text = t[0] if met else ""
 	_mood.add_theme_color_override("font_color", t[1])
@@ -193,7 +195,7 @@ func _refresh_header() -> void:
 
 func _add_history(who: String, text: String) -> void:
 	_history_lines.append("[b]%s:[/b] %s" % [who, text])
-	while _history_lines.size() > 12:
+	while _history_lines.size() > 40:
 		_history_lines.pop_front()
 	_history.text = "\n".join(_history_lines)
 	_history_scroll.visible = _show_history and not _history_lines.is_empty()
@@ -296,6 +298,7 @@ func _send(text: String) -> void:
 	turn_received.emit(_npc.id, turn)
 	_refresh_header()
 	_role.text = ("%s  %s" % [_npc.get("occupation", ""), EMOTION_LABEL.get(turn.emotion, "")]).strip_edges()
+	_role.tooltip_text = _role.text
 	_last_line = turn.line
 	_line.text = turn.line
 	var action := str(turn.get("action", ""))
@@ -319,7 +322,7 @@ func _send(text: String) -> void:
 		_leaving = true
 		_line.text += "\n[color=gray][i](%s se da la vuelta y se va.)[/i][/color]" % _npc.name.split(" ")[0]
 		_set_busy(true)
-		await get_tree().create_timer(reading + clampf(turn.line.length() * 0.035, 1.8, 5.0)).timeout
+		await get_tree().create_timer(reading + Settings.read_time(turn.line)).timeout
 		_set_busy(false)
 		if visible:
 			close()
