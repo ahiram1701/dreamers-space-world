@@ -73,6 +73,9 @@ func _run() -> void:
 		await physics_frame
 
 	# 3. Bici: pedalear sin remo; moto: postura de moto
+	root.get_node("/root/Body").set_need("rest", 80.0)  # (la caída de antes te dejó molido: sin esto, te dormirías)
+	for i in 30:
+		await physics_frame
 	var Creations = load("res://scripts/agent/Creations.gd")
 	var all: Array = Creations.all_here()
 	var bike_e: Dictionary = all.filter(func(e): return e.get("factory", "") == "bike")[0]
@@ -115,6 +118,11 @@ func _run() -> void:
 	_expect(town.get_children().any(func(c): return c.has_meta("debris") and c.get_meta("debris") == "kit"), "un coche, sus piezas de coche")
 
 	# 5. Bici con brío; coches que no vuelcan; un coche volcado se endereza solo
+	# (en campo abierto: por la calle se topaba con una farola antes de coger velocidad)
+	bike.global_transform = Transform3D(Basis(), Vector3(-75, town.ground_at(-75, -55) + 0.4, -55))
+	bike.linear_velocity = Vector3.ZERO
+	for i in 20:
+		await physics_frame
 	player.global_position = bike.global_position + Vector3(-1.2, 0.3, 0)
 	bike._on_use(player)
 	Input.action_press("move_forward")

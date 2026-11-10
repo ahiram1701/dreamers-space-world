@@ -29,7 +29,10 @@ func is_following(npc_id: String) -> bool:
 
 ## Segundos que le quedan al PNJ sin querer hablarte (0 si habla).
 func refusal_left(npc_id: String) -> int:
-	return maxi(0, int(get_mem(npc_id).refuse_until) - int(Time.get_unix_time_from_system()))
+	var until := float(get_mem(npc_id).refuse_until)
+	if until > 1.0e8:  # partidas de antes: hora real
+		return 0
+	return maxi(0, int((until - WorldClock.absolute_minutes()) * 60.0))  # (en «segundos» de minuto de juego)
 
 
 ## Dónde está metido el PNJ ahora (id de puerta) si se fue a un edificio y aún no ha salido.
@@ -58,20 +61,39 @@ func come_out(npc_id: String) -> void:
 ## Algo que acaba de pasar de verdad entre el PNJ y el jugador. Lo escribe el motor cuando
 ## ocurre (no la IA), así que el PNJ nunca "recuerda" algo que no pasó.
 ## rumor: te lo contó otro (no lo viviste); se separa en el prompt.
-func add_event(npc_id: String, text: String, relationship_delta: int = 0, rumor: bool = false) -> void:
+## meet: false si solo te vio o te sufrió (te vio pasar, le despertaste, le golpeó un coche):
+## eso no es conocerte, así que no sabrá tu nombre ni te tratará de conocido.
+## private: lo que se dijo en una conversación, que no se cuenta a otros como rumor.
+func add_event(npc_id: String, text: String, relationship_delta: int = 0, rumor: bool = false, meet: bool = true, private: bool = false) -> void:
 	var m := get_mem(npc_id)
 	var recent: Array = m.recent
 	var e := {"at": WorldClock.absolute_minutes(), "text": text}
 	if rumor:
 		e["rumor"] = true
+	if private:
+		e["private"] = true
 	recent.append(e)
 	while recent.size() > MAX_RECENT:
 		recent.pop_front()
 	# Un rumor (te lo contaron, o encontraste rastros sin ver a nadie) no es conocer al jugador
 	var fields := {"recent": recent, "relationship": clampi(int(m.relationship) + relationship_delta, -100, 100)}
-	if not rumor:
+	if not rumor and meet:
 		fields["met"] = true
 	set_fields(npc_id, fields)
+
+
+## Lo importante (cómo te llamas, lo que vivisteis en El Despertar, un encargo) no se olvida
+## primero: al llenarse, se va el hecho corriente más antiguo.
+const KEEP_FACTS := ["se llama", "despertar", "brecha", "encargo", "contigo"]
+static func _trim_facts(facts: Array) -> void:
+	while facts.size() > MAX_FACTS:
+		var drop := 0
+		for i in facts.size():
+			var low := str(facts[i]).to_lower()
+			if not KEEP_FACTS.any(func(k): return low.contains(k)):
+				drop = i
+				break
+		facts.remove_at(drop)
 
 
 ## ¿Sabe cómo se llama el jugador? Los vecinos de siempre de la Bahía, sí; los demás solo si
@@ -130,8 +152,7 @@ func record_turn(npc_id: String, player_said: String, npc_said: String, new_fact
 	for fact in new_facts:
 		if not (fact in m.facts):
 			m.facts.append(fact)
-	while m.facts.size() > MAX_FACTS:
-		m.facts.pop_front()
+	_trim_facts(m.facts)
 	# int(): tras cargar de JSON todos los números llegan como float
 	m.relationship = clampi(int(m.relationship) + relationship_delta, -100, 100)
 	all[npc_id] = m
@@ -145,8 +166,7 @@ func add_facts(npc_id: String, facts: Array, relationship_delta: int = 0) -> voi
 	for fact in facts:
 		if not (fact in m.facts):
 			m.facts.append(fact)
-	while m.facts.size() > MAX_FACTS:
-		m.facts.pop_front()
+	_trim_facts(m.facts)
 	m.relationship = clampi(int(m.relationship) + relationship_delta, -100, 100)
 	all[npc_id] = m
 	WorldDB.set_state("memories", all)

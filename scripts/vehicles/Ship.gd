@@ -32,6 +32,7 @@ var hides_riders := true
 ## Vista desde la cabina (V): cámara en el asiento del piloto y tablero con los instrumentos.
 var cockpit := false
 var proximity := false          # el crucero se corta: hay algo delante
+var _cruise_lock := false        # tras cortarse, no vuelve a engancharse hasta soltar Shift
 ## Piloto automático (en el espacio): vuela solo hasta auto_point y se para a auto_stop de él.
 var autopilot := false
 var auto_point := Vector3.ZERO
@@ -411,15 +412,23 @@ func _fly_space(c: Dictionary, delta: float, has_fuel: bool) -> void:
 	var normal_top := (50.0 + power * 14.0) * (0.35 if hull <= 0.0 else 1.0)
 	# Crucero con Shift, pero no a ciegas: si hay algo delante (un planeta, un asteroide, la
 	# estación), se corta solo. Antes llegaba a 8 km/s y luego tardaba minutos en frenar.
-	var boost: bool = c.boost and has_fuel and hull > 0.0
+	if not c.boost:
+		_cruise_lock = false
+	var boost: bool = c.boost and has_fuel and hull > 0.0 and not _cruise_lock
 	proximity = false
-	if boost and velocity.length() > normal_top:
-		var ahead := velocity.normalized() * clampf(velocity.length() * 2.0, 300.0, 4000.0)
-		var q := PhysicsRayQueryParameters3D.create(global_position, global_position + ahead, collision_mask, [get_rid()])
-		var rocks: bool = scene != null and scene.has_method("rock_on_segment") and scene.call("rock_on_segment", global_position, global_position + ahead, length)
-		if rocks or not get_world_3d().direct_space_state.intersect_ray(q).is_empty():
-			boost = false
+	# Algo delante (planeta, luna, sol, asteroide, estación): se frena con tiempo hasta parar a
+	# ~300 m, y el crucero no se vuelve a enganchar solo (antes daba tirones y chocabas a 130 m/s)
+	var vspd := velocity.length()
+	if vspd > 40.0 and not autopilot:
+		var reach := clampf(vspd * 3.5, 400.0, 7000.0)
+		var d := _obstacle_distance(global_position, global_position + velocity.normalized() * reach)
+		if d < INF:
 			proximity = true
+			boost = false
+			_cruise_lock = c.boost
+			var safe := sqrt(maxf(d - 300.0, 0.0) * 2.0 * (CRUISE / 3.0)) * 0.8
+			if vspd > safe:
+				velocity = velocity.limit_length(maxf(vspd - CRUISE / 3.0 * 1.6 * delta, safe))
 	var top := CRUISE if boost else normal_top
 	# El ratón cabecea y gira; A/D alabean. Todo suavizado (una nave tiene inercia al girar)
 	var s := steer
@@ -449,9 +458,14 @@ func _fly_space(c: Dictionary, delta: float, has_fuel: bool) -> void:
 			if reach > 50.0:
 				var q := PhysicsRayQueryParameters3D.create(global_position, global_position + aim.normalized() * reach, collision_mask, [get_rid()])
 				var hit := get_world_3d().direct_space_state.intersect_ray(q)
-				if not hit.is_empty():
-					var side := (hit.normal as Vector3) + Vector3.UP
-					_detour = (hit.position as Vector3) + side.normalized() * 900.0
+				var d := _obstacle_distance(global_position, global_position + aim.normalized() * reach)
+				if not hit.is_empty() or d < INF:
+					# Se rodea por un lado, perpendicular al rumbo (nunca hacia la superficie)
+					var at: Vector3 = hit.position if not hit.is_empty() else global_position + aim.normalized() * d
+					var side := aim.normalized().cross(Vector3.UP)
+					if side.length() < 0.1:
+						side = aim.normalized().cross(Vector3.RIGHT)
+					_detour = at + side.normalized() * 1400.0 + Vector3.UP * 300.0
 				elif _detour != Vector3.INF and global_position.distance_to(_detour) < 300.0:
 					_detour = Vector3.INF
 		var goal := _detour if _detour != Vector3.INF else auto_point
@@ -485,6 +499,11 @@ func _fly_space(c: Dictionary, delta: float, has_fuel: bool) -> void:
 	elif assist:
 		var bleed := acc * 0.35 if spd <= normal_top * 1.05 else maxf((spd - normal_top) * 1.2, acc)
 		velocity = velocity.move_toward(Vector3.ZERO if spd <= normal_top * 1.05 else velocity.normalized() * normal_top, bleed * delta)
+	elif spd > normal_top * 1.05:
+		# Sin asistencia, al soltar Shift la nave vuelve a su velocidad normal (antes seguía a 1.5 km/s)
+		velocity = velocity.move_toward(velocity.normalized() * normal_top, maxf((spd - normal_top) * 1.2, acc) * delta)
+	if not velocity.is_finite():
+		velocity = Vector3.ZERO  # nunca NaN
 	# A crucero se recorren decenas de metros por paso: se mueve en tramos cortos para no atravesar
 	# un asteroide pequeño
 	var motion := velocity * delta
@@ -506,6 +525,20 @@ func _fly_space(c: Dictionary, delta: float, has_fuel: bool) -> void:
 				Sfx.at(self, "crash", global_position)
 				if scene and scene.has_method("on_ship_hit"):
 					scene.call("on_ship_hit", into)
+
+
+## Distancia al primer obstáculo en el tramo (planetas, lunas, sol, asteroides) o INF.
+func _obstacle_distance(a: Vector3, b: Vector3) -> float:
+	var d := INF
+	if scene and scene.has_method("obstacle_distance"):
+		d = float(scene.call("obstacle_distance", a, b, length + 30.0))
+	if scene and scene.has_method("rock_on_segment") and scene.call("rock_on_segment", a, b, length):
+		d = minf(d, a.distance_to(b) * 0.5)
+	var q := PhysicsRayQueryParameters3D.create(a, b, collision_mask, [get_rid()])
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	if not hit.is_empty():
+		d = minf(d, a.distance_to(hit.position))
+	return d
 
 
 ## Un golpe en el aire (contra un edificio, el suelo a toda velocidad): daña el casco.

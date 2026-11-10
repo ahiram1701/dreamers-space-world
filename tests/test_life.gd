@@ -52,7 +52,9 @@ func _run() -> void:
 	notes = actions.execute("", [{"type": "pay", "target": "npc:npc_teo", "price": 150}])
 	_expect(wallet.amount() == 38 and "No te llega" in str(notes), "no puedes pagar lo que no tienes %s" % [notes])
 	actions.execute("", [{"type": "earn", "price": 900}])
-	_expect(wallet.amount() == 38 + 300, "como mucho $300 por acción (%d)" % wallet.amount())
+	_expect(wallet.amount() == 38 + 60, "con F (sin nadie que pague), como mucho $60 al día (%d)" % wallet.amount())
+	actions.execute("", [{"type": "earn", "price": 50}])
+	_expect(wallet.amount() == 38 + 60, "y no más ese día (%d)" % wallet.amount())
 	# Teo te pone un café y te lo cobra: queda pendiente hasta que pagas
 	notes = actions.execute("npc_teo", [{"type": "give_item", "item_name": "Café solo", "item_description": "Un café recién hecho.", "price": 2}])
 	_expect(actions.owed("npc_teo") == 2 and "cobra" in str(notes), "te cobra el café %s" % [notes])

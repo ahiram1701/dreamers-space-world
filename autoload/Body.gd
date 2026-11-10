@@ -79,17 +79,25 @@ func _decay(minutes: float) -> void:
 			rate *= exertion
 		if n == "hygiene":
 			rate *= 1.0 + dirt * 2.0  # sucio, la higiene se va antes
+		if n == "rest" and _cold():
+			rate *= 1.4  # con frío a la intemperie, cansa más
 		_store(n, _values[n] - rate * minutes)
 	# A cero de comida o agua: mareo y, poco a poco, salud (te desmayas a 0, nunca mueres)
+	var starving_now := false
 	for n in ["hunger", "thirst"]:
 		if _values[n] <= 0.0:
+			starving_now = true
 			_starve_min += minutes
-			if _starve_min >= STARVE_EVERY:
-				_starve_min = 0.0
+			# También cuenta el tiempo dormido o esperado de golpe (antes, 10 h costaban 1 punto)
+			var lost := int(_starve_min / STARVE_EVERY)
+			if lost > 0:
+				_starve_min -= lost * STARVE_EVERY
 				starving.emit(n)
 				if GameState.is_awakened():
-					GameState.change_stat("health", -1)
+					GameState.change_stat("health", -lost)
 			break
+	if not starving_now:
+		_starve_min = 0.0  # comiste o bebiste: el contador vuelve a empezar
 	# Agotado: te duermes donde estés (una vez; vuelve a poder pasar cuando descanses)
 	if _values.rest <= 0.0 and not _collapsed:
 		_collapsed = true
@@ -112,6 +120,14 @@ func slept(minutes: float) -> void:
 	_last_minutes = WorldClock.absolute_minutes()
 
 
+## Frío a la intemperie (en invierno o de noche con lluvia), y más si vas mojado.
+func _cold() -> bool:
+	var player := get_tree().get_first_node_in_group("player") as Node3D if is_inside_tree() else null
+	if player == null or player.global_position.y < -300.0:
+		return false
+	return Weather.temperature() - wet * 4.0 < 8.0
+
+
 ## Lluvia y agua: sin techo te mojas; bajo techo o al sol te secas poco a poco.
 func _weather(delta: float) -> void:
 	var player := get_tree().get_first_node_in_group("player") as Node3D
@@ -119,6 +135,10 @@ func _weather(delta: float) -> void:
 		return
 	var swimming: bool = player.get("_swimming") == true
 	var indoors := player.global_position.y < -300.0  # en un interior (bajo InteriorManager.ORIGIN)
+	# Dentro de un coche (con techo) tampoco te mojas; en bici o moto, sí
+	var ride: Node = player.get("riding")
+	if ride and ride is VehicleBody3D and not bool(ride.get("_two_wheel")) and not bool(ride.get("pedals")):
+		indoors = true
 	if swimming:
 		wet = 1.0
 	elif Weather.is_raining() and not indoors:

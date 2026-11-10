@@ -31,6 +31,21 @@ const ROOMS := {
 	"restaurant": {"size": Vector2(14, 10), "wall": "#f0d9b5", "floor": "#7a5236", "name": "Fonda"},
 	"pharmacy": {"size": Vector2(10, 8), "wall": "#eef4f2", "floor": "#b9c2c0", "name": "Farmacia"},
 	"hardware": {"size": Vector2(12, 9), "wall": "#d8d2c6", "floor": "#6b6660", "name": "Ferretería"},
+	"barn": {"size": Vector2(14, 10), "wall": "#8b5a3c", "floor": "#a08a5a", "name": "Granero"},
+	"tower": {"size": Vector2(6, 6), "wall": "#9a948a", "floor": "#6b665e", "name": "Torre"},
+	"temple": {"size": Vector2(14, 10), "wall": "#cfc6b4", "floor": "#8d8578", "name": "Templo"},
+	"greenhouse": {"size": Vector2(10, 7), "wall": "#cfe8d8", "floor": "#6b5a40", "name": "Invernadero"},
+	"mine": {"size": Vector2(8, 14), "wall": "#4a4038", "floor": "#3a332c", "name": "Mina"},
+	"archive": {"size": Vector2(12, 9), "wall": "#d9d2c0", "floor": "#6e6150", "name": "Archivo"},
+	"tent": {"size": Vector2(5, 5), "wall": "#7a8a5a", "floor": "#5a4a36", "name": "Tienda de campaña"},
+	"hospital": {"size": Vector2(14, 10), "wall": "#eef3f4", "floor": "#c8d0d2", "name": "Hospital"},
+	"police": {"size": Vector2(12, 9), "wall": "#dfe4ea", "floor": "#7d8590", "name": "Comisaría"},
+	"school": {"size": Vector2(14, 10), "wall": "#f3e9cf", "floor": "#a8885e", "name": "Escuela"},
+	"bank": {"size": Vector2(12, 9), "wall": "#e8e2d4", "floor": "#8a7f6a", "name": "Banco"},
+	"cinema": {"size": Vector2(14, 12), "wall": "#3a2a3a", "floor": "#4a2a2a", "name": "Cine"},
+	"gym": {"size": Vector2(12, 10), "wall": "#d0d8e0", "floor": "#4a4f55", "name": "Gimnasio"},
+	"realty": {"size": Vector2(10, 8), "wall": "#e6e2da", "floor": "#8d8578", "name": "Inmobiliaria"},
+	"cave": {"size": Vector2(10, 16), "wall": "#4a4440", "floor": "#3a3530", "name": "Cueva"},
 }
 
 ## Cómo es cada sitio por dentro (lo que la IA puede dar por cierto; lo demás no existe).
@@ -46,6 +61,21 @@ const DESCRIPTIONS := {
 	"restaurant": "fonda con una puerta delantera, mesas con mantel, mostrador y la cocina",
 	"pharmacy": "farmacia con una puerta delantera, mostrador y estantes de medicinas",
 	"hardware": "ferretería con una puerta delantera, mesas y estantes de herramientas",
+	"barn": "granero con un portón; dentro, heno, herramientas colgadas, el establo de los animales y un altillo",
+	"tower": "torre de piedra con una puerta; dentro, una escalera que sube al mirador de arriba",
+	"temple": "templo con una puerta; dentro, una nave con bancos, un pasillo central y el altar al fondo",
+	"greenhouse": "invernadero de cristal con una puerta; dentro, mesas de cultivo con plantas y frutos",
+	"mine": "boca de mina; dentro, un túnel con vigas, vías, una vagoneta y vetas en la roca",
+	"archive": "archivo con una puerta; dentro, pasillos de estanterías con cajas y carpetas, y una mesa de consulta",
+	"tent": "tienda de campaña: dentro solo cabe un saco de dormir, una mochila y una linterna",
+	"hospital": "hospital con una puerta; recepción, sala de espera con sillas y una consulta con camilla",
+	"police": "comisaría con una puerta; mostrador de denuncias, mesas de oficina y un calabozo al fondo",
+	"school": "escuela con una puerta; un aula con pupitres, pizarra y la mesa del maestro",
+	"bank": "banco con una puerta; ventanilla con cristal, sillas de espera y una caja fuerte al fondo",
+	"cinema": "cine con una puerta; taquilla, filas de butacas y la pantalla grande",
+	"gym": "gimnasio con una puerta; bancos de pesas, colchonetas y espejos",
+	"realty": "inmobiliaria con una puerta; un mostrador y carteles de pisos en alquiler",
+	"cave": "cueva oscura de roca: un túnel que baja, estalactitas, un charco y ecos; hace falta luz",
 }
 
 
@@ -94,6 +124,9 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3, opts
 
 	var out := {"root": root, "size": Vector2(w, d), "spawn": origin + Vector3(0, 0.1, d / 2.0 - 2.4), "exit": origin + Vector3(0, 0.1, d / 2.0 - 0.4),
 		"npc_spots": [], "seats": [], "beds": [], "uses": [], "sofa": [], "table": [], "kitchen": []}
+	if kind in ["barn", "tower", "temple", "greenhouse", "mine", "archive", "tent", "hospital", "police", "school", "bank", "cinema", "gym", "realty", "cave"]:
+		_special_room(root, kind, w, d, origin, out, rng)
+		return out
 	match kind:
 		"home":  # tu casa: recámara, baño, sala-comedor y cocina (y arriba, si tiene dos plantas)
 			var bed_y := HEIGHT if floors > 1 else 0.0
@@ -103,6 +136,7 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3, opts
 			_living(root, w, d, floors, out, rng, origin)
 			_use(root, "Kitchen_Fridge", Vector3(w / 2 - 0.6, 0, 2.6), -PI / 2, out, "eat", "Comer algo de la nevera")
 			_put(root, "Kitchen_Oven", Vector3(w / 2 - 0.5, 0, 1.6), -PI / 2)
+			_use_at(root, Vector3(w / 2 - 1.3, 0, 1.6), out, "cook", "Cocinar con lo que tengas")
 			_use(root, "Kitchen_Sink", Vector3(w / 2 - 0.5, 0, 0.7), -PI / 2, out, "drink", "Beber agua")
 			out.kitchen = [{"pos": origin + Vector3(w / 2 - 1.5, 0, 1.6), "face": origin + Vector3(w / 2, 0, 1.6)}]
 			_use(root, "Bathroom_Shower1", Vector3(w / 2 - 0.8, 0, -d / 2 + 0.8), 0.0, out, "shower", "Ducharse")
@@ -746,6 +780,168 @@ static func _wall_line(root: Node3D, a: Vector2, b: Vector2, door_at: float, c: 
 
 
 ## Algo que se usa con E sin mueble propio (pedir en la barra, pagar en la caja): un punto.
+## Interiores de los edificios que antes eran solo adorno (granero, torre, templo…).
+static func _special_room(root: Node3D, kind: String, w: float, d: float, origin: Vector3, out: Dictionary, rng: RandomNumberGenerator) -> void:
+	var wood := Color("#7a5a3a")
+	match kind:
+		"barn":
+			for i in 4:  # cubículos del establo
+				var x := -w / 2 + 1.6 + i * 2.4
+				PropsBuilder._box(root, Vector3(x + 1.1, 0.6, -d / 2 + 1.6), Vector3(0.1, 1.2, 3.0), wood, true)
+				PropsBuilder._box(root, Vector3(x, 0.15, -d / 2 + 1.4), Vector3(1.8, 0.3, 2.4), Color("#c9b16a"), false)  # paja
+			for i in 6:  # balas de heno
+				PropsBuilder._box(root, Vector3(w / 2 - 1.2, 0.35 + (i / 3) * 0.7, -1.5 + (i % 3) * 1.0), Vector3(1.4, 0.7, 0.9), Color("#d9c178"), true)
+			PropsBuilder._box(root, Vector3(0, 2.6, d / 2 - 1.5), Vector3(w - 1.0, 0.15, 2.5), wood, true)  # altillo
+			_use_at(root, Vector3(-w / 2 + 1.6, 0, -d / 2 + 2.8), out, "gather:Huevos frescos|Media docena de huevos todavía tibios.|nourish", "Recoger huevos")
+			_use_at(root, Vector3(w / 2 - 2.4, 0, 0), out, "gather:Heno|Un puñado de heno seco. A los animales les encanta.|none", "Tomar heno")
+			out.npc_spots = [origin + Vector3(-1.0, 0, 0.5), origin + Vector3(1.5, 0, 1.5), origin + Vector3(-2.5, 0, 2.0)]
+		"tower":
+			var top := _spiral_stairs(root, Vector3.ZERO, 0.4, 1.9, 16, HEIGHT * 2.0, Color("#6b665e"), 1.92)
+			PropsBuilder._box(root, Vector3(0, HEIGHT * 2.0 - 0.1, 0), Vector3(w - 0.4, 0.2, d - 0.4), Color("#6b665e"), true).visible = false
+			_use_at(root, top + Vector3(0, 0.1, 0), out, "climb_up", "Subir al mirador")
+			out["hatch"] = origin + top
+			out.npc_spots = [origin + Vector3(1.8, 0, 1.8), origin + Vector3(-1.8, 0, 1.8)]
+		"temple":
+			for row in 5:
+				for side in [-1, 1]:
+					_seat(root, "Couch_Small1", Vector3(side * 2.2, 0, d / 2 - 2.5 - row * 1.3), PI, out, "sofa")
+			PropsBuilder._box(root, Vector3(0, 0.55, -d / 2 + 1.2), Vector3(2.0, 1.1, 0.9), Color("#e8e0cc"), true)  # altar
+			for x in [-1.2, 1.2]:
+				var candle := PropsBuilder._box(root, Vector3(x * 0.6, 1.25, -d / 2 + 1.2), Vector3(0.06, 0.3, 0.06), Color("#fff4d0"), false)
+				var l := OmniLight3D.new()
+				l.light_color = Color("#ffcf7a")
+				l.light_energy = 0.8
+				l.omni_range = 4.0
+				l.position = candle.position + Vector3(0, 0.3, 0)
+				root.add_child(l)
+			_use_at(root, Vector3(0, 0, -d / 2 + 2.2), out, "pray", "Sentarte en silencio un momento")
+			out.npc_spots = [origin + Vector3(0, 0, -d / 2 + 2.0), origin + Vector3(-3.0, 0, 0), origin + Vector3(3.0, 0, 1.0)]
+		"greenhouse":
+			for row in 2:
+				var z := -1.5 + row * 3.0
+				PropsBuilder._box(root, Vector3(0, 0.45, z), Vector3(w - 2.0, 0.9, 1.0), wood, true)
+				for k in 6:
+					var plant := PropsBuilder._box(root, Vector3(-w / 2 + 1.6 + k * 1.3, 1.1, z), Vector3(0.4, 0.5, 0.4), Color("#3f8f4a"), false)
+					plant.name = "Planta"
+					if k % 2 == 0:
+						PropsBuilder._box(root, Vector3(-w / 2 + 1.6 + k * 1.3, 1.25, z + 0.18), Vector3(0.12, 0.12, 0.12), Color("#e5533d"), false)
+			_use_at(root, Vector3(0, 0, 0), out, "gather:Tomates|Tomates maduros del invernadero.|nourish", "Recoger tomates")
+			out.npc_spots = [origin + Vector3(-2.0, 0, 0), origin + Vector3(2.0, 0, 0), origin + Vector3(0, 0, 2.6)]
+		"mine":
+			for k in 5:
+				var z := d / 2 - 2.0 - k * 2.6
+				for x in [-w / 2 + 0.6, w / 2 - 0.6]:
+					PropsBuilder._box(root, Vector3(x, 1.4, z), Vector3(0.25, 2.8, 0.25), wood, true)
+				PropsBuilder._box(root, Vector3(0, 2.75, z), Vector3(w - 0.8, 0.25, 0.3), wood, false)
+			for k in 10:
+				PropsBuilder._box(root, Vector3(0, 0.03, d / 2 - 1.0 - k * 1.2), Vector3(1.2, 0.06, 0.12), Color("#555"), false)
+			PropsBuilder._box(root, Vector3(0, 0.45, -d / 2 + 3.0), Vector3(0.9, 0.6, 1.3), Color("#5c6168"), true)  # vagoneta
+			for k in 4:
+				var vein := PropsBuilder._box(root, Vector3(w / 2 - 0.35, 1.0 + (k % 2) * 0.6, d / 2 - 3.0 - k * 2.5), Vector3(0.12, 0.5, 0.9), Color("#d4af37"), false)
+				vein.material_override.emission_enabled = true
+				vein.material_override.emission = Color("#d4af37")
+				vein.material_override.emission_energy_multiplier = 0.3
+			var lamp := OmniLight3D.new()
+			lamp.light_color = Color("#ffb060")
+			lamp.light_energy = 1.2
+			lamp.omni_range = 9.0
+			lamp.position = Vector3(0, 2.4, 0)
+			root.add_child(lamp)
+			_use_at(root, Vector3(w / 2 - 1.0, 0, d / 2 - 3.0), out, "gather:Mineral|Un trozo de roca con vetas brillantes.|none", "Picar la veta")
+			out.npc_spots = [origin + Vector3(0, 0, 2.0), origin + Vector3(0, 0, -2.0)]
+		"archive":
+			for row in 3:
+				for side in [-1, 1]:
+					var shelf := AssetLibrary.instance("modular_sci_fi", "Props_Shelf_Tall")
+					var at := Vector3(side * (w / 2 - 1.4), 0, -d / 2 + 1.5 + row * 2.4)
+					if shelf:
+						AssetLibrary.place(root, shelf, at, 2.4, PI / 2 * side, true)
+					else:
+						PropsBuilder._box(root, at + Vector3(0, 1.2, 0), Vector3(0.6, 2.4, 1.8), Color("#6b5a44"), true)
+			_put(root, "Table_RoundLarge", Vector3(0, 0, 0.5), 0.0)
+			_seat(root, "Chair_3", Vector3(0, 0, 1.6), PI, out, "table")
+			_use_at(root, Vector3(0, 0, -0.6), out, "read_archive", "Consultar los registros")
+			out.npc_spots = [origin + Vector3(0, 0, -1.6), origin + Vector3(-1.5, 0, 2.0), origin + Vector3(1.5, 0, 2.0)]
+		"tent":
+			_put(root, "Bed_Single", Vector3(-0.8, 0, -1.2), 0.0, out.beds)  # el saco, sobre una colchoneta
+			var pack := AssetLibrary.instance("survival_pack", "Backpack")
+			if pack:
+				AssetLibrary.place(root, pack, Vector3(1.4, 0, -1.6), 0.5, 0.0, true)
+			out.npc_spots = [origin + Vector3(1.5, 0, -0.6)]
+		"hospital":
+			_put(root, "Kitchen_2Drawers", Vector3(-3.0, 0, -d / 2 + 2.4), PI)  # recepción
+			for i in 4:
+				_seat(root, "Chair_2", Vector3(2.0 + i * 0.9, 0, d / 2 - 2.0), PI, out, "table")
+			_put(root, "Bed_Single", Vector3(-w / 2 + 1.4, 0, -d / 2 + 1.4), 0.0)
+			_use_at(root, Vector3(-3.0, 0, -d / 2 + 3.0), out, "heal", "Que te atiendan ($40)")
+			out.npc_spots = [origin + Vector3(-3.0, 0, -d / 2 + 1.5), origin + Vector3(-w / 2 + 2.6, 0, -d / 2 + 2.0), origin + Vector3(3.0, 0, 0)]
+		"police":
+			_put(root, "Kitchen_2Drawers", Vector3(0, 0, -d / 2 + 2.4), PI)
+			for x in [-3.5, 3.5]:
+				_put(root, "Table_RoundLarge", Vector3(x, 0, 0.5), 0.0)
+				_seat(root, "Chair_3", Vector3(x, 0, 1.4), PI, out, "table")
+			for k in 6:  # barrotes del calabozo
+				PropsBuilder._box(root, Vector3(w / 2 - 2.6 + k * 0.4, 1.2, -d / 2 + 2.0), Vector3(0.05, 2.4, 0.05), Color("#333"), true)
+			_use_at(root, Vector3(0, 0, -d / 2 + 3.0), out, "report", "Poner una denuncia")
+			out.npc_spots = [origin + Vector3(0, 0, -d / 2 + 1.5), origin + Vector3(-3.5, 0, 2.0), origin + Vector3(3.5, 0, 2.0)]
+		"school":
+			PropsBuilder._box(root, Vector3(0, 1.5, -d / 2 + 0.1), Vector3(5.0, 1.4, 0.06), Color("#1f3a2a"), false)  # pizarra
+			_put(root, "Table_RoundLarge", Vector3(-3.5, 0, -d / 2 + 1.8), 0.0)
+			for r in 3:
+				for c in 4:
+					_seat(root, "Chair_2", Vector3(-3.0 + c * 2.0, 0, -0.5 + r * 1.6), PI, out, "table")
+			_use_at(root, Vector3(-2.0, 0, -d / 2 + 2.4), out, "learn_school", "Asistir a una clase")
+			out.npc_spots = [origin + Vector3(-3.5, 0, -d / 2 + 2.8), origin + Vector3(0, 0, 3.5), origin + Vector3(4.0, 0, 3.5)]
+		"bank":
+			_put(root, "Kitchen_2Drawers", Vector3(-1.0, 0, -d / 2 + 2.4), PI)
+			_put(root, "Kitchen_2Drawers", Vector3(1.0, 0, -d / 2 + 2.4), PI)
+			PropsBuilder._box(root, Vector3(0, 1.6, -d / 2 + 2.4), Vector3(3.0, 1.0, 0.04), Color(0.8, 0.9, 1.0), false)  # cristal
+			PropsBuilder._box(root, Vector3(w / 2 - 1.2, 1.0, -d / 2 + 0.8), Vector3(1.4, 2.0, 1.0), Color("#5a5f66"), true)  # caja fuerte
+			for i in 3:
+				_seat(root, "Chair_2", Vector3(-3.0 + i * 0.9, 0, d / 2 - 1.8), PI, out, "table")
+			_use_at(root, Vector3(-1.0, 0, -d / 2 + 3.0), out, "bank", "Ventanilla del banco")
+			out.npc_spots = [origin + Vector3(-1.0, 0, -d / 2 + 1.5), origin + Vector3(1.0, 0, -d / 2 + 1.5), origin + Vector3(3.0, 0, 1.0)]
+		"cinema":
+			var screen := PropsBuilder._box(root, Vector3(0, 2.6, -d / 2 + 0.2), Vector3(w - 2.0, 3.6, 0.06), Color("#dfe6f0"), false)
+			screen.material_override.emission_enabled = true
+			screen.material_override.emission = Color("#8090b0")
+			screen.material_override.emission_energy_multiplier = 0.6
+			for r in 4:
+				for c in 6:
+					_seat(root, "Couch_Small1", Vector3(-5.0 + c * 2.0, 0, -1.0 + r * 1.6), PI, out, "sofa")
+			_use_at(root, Vector3(4.5, 0, d / 2 - 2.2), out, "movie", "Comprar entrada y ver la película ($8)")
+			out.npc_spots = [origin + Vector3(4.5, 0, d / 2 - 1.2), origin + Vector3(-4.0, 0, 4.4), origin + Vector3(0, 0, 4.4)]
+		"gym":
+			for i in 3:
+				PropsBuilder._box(root, Vector3(-3.5 + i * 3.0, 0.45, -1.5), Vector3(0.5, 0.9, 1.4), Color("#333"), true)
+				PropsBuilder._box(root, Vector3(-3.5 + i * 3.0, 1.15, -1.5), Vector3(1.6, 0.06, 0.06), Color("#9aa3ad"), false)
+				PropsBuilder._box(root, Vector3(-3.5 + i * 3.0, 0.02, 1.5), Vector3(1.0, 0.04, 2.0), Color("#3d5a80"), false)
+			PropsBuilder._box(root, Vector3(0, 1.4, -d / 2 + 0.06), Vector3(w - 2.0, 2.2, 0.04), Color(0.85, 0.9, 0.95), false)  # espejos
+			_use_at(root, Vector3(0, 0, 0), out, "workout", "Hacer ejercicio ($5)")
+			out.npc_spots = [origin + Vector3(-3.5, 0, 0), origin + Vector3(2.5, 0, 0), origin + Vector3(3.5, 0, 3.0)]
+		"realty":
+			_put(root, "Kitchen_2Drawers", Vector3(0, 0, -d / 2 + 2.0), PI)
+			for k in 4:
+				PropsBuilder._box(root, Vector3(-w / 2 + 0.06, 1.5, -2.0 + k * 1.3), Vector3(0.04, 0.8, 0.6), Color("#f2efe6"), false)
+			_use_at(root, Vector3(0, 0, -d / 2 + 2.7), out, "rent_flat", "Alquilar un piso ($90 a la semana)")
+			out.npc_spots = [origin + Vector3(0, 0, -d / 2 + 1.0), origin + Vector3(2.5, 0, 1.0)]
+		"cave":
+			for k in 14:  # estalactitas y rocas
+				var x := rng.randf_range(-w / 2 + 0.8, w / 2 - 0.8)
+				var z := rng.randf_range(-d / 2 + 1.0, d / 2 - 3.0)
+				var st := PropsBuilder._cylinder(root, Vector3(x, HEIGHT - 0.5, z), 0.02, 0.18, 1.0, Color("#5a524a"), false)
+				st.name = "Estalactita"
+			for k in 6:
+				PropsBuilder._box(root, Vector3(rng.randf_range(-w / 2 + 1, w / 2 - 1), 0.3, rng.randf_range(-d / 2 + 1, d / 2 - 4)), Vector3(0.9, 0.6, 0.8), Color("#5a524a"), true)
+			var pool := PropsBuilder._box(root, Vector3(1.5, 0.02, -d / 2 + 2.5), Vector3(2.5, 0.04, 1.8), Color("#1d3b52"), false)
+			pool.name = "Charco"
+			_use_at(root, Vector3(-2.0, 0, -d / 2 + 2.0), out, "gather:Cristal de cuarzo|Un cristal transparente sacado de la pared de la cueva.|none", "Arrancar un cristal")
+			out.npc_spots = [origin + Vector3(0, 0, 0), origin + Vector3(-2.5, 0, -3.0)]
+	# Ningún edificio con un solo sitio para la gente (dos personas no se ponen una encima de otra)
+	if out.npc_spots.size() < 2:
+		out.npc_spots.append(origin + Vector3(1.2, 0, 1.2))
+
+
 static func _use_at(root: Node3D, pos: Vector3, out: Dictionary, what: String, prompt: String) -> void:
 	var marker := Node3D.new()
 	marker.position = pos

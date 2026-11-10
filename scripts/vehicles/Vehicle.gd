@@ -33,6 +33,9 @@ const BODY_SCALE := Vector3(1.3, 1.35, 1.65)
 const BIG_SCALE := Vector3(1.45, 1.55, 2.0)
 const GEARS := [0.24, 0.43, 0.62, 0.81, 1.0]          # velocidad máxima de cada marcha (fracción)
 const GEAR_TORQUE := [1.35, 1.2, 1.05, 0.9, 0.75]
+const BOOST_TIME := 3.0       # segundos de turbo (Shift) …
+const BOOST_RECHARGE := 8.0   # … que se recargan en este tiempo
+const SHIFT_CUT := 0.18       # corte de gas al cambiar de marcha (se oye y se nota)
 ## Tracción por tipo (las demás, delantera): 4x4 las camionetas, trasera los deportivos y camiones.
 const DRIVE := {"suv": "awd", "suv_luxury": "awd", "pickup": "awd", "flatbed": "awd", "sports": "rwd", "race": "rwd",
 	"police": "rwd", "delivery": "rwd", "ambulance": "rwd", "firetruck": "rwd", "garbage": "rwd", "tractor": "rwd"}
@@ -55,6 +58,9 @@ var health := 100.0         # 0 = averiado (no arranca)
 var owner_id := ""          # quién es el dueño ("" = el jugador o nadie)
 var scene: Node
 var gear := 1
+var boost := BOOST_TIME       # turbo que queda (s)
+var boosting := false
+var _shift_t := 0.0
 var rpm := 900.0
 var length := 4.0
 
@@ -115,7 +121,7 @@ static func build(s: Node, e: Dictionary) -> Node3D:
 	if v.pedals and not "engine" in types:
 		v.power = 1.2
 		v.uses_fuel = false
-	v.max_speed = 8.0 if v.pedals and not "engine" in types else 9.0 + v.power * 2.6
+	v.max_speed = 10.0 if v.pedals and not "engine" in types else 14.0 + v.power * 4.6
 	v.fuel = clampf(float(e.get("fuel", 1.0)), 0.0, 1.0)
 	v.health = clampf(float(e.get("health", 100.0)), 0.0, 100.0)
 	s.add_child(v)
@@ -374,7 +380,7 @@ static func _build_boat(s: Node, e: Dictionary) -> Node3D:
 	boat.rotation.y = float(e.get("yaw", 0.0))
 	var types: Array = e.get("behaviors", []).map(func(b): return str(b.get("type", "")))
 	if "engine" in types:
-		boat.max_speed = 13.0
+		boat.max_speed = 17.0  # lancha: ~60 km/h
 		boat.motor = true
 	if not str(e.get("model", "")).is_empty():
 		var mp: PackedStringArray = str(e.model).split("/")
@@ -508,6 +514,33 @@ func _leave() -> void:
 		remove_collision_exception_with(player)
 
 
+## La llamarada del escape mientras va el turbo.
+var _flame_node: MeshInstance3D
+func _flame(on: bool) -> void:
+	if _flame_node == null:
+		if not on:
+			return
+		_flame_node = MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.02
+		cm.bottom_radius = 0.09
+		cm.height = 0.5
+		_flame_node.mesh = cm
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color("#ffb040")
+		m.emission_enabled = true
+		m.emission = Color("#ff7a20")
+		m.emission_energy_multiplier = 3.0
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_flame_node.material_override = m
+		_flame_node.rotation.x = -PI / 2
+		_flame_node.position = Vector3(0.3, 0.35, -length * 0.5 - 0.25)
+		add_child(_flame_node)
+	_flame_node.visible = on
+	if on:
+		_flame_node.scale = Vector3.ONE * randf_range(0.8, 1.3)
+
+
 func speed() -> float:
 	return linear_velocity.dot(global_basis.z)
 
@@ -558,15 +591,27 @@ func _physics_process(delta: float) -> void:
 	var handbrake := _rider.controls_enabled and Input.is_action_pressed("jump")
 	# Marchas automáticas: cada una empuja menos pero llega más lejos
 	var av := absf(v)
-	gear = 1
-	for g in GEARS.size():
-		if av < max_speed * float(GEARS[g]) * 0.97:
-			gear = g + 1
-			break
-		gear = GEARS.size()
+	var old_gear := gear
+	if gear < GEARS.size() and av > max_speed * float(GEARS[gear - 1]) * 0.97:
+		gear += 1
+	elif gear > 1 and av < max_speed * float(GEARS[gear - 2]) * 0.85:
+		gear -= 1
+	if gear != old_gear and not pedals:
+		_shift_t = SHIFT_CUT
+		if _audio and _audio.has_method("shift"):
+			_audio.call("shift", gear > old_gear)
+	_shift_t = maxf(_shift_t - delta, 0.0)
+	# Turbo con Shift: empuje extra unos segundos (se recarga), con llamarada y sonido
+	boosting = false
+	if not pedals and has_fuel and throttle > 0.0 and _rider.controls_enabled and Input.is_action_pressed("run") and boost > 0.0:
+		boosting = true
+		boost = maxf(boost - delta, 0.0)
+	elif not Input.is_action_pressed("run"):
+		boost = minf(boost + delta * BOOST_TIME / BOOST_RECHARGE, BOOST_TIME)
+	_flame(boosting)
 	var lo_speed: float = 0.0 if gear == 1 else max_speed * float(GEARS[gear - 2])
 	var hi_speed: float = max_speed * float(GEARS[gear - 1])
-	var force := power * 260.0 * mass / 1000.0 * 1.4 * float(GEAR_TORQUE[gear - 1]) * 0.78
+	var force := power * 260.0 * mass / 1000.0 * 1.5 * float(GEAR_TORQUE[gear - 1]) * (1.6 if boosting else 1.0) * (0.15 if _shift_t > 0.0 else 1.0)
 	if pedals and not uses_fuel:  # piernas: mucha fuerza al arrancar, menos cuanto más rápido
 		force = minf(180.0, 350.0 / maxf(av, 0.5)) * mass / 80.0
 	var foot_brake := 0.0
@@ -577,8 +622,10 @@ func _physics_process(delta: float) -> void:
 	else:
 		engine_brake = 0.0 if throttle != 0.0 or pedals else 2.2 * mass / 1300.0  # el motor retiene (solo las motrices)
 		# El par cae suave al acercarse a la velocidad máxima (antes, un corte en seco)
-		var taper := clampf((max_speed - av) / maxf(max_speed * 0.18, 0.5), 0.0, 1.0)
-		engine_force = throttle * force * (1.0 if throttle > 0.0 else 0.5) * (taper if throttle > 0.0 else 1.0) if has_fuel else 0.0
+		var top := max_speed * (1.18 if boosting else 1.0)
+		var taper := clampf((top - av) / maxf(top * 0.08, 0.5), 0.0, 1.0)  # el corte empieza al 92 %
+		var reverse_ok := 1.0 if (throttle > 0.0 or av < 6.0) else 0.0  # marcha atrás: despacio (máx. ~20 km/h)
+		engine_force = throttle * force * (1.0 if throttle > 0.0 else 0.3 * reverse_ok) * (taper if throttle > 0.0 else 1.0) if has_fuel else 0.0
 	# Control de tracción: si las ruedas motrices patinan, menos fuerza
 	if engine_force != 0.0 and not pedals:
 		var grip := 1.0
@@ -590,9 +637,11 @@ func _physics_process(delta: float) -> void:
 	# Dirección: menos ángulo cuanto más rápido, y vuelve sola al centro al soltar
 	var steer_max := lerpf(0.4, 0.08, clampf(av / max_speed, 0.0, 1.0)) if _two_wheel else lerpf(0.55, 0.18, clampf(av / max_speed, 0.0, 1.0))
 	# Nunca más curva de la que se puede tomar a esta velocidad (≈0.9 g): no se vuelca girando
-	steer_max = minf(steer_max, LATERAL_G * maxf(length * 0.6, 1.0) / maxf(av * av, 1.0))
+	steer_max = minf(steer_max, LATERAL_G * 1.55 * maxf(length * 0.6, 1.0) / maxf(av * av, 1.0))  # ≈1.4 g: gira con ganas
+	if handbrake and av > 6.0:
+		steer_max = maxf(steer_max, 0.32)  # con freno de mano, derrape controlable
 	var want := -input.x * steer_max
-	steering = move_toward(steering, want, (1.6 if absf(want) > absf(steering) else 4.0) * delta)
+	steering = move_toward(steering, want, (2.6 if absf(want) > absf(steering) else 5.0) * delta)
 	# Frenos por rueda: pie, motor (las motrices) y freno de mano (las de atrás, que patinan)
 	for w in find_children("Wheel_*", "VehicleWheel3D", false, false):
 		var wh := w as VehicleWheel3D

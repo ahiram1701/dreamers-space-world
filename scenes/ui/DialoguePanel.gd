@@ -42,6 +42,7 @@ var _give_btn: MenuButton
 var _bye_btn: Button
 var _pay_btn: Button
 var _busy := false
+var _abandoned := false
 var _thinking_t := 0.0
 var _leaving := false
 
@@ -235,7 +236,8 @@ func open(npc_id: String, by_phone: bool = false) -> void:
 
 func close() -> void:
 	if _busy:
-		return
+		_abandoned = true  # Esc mientras piensa: te vas sin esperar la respuesta
+		_set_busy(false)
 	visible = false
 	StoryDirector.end_conversation(_npc.id)
 	closed.emit(_npc.id)
@@ -289,7 +291,10 @@ func _send(text: String) -> void:
 	var ctx := scene_context
 	if context_provider.is_valid():
 		ctx = context_provider.call(_npc.id)
-	var turn := await StoryDirector.talk(_npc.id, text, ctx)
+	var turn := await StoryDirector.talk(_npc.id, text, ctx, call_mode)
+	if _abandoned or not visible:
+		_abandoned = false
+		return
 	_set_busy(false)
 	if not turn.ok:
 		_line.text = "[color=red]%s[/color]" % turn.get("error", "Error")
@@ -347,7 +352,7 @@ func _send(text: String) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
 		return
-	if event.is_action_pressed("pause") and not _busy:  # Esc: despedirse
+	if event.is_action_pressed("pause"):  # Esc: despedirse (también mientras piensa)
 		get_viewport().set_input_as_handled()
 		close()
 		return

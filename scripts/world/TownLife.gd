@@ -63,7 +63,7 @@ func witness(what: String, at: Vector3, exclude: Array = []) -> Array:
 			continue
 		if not _sees(npc, at):
 			continue
-		NPCMemory.add_event(id, "Viste esto: %s" % what)
+		NPCMemory.add_event(id, "Viste esto: %s" % what, 0, false, false)
 		saw.append(id)
 	return saw
 
@@ -77,7 +77,8 @@ func _sees(npc: TownNPC, at: Vector3) -> bool:
 
 ## Rumores: quienes están juntos se pasan lo más reciente que uno sabe del jugador y el otro no.
 func gossip() -> int:
-	var ids: Array = scene._npcs.keys().filter(func(i): return scene._npcs[i].is_present())
+	# Solo quienes están despiertos y juntos (a las 3 a. m., dormidos, nadie cotillea)
+	var ids: Array = scene._npcs.keys().filter(func(i): return scene._npcs[i].is_present() and not scene._npcs[i].is_asleep())
 	var passed := 0
 	for a in ids:
 		for b in ids:
@@ -97,7 +98,7 @@ func _news_for(a: String, b: String) -> String:
 	var recent: Array = NPCMemory.get_mem(a).recent
 	for i in range(recent.size() - 1, -1, -1):
 		var text: String = recent[i].text
-		if bool(recent[i].get("rumor", false)) or " te contó" in text or known.contains(text.left(40)):
+		if bool(recent[i].get("rumor", false)) or bool(recent[i].get("private", false)) or " te contó" in text or known.contains(text.left(40)):
 			continue
 		if WorldClock.absolute_minutes() - float(recent[i].at) > 60.0 * 24.0:
 			break

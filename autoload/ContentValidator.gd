@@ -59,7 +59,7 @@ const ACTION := {"t": "object", "fields": {
 	# Encargos (give_quest): de qué tipo, dónde y a qué hora del día (3.0 = 3 a. m., 15.0 = 3 p. m.)
 	"quest_kind": {"t": "enum", "from": "quest_kind", "opt": true},
 	"place": {"t": "string", "min": 2, "max": 80, "opt": true},
-	"at_hour": {"t": "float", "min": 0.0, "max": 24.0, "opt": true},
+	"at_hour": {"t": "float", "min": 0.0, "max": 48.0, "opt": true},
 	# Frase de narración de este paso (world_action.steps)
 	"narration": {"t": "string", "min": 2, "max": 400, "opt": true},
 }}

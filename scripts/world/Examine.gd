@@ -58,7 +58,7 @@ static func examine(player: Node, label: String, pos: Vector3) -> void:
 	var scene: Node = player.get_parent() if player else null
 	if scene == null:
 		return
-	var key := "%s@%d,%d" % [label, int(pos.x), int(pos.z)]
+	var key := "v12|%s@%d,%d" % [label, int(pos.x), int(pos.z)]
 	var ui: Variant = scene.get("_ui")
 	if _cache.has(key):
 		if ui:
@@ -76,15 +76,44 @@ static func examine(player: Node, label: String, pos: Vector3) -> void:
 static func describe(scene: Node, label: String, pos: Vector3) -> String:
 	var around := ""
 	if scene.has_method("surroundings_described"):
-		around = str(scene.call("surroundings_described", pos))
+		around = str(scene.call("surroundings_described", pos, 25.0, label))
+	var company := _company(scene)
 	var messages := [
-		{"role": "system", "content": ContentGenerator.world_rules_prompt() + "\nDescribe en 1 o 2 frases cortas (segunda persona, presente, realista y concreto) lo que ve el jugador al examinar de cerca un objeto. Solo detalles físicos plausibles de ESE objeto en ESE lugar: material, estado, marcas, olor, algo pequeño que llama la atención. No inventes personas, objetos ocultos ni sucesos. JSON: {\"description\": \"...\"}"},
-		{"role": "user", "content": "LUGAR: %s\nALREDEDOR: %s\nOBJETO: %s" % [GameState.current_location(), around.left(600), label]},
+		{"role": "system", "content": ContentGenerator.world_rules_prompt() + "\nDescribe en 1 o 2 frases cortas lo que ve el jugador al examinar de cerca UN objeto. Háblale de TÚ (segunda persona del SINGULAR: «ves», «tocas»; nunca «ustedes»). %s Es UN solo objeto: no digas que hay dos o varios. Solo detalles físicos plausibles de ESE objeto en ESE lugar: material, estado, marcas, olor, algo pequeño que llama la atención. No inventes personas, objetos ocultos ni sucesos. JSON: {\"description\": \"...\"}" % company},
+		{"role": "user", "content": "LUGAR: %s\nALREDEDOR (otras cosas, no el objeto): %s\nOBJETO QUE EXAMINAS (uno): %s" % [Travel.location_name(GameState.current_location()), around.left(600), label.get_slice(" — ", 0)]},
 	]
-	var r: Dictionary = await AIClient.chat(messages, SCHEMA, "examine")
-	if r.ok and r.data is Dictionary and str(r.data.get("description", "")).length() > 8:
-		return str(r.data.description)
-	return "Te fijas bien: %s. Nada fuera de lo normal." % label
+	for attempt in 2:
+		var r: Dictionary = await AIClient.chat(messages, SCHEMA, "examine")
+		if r.ok and r.data is Dictionary and str(r.data.get("description", "")).length() > 8:
+			var text := str(r.data.description)
+			var bad := bad_examine(text, label)
+			if bad.is_empty():
+				return text
+			messages.append({"role": "assistant", "content": JSON.stringify(r.data)})
+			messages.append({"role": "user", "content": "Corrige: %s. Responde solo el JSON." % bad})
+	return "Te fijas bien: %s. Nada fuera de lo normal." % label.get_slice(" — ", 0)
+
+
+## Con quién está el jugador ahora (para que la IA no hable en plural si va solo).
+static func _company(scene: Node) -> String:
+	var with := PackedStringArray()
+	for id in WorldDB.get_state("memories", {}):
+		if NPCMemory.is_following(str(id)):
+			with.append(str(WorldDB.get_entity("npc", id).get("name", "")).get_slice(" ", 0))
+	return "El jugador está SOLO." if with.is_empty() else "Va acompañado de %s, pero examina el objeto él/ella." % ", ".join(with)
+
+
+## Lo que está mal en una descripción (o "" si está bien): plural para alguien solo, o contar más de uno.
+static func bad_examine(text: String, label: String = "") -> String:
+	var low := " " + text.to_lower() + " "
+	for w in [" ustedes", " vosotros", " os ", " frente a ustedes", " ven ustedes"]:
+		if low.contains(w):
+			return "habla de tú, en singular (el jugador está solo)"
+	var one := label.to_lower().begins_with("un ") or label.to_lower().begins_with("una ")
+	for w in [" dos ", " tres ", " varias ", " varios ", " ambas", " ambos"]:
+		if one and low.contains(w + label.to_lower().get_slice(" ", 1).left(4)):
+			return "es UN solo objeto, no digas que hay varios"
+	return ""
 
 
 ## Algo pequeño que se puede llevar: «Tomar: una radio». Una vez tomado, no vuelve a aparecer.

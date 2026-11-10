@@ -576,6 +576,20 @@ func _on_autopilot_arrived() -> void:
 		toast("Has llegado.")
 
 
+## Cámara detrás de la nave: sigue con suavidad pero nunca a más de 40 m de su sitio, y abre el
+## campo de visión en crucero.
+func _follow_camera(delta: float) -> void:
+	var want := ship.global_transform * Vector3(0, 5.0, -16.0)
+	var p := _cam.global_position.lerp(want, 1.0 - exp(-12.0 * delta))
+	var lag := p - want
+	if lag.length() > 40.0:
+		p = want + lag.normalized() * 40.0
+	_cam.global_position = p
+	_cam.look_at(ship.global_transform * Vector3(0, 1.5, 12.0), ship.global_basis.y)
+	var fov := Settings.fov + clampf((ship.velocity.length() - 150.0) / 1350.0, 0.0, 1.0) * 14.0
+	_cam.fov = lerpf(_cam.fov, fov, 1.0 - exp(-3.0 * delta))
+
+
 func _physics_process(delta: float) -> void:
 	if ship == null:
 		return
@@ -626,10 +640,7 @@ func _process(delta: float) -> void:
 				(c as MeshInstance3D).rotate_y(float(b.node.get_meta("spin", 0.0)) * delta)
 	if ship == null:
 		return
-	# Cámara detrás de la nave
-	var want := ship.global_transform * Vector3(0, 5.0, -16.0)
-	_cam.global_position = _cam.global_position.lerp(want, clampf(8.0 * delta, 0.0, 1.0)) if _cam.global_position.distance_to(want) < 200.0 else want
-	_cam.look_at(ship.global_transform * Vector3(0, 1.5, 12.0), ship.global_basis.y)
+	_follow_camera(delta)
 	_cam.h_offset = lerpf(_cam.h_offset, 0.0, clampf(6.0 * delta, 0.0, 1.0))
 	# El sol alumbra desde donde está
 	var to_ship := ship.global_position.normalized()
@@ -853,6 +864,36 @@ func _rock_collide() -> void:
 
 
 ## ¿Hay una roca en el tramo a→b? (para cortar el crucero y para el piloto automático)
+## Distancia desde `a` hasta la primera esfera (planeta, luna o el sol) que corta el tramo a→b,
+## o INF. Las lunas no tienen cuerpo físico: así los rayos de la nave también las ven.
+func obstacle_distance(a: Vector3, b: Vector3, pad: float = 30.0) -> float:
+	var best := INF
+	var spheres := [[Vector3.ZERO, SUN_RADIUS]]
+	for p in system.get("planets", []):
+		if p.kind != "station":
+			spheres.append([StarSystem.position_of(p), float(p.radius)])
+	for mo in _moons:
+		spheres.append([(mo.node as Node3D).global_position, float(mo.r)])
+	var dir := b - a
+	var len := dir.length()
+	if len < 0.01:
+		return INF
+	dir /= len
+	for s in spheres:
+		var c: Vector3 = s[0]
+		var r: float = float(s[1]) + pad
+		var oc := a - c
+		var bq := oc.dot(dir)
+		var cq := oc.dot(oc) - r * r
+		var disc := bq * bq - cq
+		if disc < 0.0:
+			continue
+		var t := -bq - sqrt(disc)
+		if t >= 0.0 and t <= len:
+			best = minf(best, t)
+	return best
+
+
 func rock_on_segment(a: Vector3, b: Vector3, pad: float = 20.0) -> bool:
 	for i in _rocks_near(a, b, pad):
 		if _rock_hit(i, a, b, pad) >= 0.0:

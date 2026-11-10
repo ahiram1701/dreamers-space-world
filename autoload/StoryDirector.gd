@@ -9,7 +9,12 @@ signal turn_started(npc_id: String)
 signal turn_finished(npc_id: String, turn: Dictionary)
 
 
-func talk(npc_id: String, player_input: String, scene_context: String) -> Dictionary:
+## remote: por teléfono o mensaje (no se puede dar, irse ni empujar a nadie a distancia).
+## npc_initiative: el mensaje lo empieza el PNJ (lo que se le pide no es algo que dijo el jugador).
+const REMOTE_ACTIONS := ["share_number", "give_quest", "complete_quest", "journal", "reveal_place", "refuse_contact", "go_to"]
+
+
+func talk(npc_id: String, player_input: String, scene_context: String, remote: bool = false, npc_initiative: bool = false) -> Dictionary:
 	turn_started.emit(npc_id)
 	var npc := WorldDB.get_entity("npc", npc_id)
 	if npc.is_empty():
@@ -40,7 +45,7 @@ func talk(npc_id: String, player_input: String, scene_context: String) -> Dictio
 	# Se presenta: a partir de ahora sabe su nombre. Si no lo sabe, no puede usarlo.
 	var pname := PlayerProfile.player_name()
 	var said_low := said.to_lower()
-	if pname.length() >= 2 and (said_low.contains(pname.to_lower()) or said_low.contains("me llamo") or said_low.contains("mi nombre es")):
+	if not npc_initiative and pname.length() >= 2 and (_has_word(said, pname, false) or said_low.contains("me llamo") or said_low.contains("mi nombre es")):
 		NPCMemory.learn_name(npc_id)
 	if res.ok and not NPCMemory.knows_name(npc_id):
 		turn.line = strip_name(str(turn.line), pname)
@@ -50,22 +55,33 @@ func talk(npc_id: String, player_input: String, scene_context: String) -> Dictio
 			print_debug("[sitios inventados] %s" % [fixed.dropped])
 			turn.line = fixed.text
 	# Lo que el PNJ hace (dar, acompañar, curar, irse…) ocurre de verdad, no solo se dice
+	if remote:
+		turn["actions"] = (turn.get("actions", []) as Array).filter(func(a): return str(a.get("type", "")) in REMOTE_ACTIONS)
 	turn["notes"] = Actions.execute(npc_id, turn.get("actions", [])) if res.ok else []
 
 	# Un respaldo no es algo que el PNJ haya "dicho": no ensucia su memoria (salvo presentarse)
 	if res.ok or not NPCMemory.get_mem(npc_id).met:
-		NPCMemory.record_turn(npc_id, said, turn.line, truthful_facts(turn.get("new_facts", [])), int(turn.relationship_delta))
-	if not said.is_empty():  # solo lo que el jugador dice o elige revela su carácter
+		NPCMemory.record_turn(npc_id, "" if npc_initiative else said, turn.line, truthful_facts(turn.get("new_facts", [])), int(turn.relationship_delta))
+	if not said.is_empty() and not npc_initiative:  # solo lo que el jugador dice o elige revela su carácter
 		PlayerProfile.apply_signals(turn.get("trait_signals", []))
 	turn_finished.emit(npc_id, turn)
 	return turn
 
 
 ## Quita el nombre del jugador de una frase de alguien que no lo sabe («Hola, Ana, pasa» → «Hola, pasa»).
+## ¿Aparece `word` como palabra entera? (con acentos: «José» al final sí cuenta; «Ana» en
+## «mañana» no). Con case_sensitive, solo con su mayúscula (así «Luz» no borra «la luz del faro»).
+static func _has_word(text: String, word: String, case_sensitive: bool = true) -> bool:
+	if word.length() < 2:
+		return false
+	var flags := "" if case_sensitive else "(?i)"
+	return RegEx.create_from_string(flags + "(?<![\\p{L}\\p{N}])" + _escape_re(word) + "(?![\\p{L}\\p{N}])").search(text) != null
+
+
 static func strip_name(line: String, pname: String) -> String:
-	if pname.length() < 2 or not line.to_lower().contains(pname.to_lower()):
+	if pname.length() < 2 or not _has_word(line, pname):
 		return line
-	var re := RegEx.create_from_string("(?i),?\\s*\\b" + _escape_re(pname) + "\\b")
+	var re := RegEx.create_from_string(",?\\s*(?<![\\p{L}\\p{N}])" + _escape_re(pname) + "(?![\\p{L}\\p{N}])")
 	var out := re.sub(line, "", true)
 	out = out.replace(" ,", ",").replace(",,", ",").replace(",.", ".").replace(",!", "!").replace(",?", "?").replace("¿,", "¿").replace("¡,", "¡")
 	out = out.strip_edges().trim_prefix(",").strip_edges()
@@ -203,7 +219,32 @@ const INSIDE_WORDS := ["me encierro", "me meto en", "me meto dentro", "entro en"
 const MOVEMENT_FACT := ["entr", "encerr", "pestillo", "se fue", "se va ", "march", "irse", "largarse", "se larg", "salió", "sale de",
 	"se dirig", "camin", "se metió", "se mete", "cerró la puerta", "dio la espalda y se"]
 const LEAVING_TYPES := ["leave", "go_inside", "guide_player"]
-const GUIDE_WORDS := ["te llevo", "le llevo", "sígueme", "sigueme", "vamos con", "vamos a ver a", "te acompaño a", "te acompaño con", "ven conmigo", "acompáñame"]
+const GUIDE_WORDS := ["te llevo", "le llevo", "sígueme", "sigueme", "vamos a ver a", "te acompaño a", "te acompaño con", "ven conmigo", "acompáñame"]
+## Lo que sigue a «me voy…», «entro…» cuando NO es moverse («me voy a tomar un café contigo»,
+## «me vuelvo a equivocar», «entro a trabajar a las 9», «no entro en detalles»).
+const FIGURATIVE_AFTER := ["a tomar", "a decir", "a contar", "a explicar", "a equivocar", "a poner", "a ver si", "al grano",
+	"a dormir contigo", "a trabajar", "en detalles", "en razón", "en materia", "en pánico", "en calor", "a hablar",
+	"a preguntar", "a pensar", "a quedar", "a sentar", "a acordar", "a callar", "a tranquilizar", "contigo"]
+
+
+## ¿Dice de verdad una de estas cosas? (no negada: «no me voy», «nunca entro»; ni en sentido figurado)
+static func says_really(low: String, words: Array) -> bool:
+	for w in words:
+		var from := 0
+		while true:
+			var i := low.find(w, from)
+			if i < 0:
+				break
+			from = i + 1
+			var before := low.substr(maxi(0, i - 14), mini(i, 14))
+			if [" no ", "nunca ", "jamás ", "jamas ", " ni "].any(func(n): return (" " + before).contains(n)):
+				continue
+			var after := low.substr(i + w.length(), 22).strip_edges()
+			# («entro a» + «trabajar»: la «a» ya va en la palabra buscada)
+			if FIGURATIVE_AFTER.any(func(f): return after.begins_with(f) or (f.begins_with("a ") and after.begins_with(f.substr(2)))):
+				continue
+			return true
+	return false
 
 
 ## Lo que el PNJ dice que hace, lo hace: si anuncia que se va o se encierra y no trae la acción,
@@ -213,7 +254,7 @@ static func make_consistent(turn: Dictionary) -> void:
 	var types: Array = actions.map(func(a): return a.get("type", ""))
 	var low := " " + str(turn.get("line", "")).to_lower()
 	# «Te llevo», «sígueme», «vamos con…»: lo dice, así que lo hace (antes, sin su acción, no pasaba nada)
-	if not types.any(func(t): return t in LEAVING_TYPES) and GUIDE_WORDS.any(func(w): return low.contains(w)):
+	if not types.any(func(t): return t in LEAVING_TYPES) and says_really(low, GUIDE_WORDS):
 		var where := ""
 		for marker in [" con ", " a la ", " al ", " a ver a ", " hasta "]:
 			var i := low.find(marker, low.find(GUIDE_WORDS.filter(func(w): return low.contains(w))[0]))
@@ -225,15 +266,15 @@ static func make_consistent(turn: Dictionary) -> void:
 			actions.append(g)
 			types.append(g.type)
 	if not types.any(func(t): return t in LEAVING_TYPES):
-		var inside := INSIDE_WORDS.any(func(w): return low.contains(w))
-		var leave := inside or LEAVE_WORDS.any(func(w): return low.contains(w))
+		var inside := says_really(low, INSIDE_WORDS)
+		var leave := inside or says_really(low, LEAVE_WORDS)
 		if leave:
 			var a := {"type": "go_inside" if inside else "leave", "target": _place_in(low)}
 			actions.append(a)
 			types.append(a.type)
 	# Un favor que pide en voz alta queda apuntado aunque se le olvide la acción give_quest
 	var said: String = str(turn.get("line", ""))
-	if not "give_quest" in types and REQUEST_WORDS.any(func(w): return low.contains(w)):
+	if not "give_quest" in types and says_really(low, REQUEST_WORDS) and not turn.get("location_quest_offer", false):
 		var sentence := _sentence_with(said, REQUEST_WORDS)
 		if not sentence.is_empty():
 			var q := {"type": "give_quest", "target": ContentValidator.fit_text(sentence.trim_prefix("¿").trim_suffix("?"), 60), "text": sentence}
@@ -241,11 +282,12 @@ static func make_consistent(turn: Dictionary) -> void:
 				q["quest_kind"] = "bring_item"
 			actions.append(q)
 			types.append("give_quest")
-	# La hora que dijo («a las 3 de la mañana») va en el encargo aunque la IA no la pusiera
-	var at := parse_at_hour(low)
-	if at >= 0.0:
-		for a in actions:
-			if a.get("type", "") == "give_quest" and a.get("at_hour") == null:
+	# La hora que dijo («a las 3 de la mañana») va en el encargo aunque la IA no la pusiera, pero
+	# solo si la dice en la MISMA frase que el pedido (no «tráeme pan; la panadería abre a las 7»)
+	for a in actions:
+		if a.get("type", "") == "give_quest" and a.get("at_hour") == null:
+			var at := parse_at_hour(str(a.get("text", "")).to_lower())
+			if at >= 0.0:
 				a["at_hour"] = at
 	turn["actions"] = actions
 	var leaving: bool = types.any(func(t): return t in LEAVING_TYPES)
@@ -282,17 +324,32 @@ static func _sentence_with(text: String, words: Array) -> String:
 
 ## «a las 3 de la mañana» → 3.0, «a las 5:30 p. m.» → 17.5, «a las 3» → la próxima 3 (de
 ## madrugada o de tarde, la que llegue antes). -1 si no dice hora.
+const HOUR_WORDS := {"una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5, "seis": 6, "siete": 7, "ocho": 8,
+	"nueve": 9, "diez": 10, "once": 11, "doce": 12}
+
+
+## Devuelve la hora (3.0 = 3 a. m.); si dice «mañana» (el día, no «de la mañana»), +24.
 static func parse_at_hour(low: String) -> float:
-	var re := RegEx.create_from_string("a las? (\\d{1,2})(?:[:.](\\d{2}))?\\s*(a\\. ?m\\.|am|p\\. ?m\\.|pm|de la mañana|de la madrugada|de la tarde|de la noche|del mediodía)?")
-	var m := re.search(low)
+	var text := low
+	for word in HOUR_WORDS:  # «a las tres y media» → «a las 3:30»
+		text = text.replace("a las " + word, "a las %d" % HOUR_WORDS[word]).replace("a la " + word, "a la %d" % HOUR_WORDS[word])
+	text = text.replace(" y media", ":30").replace(" y cuarto", ":15").replace(" menos cuarto", ":-15")
+	var re := RegEx.create_from_string("a las? (\\d{1,2})(?:[:.](-?\\d{2}))?\\s*(a\\. ?m\\.|am|p\\. ?m\\.|pm|de la mañana|de la madrugada|de la tarde|de la noche|del mediodía)?")
+	var m := re.search(text)
 	if m == null:
 		return -1.0
 	var h := float(m.get_string(1))
 	if h > 24.0:
 		return -1.0
 	var mins := float(m.get_string(2)) if not m.get_string(2).is_empty() else 0.0
+	if mins < 0.0:
+		h -= 1.0
+		mins += 60.0
 	var suffix := m.get_string(3)
-	if suffix.begins_with("p") or suffix.contains("tarde") or suffix.contains("noche"):
+	var tomorrow := RegEx.create_from_string("(^|[^a-záéíóú])mañana(?! *(a\\. ?m|am))").search(text.replace("de la mañana", "")) != null
+	if suffix.contains("noche") and h == 12.0:
+		h = 0.0  # las 12 de la noche son las 0:00
+	elif suffix.begins_with("p") or suffix.contains("tarde") or suffix.contains("noche"):
 		if h < 12.0:
 			h += 12.0
 	elif suffix.begins_with("a") or suffix.contains("mañana") or suffix.contains("madrugada"):
@@ -304,7 +361,7 @@ static func parse_at_hour(low: String) -> float:
 		var pm := fposmod(h + 12.0 - now, 24.0)
 		if pm < am:
 			h += 12.0
-	return fmod(h + mins / 60.0, 24.0)
+	return fmod(h + mins / 60.0, 24.0) + (24.0 if tomorrow else 0.0)
 
 
 ## Lugar mencionado en una frase ("me voy a la cafetería" → "cafetería"), o "".
@@ -329,7 +386,7 @@ static func truthful_facts(facts: Array) -> Array:
 ## Pedidos en voz alta: si el PNJ los dice, el encargo queda apuntado.
 const REQUEST_WORDS := ["tráeme", "traeme", "¿me traes", "¿me traerías", "¿me consigues", "consígueme", "consigueme",
 	"¿me puedes traer", "¿me puedes conseguir", "necesito que me traigas", "necesito que me consigas",
-	"necesito que vayas", "llévale", "te encargo", "hazme el favor de", "búscame", "encuéntrame"]
+	"necesito que vayas", "llévale", "te encargo", "encuéntrame"]
 
 ## Pasos que tienen sentido en una acción del jugador (tecla F).
 const WORLD_STEPS := ["go_to", "play", "use", "npc_react", "give_to_npc", "give_item", "change_stat", "journal",
@@ -474,7 +531,10 @@ static func check_places(text: String, known: String) -> Dictionary:
 	var dropped := []
 	for sentence in _sentences(text):
 		var low := sentence.to_lower()
-		var bad := ROOM_WORDS.any(func(w): return low.contains(w) and not known_low.contains(w))
+		var plain := low
+		for f in ["cuarto de hora", "cuarto de siglo", "cuarto de kilo", "cuarto de litro", "cuarto de vuelta", "cuarto de luna"]:
+			plain = plain.replace(f, "")
+		var bad := ROOM_WORDS.any(func(w): return plain.contains(w) and not known_low.contains(w))
 		if bad:
 			dropped.append(sentence)
 		else:
@@ -637,7 +697,49 @@ TOMAS QUE EXISTEN ("shot"): lighthouse (el faro entero, de noche), lamp (la lám
 
 
 ## Pide a la IA el Despertar de ESTE jugador. Siempre devuelve uno válido (IA o respaldo).
-func generate_awakening() -> Dictionary:
+## Frase de respaldo de cada toma, por si la de la IA no casa con lo que se ve.
+const NEUTRAL_BEATS := {
+	"lighthouse": "Son las 3:33. La lámpara del faro, apagada desde hace años, parpadea sola.",
+	"lamp": "Arriba, la luz gira sin corriente.",
+	"sea": "El mar se aplana de golpe. Ya no se oyen las olas.",
+	"crack": "Junto a la puerta, el aire se dobla: una grieta del tamaño de una moneda.",
+	"breach": "La grieta se abre y tira de todo. Te agachas para no caer.",
+	"companion": "Alguien corre hacia ti.",
+	"watch": "En tu mano, la brújula gira y se queda apuntando al pueblo.",
+	"pier": "Las tablas del muelle crujen bajo tus pies.",
+	"town": "En el pueblo se enciende una ventana.",
+	"neighbor": "Alguien baja la calle y te reconoce.",
+	"player": "Respiras hondo.",
+	"sky": "Arriba, las estrellas de siempre.",
+	"door": "La puerta del faro, cerrada, como siempre.",
+}
+
+
+## El vecino que vendría a por ti: el que más te aprecia.
+func awakening_friend() -> String:
+	return _closest_neighbor()
+
+
+## Alinea lo que escribió la IA con las tomas decididas por el motor: una frase por toma, en
+## ese orden; lo que la IA añada de más se descarta, y lo que falte se cubre con la frase neutra.
+static func align_beats(ai_beats: Array, plan: Array) -> Array:
+	var out := []
+	var used := {}
+	for i in plan.size():
+		var shot := str(plan[i].shot)
+		var line := ""
+		for j in ai_beats.size():
+			if not used.has(j) and str(ai_beats[j].get("shot", "")) == shot:
+				line = str(ai_beats[j].get("line", ""))
+				used[j] = true
+				break
+		if line.strip_edges().is_empty():
+			line = str(NEUTRAL_BEATS.get(shot, ""))
+		out.append({"shot": shot, "line": line})
+	return out
+
+
+func generate_awakening(plan: Array = []) -> Dictionary:
 	var neighbors := PackedStringArray()
 	for id in ACT0_NEIGHBORS:
 		var npc := WorldDB.get_entity("npc", id)
@@ -656,20 +758,28 @@ EL FARO (lo único que hay): %s
 
 %s
 
+LAS TOMAS DE LA ESCENA (ya decididas: esto es lo que se VERÁ, en este orden):
+%s
+
 Escribe:
-- "beats": de 5 a 8 tomas en orden, cada una con "shot" (de la lista) y "line" (una o dos frases, máx. 130 caracteres). Empieza por el faro y la lámpara, sigue con la grieta, termina con la brecha tirando de ti.
+- "beats": EXACTAMENTE una por cada toma de arriba, en el mismo orden y con el mismo "shot", con "line" (una o dos frases, máx. 130 caracteres) que cuente SOLO lo que se ve en esa toma. No añadas personas, objetos ni sucesos que no estén en su descripción.
 - "anchor": la brújula que te queda; "name" corto y "description" de 1-2 frases (de qué está hecha y qué hace: apunta a casa); "base" es el objeto del pueblo del que sale.
-- "companion_line": lo que te grita el vecino que más te aprecia al agarrarte la mano.
+- "companion_line": lo que te grita %s al agarrarte la mano (si no viene nadie, déjalo vacío).
 - "canon_facts": 2-3 hechos que serán verdad para siempre.
 - "destination_hint": a qué tipo de lugar te arrastra la brecha.""" % [
-			PlayerProfile.describe(), "\n".join(neighbors), InteriorBuilder.DESCRIPTIONS.get("lighthouse", ""), ORIGIN_GUIDE]},
+			PlayerProfile.describe(), "\n".join(neighbors), InteriorBuilder.DESCRIPTIONS.get("lighthouse", ""), ORIGIN_GUIDE,
+			_plan_text(plan), _friend_name(plan)]},
 	]
 	var res := await ContentGenerator.request_valid("awakening", messages)
 	var data: Dictionary = res.data if res.ok else ContentGenerator.load_fallback("awakening")
 	data["source"] = "ai" if res.ok else "fallback"
 	_clean_beats(data)
-	# La decisión es concreta y sale de lo que pasa: agarrar o no la mano de quien llega corriendo
-	var friend := _closest_neighbor()
+	if not plan.is_empty():
+		data["beats"] = align_beats(data.beats, plan)
+	# La decisión es concreta y sale de lo que se ve: agarrar o no la mano de quien llegó corriendo.
+	# Si nadie vino (no hay toma del vecino), no hay a quién agarrar.
+	var comes := plan.is_empty() or plan.any(func(p): return p.shot == "companion")
+	var friend := _closest_neighbor() if comes else ""
 	var first := str(WorldDB.get_entity("npc", friend).get("name", "")).get_slice(" ", 0)
 	data["companion"] = friend
 	data["choices"] = [
@@ -680,6 +790,21 @@ Escribe:
 	if not res.ok:
 		push_warning("El Despertar usó respaldo: %s" % [res.errors])
 	return data
+
+
+static func _plan_text(plan: Array) -> String:
+	if plan.is_empty():
+		return "(elige tú: lighthouse, lamp, sea, crack, breach, watch)"
+	var lines := PackedStringArray()
+	for i in plan.size():
+		lines.append("%d. shot \"%s\": %s" % [i + 1, plan[i].shot, plan[i].does])
+	return "\n".join(lines)
+
+
+func _friend_name(plan: Array) -> String:
+	if not plan.is_empty() and not plan.any(func(p): return p.shot == "companion"):
+		return "nadie"
+	return str(WorldDB.get_entity("npc", _closest_neighbor()).get("name", "el vecino")).get_slice(" ", 0)
 
 
 ## Quita de una escena las frases que hablan de sitios que no existen (cuartos, sótanos…).
@@ -725,7 +850,7 @@ func apply_awakening(data: Dictionary, choice_index: int) -> Dictionary:
 # --- El final -------------------------------------------------------------------------
 
 ## La revelación del origen de la señal y los tres finales, escritos con TODO lo vivido.
-func generate_finale() -> Dictionary:
+func generate_finale(plan: Array = []) -> Dictionary:
 	var awakening: Dictionary = WorldDB.get_state("awakening", {})
 	var places := PackedStringArray()
 	for n in TimelineManager.visited_locations():
@@ -747,15 +872,18 @@ Misiones completadas: %s
 Quién es: %s
 
 Escribe:
-- "beats": de 5 a 8 tomas de la llegada, cada una con "shot" (breach: la grieta que se cierra detrás; pier: el muelle; lighthouse: el faro; town: las luces del pueblo; sea; sky; player: tu cara; neighbor: un vecino que te reconoce; watch: la brújula que por fin se queda quieta) y "line" (máx. 130 caracteres). Recuerda a dos o tres personas concretas que te ayudaron por el camino.
+- "beats": EXACTAMENTE una por cada toma de esta lista (ya decidida: es lo que se VERÁ), en el mismo orden y con el mismo "shot", con "line" (máx. 130 caracteres) que cuente SOLO lo que se ve en esa toma; puedes recordar en pensamiento a dos o tres personas que te ayudaron:
+%s
 - "choices": exactamente tres, una por final, con "text" corto (máx. 90 caracteres): stay_home (quedarte en casa para siempre), go_back_for_someone (volver a por alguien que te ayudó y traerle o quedarte con él), keep_traveling (guardar la brújula y seguir viajando, ahora por gusto). Cada una con su "epilogue": cómo termina, nombrando a la gente y los sitios de su viaje.""" % [
 			awakening.get("origin", "?"), awakening.get("title", ""), awakening.get("choice", "?"),
-			companion.get("name", "nadie"), ", ".join(places), ", ".join(quests), PlayerProfile.describe()]},
+			companion.get("name", "nadie"), ", ".join(places), ", ".join(quests), PlayerProfile.describe(), _plan_text(plan)]},
 	]
 	var res := await ContentGenerator.request_valid("finale", messages)
 	var data: Dictionary = res.data if res.ok else ContentGenerator.load_fallback("finale")
 	data["source"] = "ai" if res.ok else "fallback"
 	_clean_beats(data)
+	if not plan.is_empty():
+		data["beats"] = align_beats(data.beats, plan)
 	_ensure_distinct(data.choices, "ending", ContentValidator.archetypes().ending)
 	return data
 

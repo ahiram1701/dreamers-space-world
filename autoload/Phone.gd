@@ -162,7 +162,7 @@ func _reply(npc_id: String, text: String) -> void:
 	if _busy.get(npc_id, false):
 		return
 	_busy[npc_id] = true
-	var turn: Dictionary = await StoryDirector.talk(npc_id, "(Por mensaje) " + text, remote_context(npc_id, false))
+	var turn: Dictionary = await StoryDirector.talk(npc_id, "(Por mensaje) " + text, remote_context(npc_id, false), true)
 	StoryDirector.end_conversation(npc_id)
 	_busy[npc_id] = false
 	if not turn.get("ok", false) or turn.get("source", "") != "ai":
@@ -244,7 +244,7 @@ func _maybe_text_first() -> void:
 		var why := ("Te acabas de enterar de esto y se lo quieres comentar o preguntar: «%s»." % news) if not news.is_empty() \
 			else "Hace un rato que no saben el uno del otro y te apetece escribirle (por algo de tu vida, del pueblo o de lo raro que está pasando)."
 		var turn: Dictionary = await StoryDirector.talk(id, "(Esto no lo escribe el jugador: decides TÚ mandarle un mensaje por el celular. %s Escribe solo tu mensaje. No estás con él/ella ahora. Cuenta SOLO cosas que estén en tu memoria: no te inventes que le viste, que pasó por algún sitio ni encuentros que no constan.)" % why,
-			remote_context(id, false))
+			remote_context(id, false), true, true)
 		StoryDirector.end_conversation(id)
 		_busy[id] = false
 		if turn.get("ok", false) and turn.get("source", "") == "ai":

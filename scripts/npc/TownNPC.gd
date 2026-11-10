@@ -156,7 +156,8 @@ func refresh_name(entity: Dictionary) -> void:
 
 
 func interaction_prompt() -> String:
-	return "Hablar con " + _display_name
+	# Dormido: se avisa de que lo vas a despertar (antes ponía «Hablar» y se enfadaba sin aviso)
+	return ("Despertar a " if is_asleep() else "Hablar con ") + _display_name
 
 
 func interaction_point() -> Vector3:
@@ -206,10 +207,21 @@ func seat_near(radius: float) -> Node3D:
 			continue
 		var seat: Node3D = it.owner_node
 		var d := seat.global_position.distance_to(global_position)
-		if d < best_d and absf(seat.global_position.y - global_position.y) < 1.5:
+		if d < best_d and absf(seat.global_position.y - global_position.y) < 1.5 and not _seat_taken(seat):
 			best = seat
 			best_d = d
 	return best
+
+
+## Una silla en la que ya hay alguien (otra persona colocada o el jugador sentado) no se usa.
+func _seat_taken(seat: Node3D) -> bool:
+	for n in get_tree().get_nodes_in_group("townsfolk"):
+		if n != self and n is TownNPC and (n as TownNPC).is_settled() and (n as Node3D).global_position.distance_to(seat.global_position) < 0.6:
+			return true
+	for p in get_tree().get_nodes_in_group("player"):
+		if (p as Node3D).global_position.distance_to(seat.global_position) < 0.6:
+			return true
+	return false
 
 
 func stop_gesture() -> void:
@@ -325,7 +337,7 @@ func settle(pos: Vector3, look_to: Vector3, gesture: String, text: String) -> vo
 	set_physics_process(false)
 	if _shape:
 		_shape.set_deferred("disabled", true)
-	global_position = pos
+	global_position = free_settle_pos(pos)
 	face(look_to)
 	_name_label.visible = gesture != "sleep"  # tumbado, el nombre quedaría flotando
 	set_activity(text, gesture)
@@ -347,6 +359,30 @@ func unsettle() -> void:
 	# metía dentro del mueble y acababa encima)
 	var ahead := global_position + _body.global_basis.z * 0.6
 	global_position = InteriorManager.free_spot_near(self, ahead, _body.global_basis.z, [self]) + Vector3(0, 0.15, 0)
+
+
+## Nadie se queda encima de otro: si en ese sitio ya hay alguien colocado (o de pie al lado),
+## se busca un hueco cercano libre.
+func free_settle_pos(pos: Vector3) -> Vector3:
+	if not is_inside_tree() or not _occupied(pos):
+		return pos
+	for r in [0.65, 0.95, 1.3, 1.7, 2.2]:
+		for k in 8:
+			var a := k * TAU / 8.0
+			var cand: Vector3 = pos + Vector3(cos(a), 0, sin(a)) * r
+			if not _occupied(cand) and InteriorManager.is_free(self, cand + Vector3(0, 0.1, 0), [self], 0.3):
+				return cand
+	return pos
+
+
+func _occupied(pos: Vector3) -> bool:
+	for n in get_tree().get_nodes_in_group("townsfolk"):
+		if n == self or not (n is TownNPC) or not n.visible:
+			continue
+		var o: Vector3 = (n as Node3D).global_position
+		if Vector2(o.x - pos.x, o.z - pos.z).length() < 0.55 and absf(o.y - pos.y) < 1.2:
+			return true
+	return false
 
 
 func is_settled() -> bool:
@@ -496,7 +532,18 @@ func _physics_process(delta: float) -> void:
 			speed = FOLLOW_SPEED if Vector2(to_player.x, to_player.z).length() > 6.0 else WALK_SPEED * 1.6
 	elif _target != Vector3.INF:
 		_walk_time += delta
-		if Vector2(_target.x - global_position.x, _target.z - global_position.z).length() < 0.8 or _walk_time > _walk_limit:
+		var left := Vector2(_target.x - global_position.x, _target.z - global_position.z).length()
+		if left >= 0.8 and _walk_time > _walk_limit:
+			# Atascado: si no se le ve, llega por otro camino (se le pone allí); si se le ve, lo
+			# vuelve a intentar un poco más antes de rendirse. Nunca «llega» a 20 m de su destino.
+			var cam := get_viewport().get_camera_3d()
+			var seen := cam != null and cam.is_position_in_frustum(global_position + Vector3(0, 1, 0)) and cam.global_position.distance_to(global_position) < 40.0
+			if seen and _walk_time < _walk_limit * 1.6:
+				pass
+			else:
+				global_position = free_settle_pos(_target) + Vector3(0, 0.2, 0)
+				left = 0.0
+		if left < 0.8:
 			_target = Vector3.INF
 			_speed_override = 0.0
 			arrived.emit()

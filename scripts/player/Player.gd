@@ -52,6 +52,7 @@ var _shake_strength := 0.0
 var _rig: HumanoidRig
 var _zoom := 4.0               # distancia que elige el jugador
 var _zoom_override := -1.0     # la impone una conversación o una acción (o -1)
+var _cinematic := false        # en una escena de cine: el cuerpo se ve aunque estuvieras en primera persona
 var _first_person := false
 var _zoom_dirty := false
 var _frame_v := 0.0   # desplazamiento vertical de la cámara al conversar
@@ -259,6 +260,14 @@ func hold_gesture(gesture: String) -> void:
 	play_gesture(gesture)
 
 
+## Durante una escena de cine el cuerpo se ve entero (nada de primera persona).
+func set_cinematic(on: bool) -> void:
+	_cinematic = on
+	if on and _first_person:
+		_first_person = false
+		_set_body_shadow_only(false)
+
+
 func play_gesture(gesture: String, duration: float = -1.0, provided: bool = false) -> void:
 	if _rig:
 		_rig.play(gesture, duration, provided or has_tool_for(gesture))
@@ -447,17 +456,23 @@ func _process(delta: float) -> void:
 	if _cam_vehicle != null and _zoom_override < 0.0 and _cam_vehicle.has_method("camera_distance"):
 		want = maxf(_zoom, float(_cam_vehicle.call("camera_distance")))
 	_spring.spring_length = lerpf(_spring.spring_length, want, 1.0 - exp(-10.0 * delta))
-	var fp := want < FIRST_PERSON and _zoom_override < 0.0
+	var fp := want < FIRST_PERSON and _zoom_override < 0.0 and not _cinematic
 	if fp != _first_person:
 		_first_person = fp
 		_set_body_shadow_only(fp)
 	if _cam_vehicle == null:
 		_yaw.position.y = lerpf(_yaw.position.y, 1.68 if _first_person else 1.6, 1.0 - exp(-10.0 * delta))
 	_spring.position.x = lerpf(_spring.position.x, 0.0 if _first_person else SHOULDER * clampf(_spring.spring_length / 3.0, 0.0, 1.0), 1.0 - exp(-8.0 * delta))
-	if _cam.fov != Settings.fov:
-		_cam.fov = Settings.fov
-	if _cam_vehicle != null and _cam_vehicle.has_method("speed"):  # sensación de velocidad
-		_cam.fov = lerpf(_cam.fov, Settings.fov + clampf(absf(float(_cam_vehicle.call("speed"))) * 0.45, 0.0, 14.0), 1.0 - exp(-3.0 * delta))
+	# Sensación de velocidad: el FOV se abre con la velocidad (antes se reiniciaba cada fotograma y no se notaba)
+	var want_fov := Settings.fov
+	var vspeed := 0.0
+	if _cam_vehicle != null and _cam_vehicle.has_method("speed"):
+		vspeed = absf(float(_cam_vehicle.call("speed")))
+		want_fov += clampf(vspeed * 0.32, 0.0, 14.0) + (6.0 if _cam_vehicle.get("boosting") == true else 0.0)
+	_cam.fov = lerpf(_cam.fov, want_fov, 1.0 - exp(-3.0 * delta))
+	if vspeed > 25.0 and _shake_time <= 0.0:  # a mucha velocidad, una vibración suave
+		_cam.h_offset = randf_range(-1.0, 1.0) * 0.012 * (vspeed - 25.0) / 20.0
+		_cam.v_offset = randf_range(-1.0, 1.0) * 0.012 * (vspeed - 25.0) / 20.0
 	if _shake_time > 0.0:
 		_shake_time -= delta
 		_cam.h_offset = randf_range(-_shake_strength, _shake_strength)
@@ -470,7 +485,7 @@ func _process(delta: float) -> void:
 ## En un vehículo: la cámara no choca con él (si no, se metía dentro), va más alta y, si no la
 ## mueves en 2 s, vuelve sola detrás, mirando hacia donde vas.
 func _update_vehicle_camera(delta: float) -> void:
-	var v: Node3D = riding if riding is VehicleBody3D or riding is CharacterBody3D else null
+	var v: Node3D = riding if riding != null and (riding is VehicleBody3D or riding is CharacterBody3D or riding.has_method("speed")) else null  # (la barca también: cámara detrás)
 	if v != _cam_vehicle:
 		if _cam_vehicle != null and is_instance_valid(_cam_vehicle) and _cam_vehicle is CollisionObject3D:
 			_spring.remove_excluded_object((_cam_vehicle as CollisionObject3D).get_rid())

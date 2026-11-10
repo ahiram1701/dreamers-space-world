@@ -132,7 +132,14 @@ static func build(root: Node3D, kind: String, rng: RandomNumberGenerator, stone:
 			_cyl(root, Vector3(0, 0.15, 0), 2.9, 3.1, 0.3, stone, true)  # zócalo bajo: se sube sin saltar
 			_cyl(root, Vector3(0, 0.3 + 5.5, 0), 2.1, 2.6, 11.0, white, true)
 			_cyl(root, Vector3(0, 5.0, 0), 2.37, 2.37, 1.2, Color("#c0392b"), false)  # franja roja
-			_cyl(root, Vector3(0, 12.0, 0), 2.6, 2.6, 0.3, Color("#2f3338"), false)  # galería
+			# Galería pisable alrededor de la linterna, con barandilla (se sale a ella desde la trampilla)
+			_cyl(root, Vector3(0, 12.0, 0), 3.0, 3.0, 0.2, Color("#2f3338"), true)
+			for k in 16:
+				var a := k * TAU / 16.0
+				var post := _box(root, Vector3(sin(a) * 2.9, 12.6, cos(a) * 2.9), Vector3(0.06, 1.0, 0.06), Color("#2f3338"), true)
+				post.rotation.y = a
+				var rail := _box(root, Vector3(sin(a + PI / 16.0) * 2.86, 13.08, cos(a + PI / 16.0) * 2.86), Vector3(1.15, 0.05, 0.05), Color("#2f3338"), false)
+				rail.rotation.y = a + PI / 16.0 + PI / 2.0
 			var lamp := _cyl(root, Vector3(0, 13.0, 0), 1.5, 1.5, 1.7, Color("#fff4c2"), false)
 			_glow(lamp, Color("#ffe9a0"), 1.5)
 			var cap := MeshInstance3D.new()
@@ -152,6 +159,7 @@ static func build(root: Node3D, kind: String, rng: RandomNumberGenerator, stone:
 			light.position = Vector3(0, 13.0, 0)
 			root.add_child(light)
 			out.door = {"offset": Vector3(0, 0.3, 3.15), "kind": "lighthouse", "size": Vector3(5.2, 15.0, 5.2), "shape": "round"}
+			out.gallery = Vector3(0, 12.15, 2.45)
 			out.stand = Vector3(1.6, 0.3, 3.6)
 		"console":
 			var desk := _box(root, Vector3(0, 0.45, 0), Vector3(1.8, 0.9, 0.8), Color("#3a3f46"), true)
@@ -187,6 +195,7 @@ static func build(root: Node3D, kind: String, rng: RandomNumberGenerator, stone:
 			for x in [-3.3, 3.3]:
 				_cyl(root, Vector3(x, 1.5, 0.9), 0.08, 0.08, 3.0, Color("#4a4f55"), true)
 			out.stand = Vector3(0, 0, 1.2)
+			out.door = {"offset": Vector3(0, 0, 1.7), "kind": "archive", "size": Vector3(7.0, 3.0, 2.6), "shape": "box"}
 		"temple":
 			_box(root, Vector3(0, 0.25, 0), Vector3(7.0, 0.5, 5.0), stone, true)
 			for x in [-2.8, 2.8]:
@@ -194,7 +203,15 @@ static func build(root: Node3D, kind: String, rng: RandomNumberGenerator, stone:
 					_cyl(root, Vector3(x, 2.25, z), 0.32, 0.36, 3.5, stone.lightened(0.15), true)
 			_box(root, Vector3(0, 4.2, 0), Vector3(7.2, 0.5, 5.2), stone.darkened(0.1), false)
 			_box(root, Vector3(0, 1.0, -1.0), Vector3(1.2, 1.0, 0.8), stone.darkened(0.2), true)  # altar
-			out.stand = Vector3(0, 0.5, 0.2)
+			# Muros entre las columnas (atrás y a los lados) y un portal delante: se entra
+			_box(root, Vector3(0, 2.25, -2.3), Vector3(6.4, 3.5, 0.3), stone.lightened(0.05), true)
+			for x in [-3.0, 3.0]:
+				_box(root, Vector3(x, 2.25, 0), Vector3(0.3, 3.5, 4.4), stone.lightened(0.05), true)
+			for x in [-2.0, 2.0]:
+				_box(root, Vector3(x, 2.25, 2.3), Vector3(2.2, 3.5, 0.3), stone.lightened(0.05), true)
+			_box(root, Vector3(0, 1.4, 2.32), Vector3(1.6, 2.4, 0.1), Color("#4a3020"), false)  # puerta
+			out.stand = Vector3(1.4, 0.5, 3.0)
+			out.door = {"offset": Vector3(0, 0.5, 2.9), "kind": "temple", "size": Vector3(7.0, 4.5, 5.0), "shape": "box"}
 		"cabin":
 			var wood := Color("#7a5a3a")
 			_box(root, Vector3(0, 1.4, -0.3), Vector3(4.4, 2.8, 4.0), wood, true)
@@ -226,7 +243,11 @@ static func build(root: Node3D, kind: String, rng: RandomNumberGenerator, stone:
 			root.add_child(top)
 		"tower":
 			_box(root, Vector3(0, 4.0, 0), Vector3(2.6, 8.0, 2.6), stone, true)
-			_box(root, Vector3(0, 8.3, 0), Vector3(3.4, 0.6, 3.4), stone.darkened(0.15), false)
+			_box(root, Vector3(0, 8.3, 0), Vector3(3.4, 0.6, 3.4), stone.darkened(0.15), true)
+			_box(root, Vector3(0, 1.1, 1.32), Vector3(0.9, 2.1, 0.06), Color("#4a3020"), false)  # puerta
+			out.door = {"offset": Vector3(0, 0, 1.9), "kind": "tower", "size": Vector3(2.6, 8.0, 2.6), "shape": "box"}
+			out.gallery = Vector3(0, 8.65, 0.9)
+			out.stand = Vector3(1.4, 0, 2.0)
 			for k in 4:
 				var a := k * TAU / 4.0
 				var win := _box(root, Vector3(sin(a) * 1.32, 6.0, cos(a) * 1.32), Vector3(0.5, 0.8, 0.05), Color("#1a1a1a"), false)
@@ -259,7 +280,8 @@ static func build(root: Node3D, kind: String, rng: RandomNumberGenerator, stone:
 			var gm := _mat(Color(0.75, 0.95, 0.85, 0.22))
 			gm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 			glass.material_override = gm
-			_box(root, Vector3(0, 1.2, 0), Vector3(5.0, 2.4, 3.6), Color.WHITE, true).visible = false
+			_box(root, Vector3(0, 1.2, 0), Vector3(5.0, 2.4, 3.6), Color.WHITE, true).visible = false  # el cristal no se atraviesa…
+			out.door = {"offset": Vector3(0, 0, 2.3), "kind": "greenhouse", "size": Vector3(5.0, 2.4, 3.6), "shape": "box"}  # …se entra por la puerta
 			for k in 6:
 				var plant := _cyl(root, Vector3(-2.0 + (k % 3) * 2.0, 0.45, -0.8 + (k / 3) * 1.6), 0.35, 0.2, 0.9, Color("#3f8f4a"), false)
 				plant.name = "Planta"
@@ -275,6 +297,7 @@ static func build(root: Node3D, kind: String, rng: RandomNumberGenerator, stone:
 				_box(root, Vector3(-0.4 + (k % 2) * 0.8, 0.02, 0.4 + k * 0.6), Vector3(0.1, 0.06, 0.5), Color("#555"), false)
 			_box(root, Vector3(0.5, 0.45, 1.6), Vector3(0.9, 0.6, 1.3), Color("#5c6168"), true)  # vagoneta
 			out.stand = Vector3(1.8, 0, 0.8)
+			out.door = {"offset": Vector3(0, 0, 0.3), "kind": "mine", "size": Vector3(3.0, 3.0, 3.0), "shape": "box"}
 		"marker":  # piedras de verdad, apiladas
 			var made := 0
 			for k in 4:

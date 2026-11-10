@@ -3,6 +3,91 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.12.0] - 2026-11-10
+
+### Corregido
+- **Las escenas muestran lo que dicen.** Antes la IA escribía la escena y el juego intentaba escenificarla; ahora el juego decide qué pasa en cada toma y con quién, y la IA solo pone la frase.
+  - Al final de cada toma se comprueba que se ve lo que dice: la persona, visible, en el encuadre y a tu lado. Si no, la frase cambia.
+  - **El Despertar:**
+    - El vecino que más te aprecia sale de su casa y corre hasta ti. Antes estaba invisible dentro de casa.
+    - La brújula aparece en tu mano.
+    - El mar se aplana de verdad y la lámpara parpadea.
+    - Ya no te ves en primera persona durante la escena.
+    - Si eliges soltarte, se ve cómo se queda atrás.
+  - **La vuelta a casa** ocurre en el muelle, y el vecino baja de verdad a recibirte.
+  - **Al cumplir una misión**, quien te la dio sale aunque estuviera dentro, se pone a tu altura y se ve el paquete que te entrega.
+- **«Subir a la linterna» funciona en todos los faros**: los faros de otros mundos tienen galería, y de ella se baja con E.
+- **Examinar habla de lo que es**: de una caja, una caja (no «dos cajas»), y a ti solo (no «ustedes»). Una respuesta así se vuelve a pedir.
+- **PNJ empalmados**: cada persona tiene su sitio y su asiento. Si está ocupado, se pone al lado.
+  - Al cambiar la hora, nadie se mueve si está hablando contigo o sentado.
+  - Los dependientes no cocinan ni duermen en la tienda: se van al cerrar.
+- **Bloqueos**:
+  - Con un diálogo abierto, Cuaderno → celular → llamar ya no deja el juego sin control.
+  - Durante una escena no se abren paneles.
+  - Esc cierra una conversación aunque la IA esté pensando.
+  - La pausa ahora pausa: el reloj, las necesidades y los encargos.
+- **Encargos y diálogo**:
+  - «Ve a la farmacia» ya no se cumple al momento; estar dentro de un sitio cuenta.
+  - Se entienden «mañana a las 9», «las 12 de la noche» y «a las tres y media».
+  - Frases como «no me voy», «me voy a tomar un café contigo», «entro a trabajar», «vamos con calma» o «un cuarto de hora» ya no hacen que alguien se vaya ni que se borren frases.
+  - Un encargo que el juego comprueba no se da por cumplido solo con decirlo.
+  - Llamar por teléfono no cuenta como hablar en persona, y los mensajes no mueven ni dan cosas.
+- **Nombres y memoria**:
+  - Quitar tu nombre funciona con acentos y no borra palabras («Luz» ya no borra «la luz del faro»).
+  - Ver algo o ser despertado no hace que te conozcan.
+  - Lo que se dice en privado no se convierte en rumor, y nadie cotillea dormido.
+  - Lo importante, como tu nombre o El Despertar, ya no es lo primero que se olvida.
+- **El cuerpo**:
+  - Si caes agotado con algo abierto, el desmayo espera.
+  - Conduciendo, primero paras; nadando, sales a la orilla.
+  - Sin comer, también se pierde salud mientras duermes.
+  - Dentro de un coche no te mojas.
+- **F ya no da dinero ni salud sin fin**: hay un tope al día ($60 y +30).
+- **El crucero (Shift) en el espacio**:
+  - Frena solo ante un planeta, una luna (antes invisibles al aviso), el sol o un asteroide, y para a unos 300 m sin engancharse a tirones.
+  - Sin asistencia, al soltar Shift vuelves a tu velocidad normal.
+  - El piloto automático rodea por un lado, nunca hacia el suelo.
+  - La cámara ya no se queda atrás ni da tirones.
+
+### Cambiado
+- **Vehículos arcade ágiles**:
+  - Más aceleración y velocidad: un sedán llega a unos 150 km/h y un deportivo a unos 205.
+  - Giro más vivo y derrape con freno de mano.
+  - Marchas con corte de gas que se oye.
+  - Marcha atrás lenta.
+  - La sensación de velocidad (campo de visión y vibración) por fin se nota.
+  - La lancha va más rápida y la barca tiene cámara detrás.
+- **Todo edificio se usa**, con su interior:
+  - Granero (recoger huevos y heno), torre con mirador y templo (sentarse en silencio).
+  - Invernadero (recoger tomates) y mina (picar la veta).
+  - Archivo (consultar registros), tienda de campaña y cueva.
+  - En los lugares generados, las casas sencillas tienen la puerta en su pared.
+- **Animales de verdad**:
+  - Tienen cuerpo: no atraviesan vallas ni personas. Mueven las patas, pastan y duermen de noche.
+  - Perros y gatos se acarician y, si les das de comer, te siguen. La vaca se ordeña y las gallinas dan huevos.
+  - Ciervos, conejos y zorros huyen si corres hacia ellos.
+  - También hay fauna en los planetas con vida.
+
+### Añadido
+- **Puerto Alto**, la ciudad a unos 400 m al sur del pueblo:
+  - 16 manzanas con edificios altos, aceras y pasos de cebra.
+  - Semáforos que cambian, y coches que paran en rojo y ante peatones.
+  - Servicios que se usan:
+    - hospital (te curan por $40), comisaría (denuncias) y escuela (clases que aprendes);
+    - banco (ingresar, sacar, préstamo), cine (una película por $8) y gimnasio;
+    - supermercado, restaurante, farmacia e inmobiliaria.
+- **El autobús** Bahía ⇄ Puerto Alto: paradas con horario. Pagas $2, viajas sentado y te bajas en la otra parada.
+- **Naturaleza**: un bosque denso con fauna, un río que baja al lago, una cueva en la montaña, tormentas con rayos y truenos, estaciones del año y frío que cansa.
+- **Vida y economía**:
+  - Alquilar un piso, con facturas semanales de alquiler, luz y agua. Si no pagas, avisos y desahucio.
+  - Ahorros con interés y préstamos con cuotas.
+  - Cocinar en casa con dos ingredientes.
+- **Sociedad**:
+  - Mercado los sábados en la plaza, partido los domingos y fiesta con farolillos una vez al mes.
+  - Los vecinos hacen amistades o se pelean.
+  - El periódico del quiosco cuenta lo que pasa, también lo que hiciste tú.
+  - La IA sabe qué hay hoy en el pueblo, la estación del año y tu situación económica.
+
 ## [0.11.1] - 2026-11-09
 
 ### Corregido

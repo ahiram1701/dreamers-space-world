@@ -84,7 +84,7 @@ static func _wild_traces(parent: Node3D, height_at: Callable, rng: RandomNumberG
 
 ## En un planeta: un puesto avanzado (módulos con puerta, cajas, contenedores, una antena y una
 ## terminal), no solo naturaleza. Aquí vive y trabaja la gente del lugar.
-const OUTPOST_LABELS := {"Props_Crate": "unas cajas de carga", "Props_CrateLong": "una caja de carga alargada",
+const OUTPOST_LABELS := {"Props_Crate": "una caja de carga", "Props_CrateLong": "una caja de carga alargada",
 	"Props_ContainerFull": "un contenedor lleno", "Props_Vessel": "un tanque de agua", "Props_Vessel_Tall": "un depósito alto",
 	"Props_Computer": "una computadora del puesto", "Props_Pod": "una cápsula de suministros", "Column_1": "un pilar metálico"}
 
@@ -145,20 +145,24 @@ static func _settlement(parent: Node3D, def: Dictionary, height_at: Callable, rn
 			parent.add_child(marker)
 			_extras.buildings.append(marker)
 		var front := Vector3(sin(yaw), 0, cos(yaw))
+		# Lo cuadrado se construye girado con su puerta (antes la caja quedaba recta y la puerta fuera de la pared)
+		var holder := Node3D.new()
+		holder.position = p
+		holder.rotation.y = yaw
+		parent.add_child(holder)
 		match style.shape:
 			"hut":
 				_cylinder(parent, p + Vector3(0, h / 2, 0), w * 0.4, w * 0.45, h, wall, true)
 				_cone(parent, p + Vector3(0, h + 1.0, 0), w * 0.55, 2.0, roof)
 			"house":
-				_box(parent, p + Vector3(0, h / 2, 0), Vector3(w, h, w * 0.9), wall, true)
-				_prism(parent, p + Vector3(0, h + 0.9, 0), Vector3(w + 0.6, 1.8, w * 0.9 + 0.6), roof)
+				_box(holder, Vector3(0, h / 2, 0), Vector3(w, h, w * 0.9), wall, true)
+				_prism(holder, Vector3(0, h + 0.9, 0), Vector3(w + 0.6, 1.8, w * 0.9 + 0.6), roof)
 			"factory":
-				var fb := _box(parent, p + Vector3(0, h / 2, 0), Vector3(w, h, w * 1.6), wall, true)
-				fb.rotation.y = yaw
-				_cylinder(parent, p + Vector3(w * 0.5, h + 2.5, 0), 0.5, 0.6, 5.0, roof, true)
+				_box(holder, Vector3(0, h / 2, 0), Vector3(w, h, w * 1.6), wall, true)
+				_cylinder(holder, Vector3(w * 0.5, h + 2.5, 0), 0.5, 0.6, 5.0, roof, true)
 			"tower":
-				_box(parent, p + Vector3(0, h / 2, 0), Vector3(w * 0.8, h, w * 0.8), wall, true)
-				_emissive_box(parent, p + Vector3(0, h * 0.75, 0), Vector3(w * 0.82, 0.3, w * 0.82), Color(style.roof).lightened(0.5))
+				_box(holder, Vector3(0, h / 2, 0), Vector3(w * 0.8, h, w * 0.8), wall, true)
+				_emissive_box(holder, Vector3(0, h * 0.75, 0), Vector3(w * 0.82, 0.3, w * 0.82), Color(style.roof).lightened(0.5))
 			"dome":
 				# Media cúpula sobre el suelo, con un vestíbulo de entrada (antes: una esfera
 				# medio enterrada, sin puerta: parecía un iglú)

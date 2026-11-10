@@ -45,6 +45,22 @@ const PLACEABLE_NAMES := {"boat": "Bote", "raft": "Balsa", "campfire": "Hoguera"
 	"torch": "Antorcha", "box": "Caja", "garden": "Huerto", "other": "Construcción"}
 
 
+const F_MONEY_PER_DAY := 60
+const F_STAT_PER_DAY := 30
+
+
+## Lo que queda de un tope diario (dinero o salud/energía conseguidos con F sin nadie que lo dé).
+func _daily_cap(kind: String, want: int, cap: int) -> int:
+	var day := int(WorldClock.absolute_minutes() / 1440.0)
+	var g: Dictionary = WorldDB.get_state("f_gains", {})
+	if int(g.get("day", -1)) != day:
+		g = {"day": day, "money": 0, "stat": 0}
+	var give := clampi(want, 0, maxi(0, cap - int(g.get(kind, 0))))
+	g[kind] = int(g.get(kind, 0)) + give
+	WorldDB.set_state("f_gains", g)
+	return give
+
+
 func execute(npc_id: String, actions: Array) -> Array:
 	var notes := []
 	var gifts := 0
@@ -82,6 +98,9 @@ func execute(npc_id: String, actions: Array) -> Array:
 				if not npc_id.is_empty() and a.has("target") and not NPCMemory.is_following(npc_id):
 					note = "%s se dirige a: %s." % [_name(npc_id), a.target]
 			"change_stat":
+				if npc_id.is_empty() and int(a.get("amount", 0)) > 0:  # por tu cuenta (F): no hay curas ni energía gratis sin fin
+					a = a.duplicate()
+					a["amount"] = _daily_cap("stat", int(a.amount), F_STAT_PER_DAY)
 				note = _change_stat(a)
 			"reveal_place":
 				note = _reveal_place(npc_id, a)
@@ -102,7 +121,7 @@ func execute(npc_id: String, actions: Array) -> Array:
 			"refuse_contact":
 				if not npc_id.is_empty():
 					var minutes := clampi(absi(int(a.get("amount", 5))), 1, MAX_REFUSAL_MINUTES)
-					NPCMemory.set_fields(npc_id, {"refuse_until": int(Time.get_unix_time_from_system()) + minutes * 60})
+					NPCMemory.set_fields(npc_id, {"refuse_until": WorldClock.absolute_minutes() + minutes})  # minutos de juego (dormir lo pasa)
 					note = "%s no quiere saber nada de ti por ahora." % _name(npc_id)
 			"journal":
 				if a.has("text"):
@@ -132,7 +151,10 @@ func execute(npc_id: String, actions: Array) -> Array:
 				note = _pay(npc_from(str(a.get("target", ""))) if npc_id.is_empty() else npc_id, int(a.get("price", 0)))
 			"earn":  # le pagan por un trabajo o una venta
 				Wallet.reason = str(a.get("text", "Ingreso")).left(40)
-				var got := Wallet.earn(int(a.get("price", 0)))
+				var amount := int(a.get("price", 0))
+				if npc_id.is_empty():  # «encuentro dinero» no es una fuente infinita
+					amount = _daily_cap("money", amount, F_MONEY_PER_DAY)
+				var got := Wallet.earn(amount)
 				note = ("Ganas %s." % Wallet.text(got)) if got > 0 else ""
 			"charge":  # un PNJ te cobra: se paga con el botón Pagar o diciéndolo
 				if not npc_id.is_empty():
@@ -399,7 +421,7 @@ func npc_from(text: String) -> String:
 	var plain := _plain(t.trim_prefix("npc_").replace("_", " "))
 	for e in npcs:
 		var n := _plain(str(e.get("name", "")))
-		if not n.is_empty() and (n == plain or n.split(" ")[0] == plain.split(" ")[0] or plain.contains(n.split(" ")[0])):
+		if not n.is_empty() and (n == plain or n.split(" ")[0] == plain.split(" ")[0] or (" " + plain + " ").contains(" " + n.split(" ")[0] + " ")):
 			return str(e.id)
 	return ""
 

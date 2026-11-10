@@ -96,7 +96,9 @@ func _ready() -> void:
 	var traffic := Traffic.new()
 	traffic.scene = self
 	add_child(traffic)
-	WorldClock.hour_changed.connect(func(_h): _follow_schedules(false); _shop_hours(); _update_windows())
+	WorldClock.hour_changed.connect(func(_h): _follow_schedules(false); _shop_hours(); _update_windows(); _town_events())
+	_town_events()
+	_kiosk()
 	_interiors.entered.connect(func(_k, _id): _update_windows())
 	_interiors.exited.connect(func(_k, _id): _update_windows())
 	_follow_schedules(true)
@@ -213,7 +215,9 @@ func ground_at(x: float, z: float) -> float:
 
 
 func scene_context() -> String:
-	return SCENE_CONTEXT
+	var extra := PackedStringArray([Society.describe_today(), Economy.describe(),
+		"Al sur, por la carretera (unos 400 m), está la ciudad de Puerto Alto (hospital, comisaría, escuela, banco, cine, gimnasio); hay un autobús de línea. Al oeste, el bosque, el río y una cueva en la montaña. Es %s; hace unos %d °C." % [Weather.season(), roundi(Weather.temperature())]])
+	return SCENE_CONTEXT + "\n" + "\n".join(PackedStringArray(Array(extra).filter(func(s): return not str(s).is_empty())))
 
 
 ## Si un vecino se mete "dentro" sin decir dónde, va a su casa (o, si no tiene, a su trabajo).
@@ -259,18 +263,64 @@ func _base_talked(p: Dictionary) -> int:
 	return p.talked.filter(func(id): return _schedules.has(id)).size()
 
 
+## El calendario del pueblo se ve: puestos del mercado los sábados por la mañana y farolillos y
+## música en la fiesta. Se montan y se desmontan a su hora.
+var _event_props: Node3D
+func _town_events() -> void:
+	var market := Society.is_on("market")
+	var fiesta := Society.is_on("fiesta")
+	var want := "market" if market else ("fiesta" if fiesta else "")
+	if _event_props and _event_props.get_meta("kind", "") == want:
+		return
+	if _event_props:
+		_event_props.queue_free()
+		_event_props = null
+	if want.is_empty():
+		return
+	_event_props = Node3D.new()
+	_event_props.set_meta("kind", want)
+	add_child(_event_props)
+	var plaza: Vector3 = PLACES.plaza
+	plaza.y = _ground_height(plaza.x, plaza.z)
+	if want == "market":
+		var root := Node3D.new()
+		_event_props.add_child(root)
+		root.global_position = plaza + Vector3(0, 0, -3)
+		PoiCatalog.build(root, "market", RandomNumberGenerator.new(), Color("#8a8070"))
+		Decor.landmark(_event_props, plaza, "el mercado de los sábados: puestos de fruta, verdura y pescado", "market")
+	else:
+		for i in 14:  # farolillos de colores
+			var a := i * TAU / 14.0
+			var l := PropsBuilder._sphere(_event_props, plaza + Vector3(cos(a) * 7.0, 3.6 + sin(i * 1.7) * 0.3, sin(a) * 7.0), 0.18, Color.from_hsv(i / 14.0, 0.7, 1.0), false)
+			l.material_override.emission_enabled = true
+			l.material_override.emission = Color.from_hsv(i / 14.0, 0.7, 1.0)
+			l.material_override.emission_energy_multiplier = 1.5
+		Decor.landmark(_event_props, plaza, "la fiesta del pueblo: farolillos de colores, música y gente bailando", "fiesta")
+
+
+## El quiosco de la plaza: el periódico con lo que pasa en el pueblo (y lo que hiciste tú).
+func _kiosk() -> void:
+	var at: Vector3 = PLACES.plaza + Vector3(6, 0, 4)
+	at.y = _ground_height(at.x, at.z)
+	PropsBuilder._box(self, at + Vector3(0, 1.1, 0), Vector3(1.6, 2.2, 1.2), Color("#2f6b4a"), true)
+	PropsBuilder._box(self, at + Vector3(0, 2.35, 0), Vector3(2.0, 0.15, 1.6), Color("#1f4a33"), false)
+	Interactable.create(self, at + Vector3(0, 1.0, 0.9), 1.4, "Leer el periódico", func(p): Examine.read(p, "El Eco de la Bahía", Society.newspaper()), self)
+	Decor.landmark(self, at, "el quiosco de la plaza, con el periódico del día", "kiosk")
+
+
 ## La vuelta a casa: la brecha te deja delante del faro y se juega el final.
 func _homecoming() -> void:
 	await get_tree().create_timer(0.5).timeout
-	var door: Vector3 = _interiors.door_position("faro")
-	var out := (door - LIGHTHOUSE_POS)
-	out.y = 0.0
-	out = out.normalized() if out.length() > 0.1 else Vector3.BACK
-	var spot := door + out * 5.0
-	spot.y = maxf(door.y, 0.0)
+	# En el muelle de verdad, sobre sus tablas (lo que cuenta la escena)
+	var spot := Vector3(44, 0.5, 6)
+	var space := get_world_3d().direct_space_state
+	var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(spot + Vector3(0, 6, 0), spot - Vector3(0, 6, 0)))
+	if not hit.is_empty():
+		spot.y = float(hit.position.y)
 	_player.global_position = spot + Vector3(0, 0.3, 0)
 	var finale := FinaleSequence.new()
 	finale.player = _player
+	finale.door_position = func(id: String) -> Vector3: return _interiors.door_position(id) if _interiors.doors().has(id) else Vector3.INF
 	finale.center = spot
 	finale.tower_position = LIGHTHOUSE_POS
 	finale.town_position = SPAWN
@@ -323,6 +373,7 @@ func _on_lighthouse_entered(body: Node3D) -> void:
 	_awakening.tower_position = LIGHTHOUSE_POS
 	_awakening.town_position = SPAWN
 	_awakening.npcs = _npcs
+	_awakening.door_position = func(id: String) -> Vector3: return _interiors.door_position(id) if _interiors.doors().has(id) else Vector3.INF
 	add_child(_awakening)
 	_awakening.play()
 
@@ -338,8 +389,8 @@ func _follow_schedules(teleport: bool) -> void:
 func _follow_one(id: String, teleport: bool) -> void:
 	var h := WorldClock.hour()
 	var npc: TownNPC = _npcs[id]
-	if npc_busy(id):
-		return  # se fue o se encerró: no sigue su rutina hasta que salga
+	if npc_busy(id) or npc.has_meta("scripted"):
+		return  # se fue, se encerró o actúa en una escena: no sigue su rutina
 	if _going_home.has(id):
 		if not teleport:
 			return  # sigue caminando a casa
@@ -377,7 +428,7 @@ func _follow_one(id: String, teleport: bool) -> void:
 			elif npc.activity != act[0] or not npc.is_settled():
 				npc.stop()
 				if _interiors.current_kind() == "cafe" and id != "npc_teo":  # de cliente: en una mesa
-					var seat := _interiors.activity_spot("table", 2 + _npcs.keys().find(id))
+					var seat := _interiors.free_activity_spot("table", 2 + _npcs.keys().find(id))
 					if not seat.is_empty():
 						npc.settle(seat.pos, seat.face, "sit_eat" if act[1] in ["drink", "eat"] else "sit", act[0])
 						return
@@ -390,6 +441,8 @@ func _follow_one(id: String, teleport: bool) -> void:
 				_going_home[id] = true
 				npc_go(id, door_at, func():
 					_going_home.erase(id)
+					if npc.has_meta("scripted"):
+						return  # (una escena lo llamó por el camino: ya no se va a dormir)
 					Sfx.at(self, "door", door_at + Vector3(0, 1, 0))
 					if _interiors.current_door() == door_id:  # llegas tú antes: entra y se acuesta
 						npc.global_position = _interiors.entry_position() + Vector3(0, 0.3, 0)
@@ -575,8 +628,10 @@ func _build_terrain() -> void:
 	# Hierba alta por todo el campo (no en los caminos, la arena ni la roca de la montaña)
 	world.grass_density = 0.55
 	world.grass_accept = func(x: float, z: float, h: float) -> bool:
-		return x < 20.0 and h > 0.3 and h < 9.0 and Countryside._path_dist(x, z) > Countryside.PATH_W + 0.4
+		return x < 20.0 and h > 0.3 and h < 9.0 and Countryside._path_dist(x, z) > Countryside.PATH_W + 0.4 and not Countryside.in_city(x, z)
 	world.prop_builder = func(parent: Node3D, kind: String, pos: Vector3, rng: RandomNumberGenerator) -> void:
+		if Countryside.in_city(pos.x, pos.z):
+			return  # en Puerto Alto no crecen árboles ni hierba en mitad de la calle
 		if kind in ["grass", "flower"]:  # matas de hierba alta y de flores (sin colisión)
 			var names: Array = ["Flowers", "Flowers", "Grass"] if kind == "flower" else ["Grass", "Grass_2", "Grass"]
 			var m := AssetLibrary.instance("nature_pack", str(names[rng.randi() % names.size()]))

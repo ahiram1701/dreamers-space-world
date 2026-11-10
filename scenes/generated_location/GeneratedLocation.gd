@@ -16,6 +16,7 @@ var _placed: Array = []  # posiciones ocupadas (balizas, objetos) para que la de
 var _extras := {"features": [], "buildings": [], "removed": []}  # lo que decora PropsBuilder
 var _poi_kinds := {}   # nombre del punto → tipo construido (faro, consola…)
 var _poi_stands := {}  # nombre del punto → dónde se pone quien trabaja allí
+var _galleries := {}   # puerta del faro → {spot, out}: su galería exterior
 
 
 func _ready() -> void:
@@ -49,6 +50,7 @@ func _ready() -> void:
 		_features = _extras.features
 		_add_doors()
 		_planet_finds()
+		_fauna()
 	elif _def.get("kind", "") == "anomaly_zone" or _def.get("finale", false):
 		PropsBuilder._floating_rocks(self, _rng(4), "void")
 
@@ -95,23 +97,62 @@ func _ready() -> void:
 func _quest_scene(q: Dictionary, reward: String) -> void:
 	if q.get("objective", "") == "custom" or q.get("location_id", "") != _location_id:
 		return
+	# Primero termina la conversación en la que se entregó (no una escena encima del diálogo)
+	while _dialogue and _dialogue.visible:
+		await get_tree().process_frame
+	await _interiors.wait_idle()
 	var npc: TownNPC = _npcs.get(q.giver)
 	if npc == null or not is_instance_valid(npc) or _interiors.is_inside():
 		return
 	var cut := Cutscene.new()
 	add_child(cut)
 	await cut.begin(_player)
-	npc.global_position = _player.global_position + (npc.global_position - _player.global_position).normalized() * 1.4
+	# Sale de donde estuviera (aunque estuviera dentro) y se pone delante de ti, en un sitio libre y a ras de suelo
+	NPCMemory.come_out(q.giver)
+	npc.unsettle()
+	npc.set_present(true)
+	var dir := npc.global_position - _player.global_position
+	dir.y = 0.0
+	dir = dir.normalized() if dir.length() > 0.2 else -_player.global_basis.z
+	var want := _player.global_position + dir * 1.4
+	want.y = _height_at.call(want.x, want.z)
+	npc.global_position = InteriorManager.free_spot_near(self, want, Vector3.ZERO, [npc, _player]) + Vector3(0, 0.05, 0)
+	npc.stop()
 	npc.face(_player.global_position)
+	_player.face_towards(npc.global_position)
 	var mid := (npc.global_position + _player.global_position) / 2.0 + Vector3(0, 1.5, 0)
-	var side := (npc.global_position - _player.global_position).cross(Vector3.UP).normalized()
+	var side := dir.cross(Vector3.UP).normalized()
 	await cut.shot(mid + side * 2.6 + Vector3(0, 0.2, 0), mid, 0.8)
+	# Lo que te da se ve: un paquete pasa de su mano a la tuya
+	var gift := PropsBuilder._box(self, npc.global_position + Vector3(0, 1.1, 0) - dir * 0.35, Vector3(0.22, 0.14, 0.18), Color("#b8913a"), false)
 	npc.play_gesture("give", 2.0)
 	var text := str(q.get("completion_text", "")).strip_edges()
 	if not text.is_empty():
 		await cut.say(npc, text)
+	gift.create_tween().tween_property(gift, "global_position", _player.global_position + Vector3(0, 1.0, 0) + dir * 0.35, 0.6)
+	_player.play_gesture("pick_up", 1.2)
 	await cut.line(reward)
+	gift.queue_free()
 	await cut.finish("Misión cumplida: %s" % q.title)
+
+
+## Fauna según el bioma (en planetas con vida): ciervos, conejos y zorros que pastan y huyen.
+func _fauna() -> void:
+	var biome := str(_def.get("biome", "barren"))
+	var kinds: Array = {"temperate": ["deer", "deer", "rabbit", "rabbit", "fox"], "jungle": ["deer", "rabbit", "fox"],
+		"tundra": ["fox", "rabbit"], "ocean": ["rabbit"], "desert": ["fox"]}.get(biome, [])
+	var rng := _rng(9)
+	for k in kinds:
+		var c := Vector3(rng.randf_range(-45, 45), 0, rng.randf_range(-45, 45))
+		var a := Animal.make(k, c, Vector2(10, 10), rng)
+		a.ground_at = _height_at
+		add_child(a)
+		a.global_position = Vector3(c.x, _height_at.call(c.x, c.z) + 0.5, c.z)
+
+
+func _on_climb(dir: String, door: String) -> void:
+	if dir == "up" and _galleries.has(door):
+		_interiors.leave_to(_galleries[door].spot + _galleries[door].out * 0.1 + Vector3(0, 0.2, 0), _galleries[door].out)
 
 
 ## Al llegar: un plano general del lugar con su nombre (unos segundos; clic o Esc lo salta).
@@ -389,6 +430,16 @@ func _beacon(pos: Vector3, label: String, _color: Color, poi_index: int) -> void
 		_interiors.add_door(id, dpos, root.rotation.y, str(door.kind), int(_def.get("seed", 1)) * 31 + poi_index, label.get_slice(":", 0).strip_edges())
 		_interiors.set_building(id, root.global_position, door.size, root.rotation.y)
 		_interiors.set_door_option(id, "shape", str(door.shape))
+		if built.has("gallery"):
+			# «Subir a la linterna» lleva a la galería de ESTE faro; desde ella, «Bajar» te devuelve dentro
+			var spot := root.to_global(built.gallery)
+			var out_dir := (spot - root.global_position)
+			out_dir.y = 0.0
+			_galleries[id] = {"spot": spot, "out": out_dir.normalized()}
+			Interactable.create(self, spot + Vector3(0, 0.9, 0), 1.2, "Bajar por la escalera", func(_p): _interiors.enter_at(id, "hatch"))
+			Decor.landmark(self, spot, "la galería de la linterna de %s, a 12 m de altura" % label.get_slice(":", 0).strip_edges(), "gallery")
+			if not _interiors.climb.is_connected(_on_climb):
+				_interiors.climb.connect(_on_climb)
 	# Letrero de madera a un lado, con el nombre (solo se lee de cerca)
 	var post := _cylinder_at(root, Vector3(2.4, 0.6, 2.4), 0.05, 1.2, Color("#6b4a2b"))
 	post.rotation.y = 0.0
@@ -497,6 +548,7 @@ func _spawn_npcs() -> void:
 		npc.position = offset + Vector3(0, _height_at.call(offset.x, offset.z), 0) if work.is_empty() \
 			else Vector3(offset.x, maxf(offset.y, _height_at.call(offset.x, offset.z)), offset.z)
 		npc.setup(entity)
+		npc.global_position = npc.free_settle_pos(npc.global_position)  # dos del mismo sitio, uno al lado del otro
 		npc.face(look_at)
 		if not work.is_empty():
 			npc.set_meta("workplace", work)

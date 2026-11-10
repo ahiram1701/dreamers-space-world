@@ -17,12 +17,18 @@ const SPOTS := [
 	{"id": "mirador", "name": "el mirador", "kind": "lookout", "pos": Vector2(-560, -40), "r": 10.0},
 	{"id": "cabana", "name": "la cabaña del pescador", "kind": "hut", "pos": Vector2(14, 172), "r": 9.0},
 	{"id": "cruce", "name": "el cruce de caminos", "kind": "crossing", "pos": Vector2(-200, 20), "r": 5.0},
+	{"id": "bosque", "name": "el bosque", "kind": "forest", "pos": Vector2(-430, -300), "r": 70.0},
+	{"id": "cueva", "name": "la cueva", "kind": "cave", "pos": Vector2(-610, -150), "r": 9.0},
+	{"id": "ciudad", "name": "Puerto Alto", "kind": "city", "pos": Vector2(-40, -420), "r": 130.0},
 ]
+## El río: baja de la montaña al lago (se puede pescar y nadar).
+const RIVER := [[Vector2(-680, 160), Vector2(-520, 115)], [Vector2(-520, 115), Vector2(-360, 72)]]
 ## Caminos de tierra (tramos rectos): del pueblo al cruce y de ahí a cada sitio.
 const PATHS := [
 	[Vector2(-48, -6), Vector2(-200, 20)], [Vector2(-200, 20), Vector2(-230, -70)], [Vector2(-200, 20), Vector2(-300, 52)],
 	[Vector2(-360, 50), Vector2(-560, -40)], [Vector2(-12, -70), Vector2(-150, -235)], [Vector2(-12, 70), Vector2(-125, 250)],
 	[Vector2(8, 66), Vector2(14, 172)],
+	[Vector2(-12, -70), Vector2(-30, -340)], [Vector2(-200, 20), Vector2(-400, -250)], [Vector2(-560, -40), Vector2(-605, -140)],
 ]
 const PATH_W := 1.7
 
@@ -44,15 +50,41 @@ static func prepare(base_height: Callable) -> void:
 		_centers[s.id] = float(base_height.call(s.pos.x, s.pos.y))
 
 
-## Allana el terreno donde hay algo y cava el lago.
+## ¿Está dentro de Puerto Alto? (ahí no hay hierba ni árboles: es ciudad)
+static func in_city(x: float, z: float) -> bool:
+	return Vector2(x, z).distance_to(Vector2(-40, -420)) < 100.0
+
+
+## Allana el terreno donde hay algo, cava el lago y el cauce del río.
 static func shape(x: float, z: float, h: float) -> float:
 	if _centers.is_empty():
 		return h
+	return _river(x, z, _spots_shape(x, z, h))
+
+
+## El cauce del río: por debajo del nivel del agua (el mar lo llena), con orillas suaves.
+static func _river(x: float, z: float, h: float) -> float:
+	var p := Vector2(x, z)
+	var best := INF
+	for seg in RIVER:
+		var a: Vector2 = seg[0]
+		var b: Vector2 = seg[1]
+		var ab := b - a
+		var t := clampf((p - a).dot(ab) / ab.length_squared(), 0.0, 1.0)
+		best = minf(best, p.distance_to(a + ab * t))
+	if best > 9.0:
+		return h
+	return lerpf(minf(h, -1.6), h, smoothstep(3.5, 9.0, best))
+
+
+static func _spots_shape(x: float, z: float, h: float) -> float:
 	for s in SPOTS:
 		var d := Vector2(x, z).distance_to(s.pos)
 		var r: float = s.r
 		if d > r * 1.6:
 			continue
+		if s.kind == "forest":
+			continue  # el bosque sigue el terreno (no se allana)
 		var base: float = maxf(float(_centers[s.id]), 0.6)
 		if s.kind == "lake":
 			var bed := lerpf(-2.6, base, smoothstep(r * 0.55, r, d))  # el fondo del lago, bajo el nivel del agua
@@ -151,6 +183,9 @@ func build(s: Node3D, ground: Callable, places: Dictionary) -> void:
 			"lookout": _lookout(at)
 			"hut": _hut(at, rng)
 			"crossing": _crossing(at)
+			"forest": _forest(at, rng)
+			"cave": _cave(at)
+			"city": _city.call_deferred(at)
 	# Pescar también desde la punta del muelle del pueblo
 	_fishing_spot(Vector3(38.0, 0.6, 6.0), "el muelle")
 	_town_life(ground)
@@ -187,12 +222,12 @@ func _sign(at: Vector3, text: String) -> void:
 
 
 ## Un edificio del campo con puerta de verdad (se entra con E), redondo por dentro si lo es fuera.
-func _enterable(root: Node3D, id: String, label: String) -> void:
+func _enterable(root: Node3D, id: String, label: String, kind: String = "house", shape: String = "round") -> void:
 	if scene == null or not scene.has_method("_add_door") or scene.get("_interiors") == null:
 		return
 	root.set_meta("size", AssetLibrary.bounds(root).size)
-	scene.call("_add_door", root, "house", id, label)
-	scene.get("_interiors").set_door_option(id, "shape", "round")
+	scene.call("_add_door", root, kind, id, label)
+	scene.get("_interiors").set_door_option(id, "shape", shape)
 
 
 ## Una barca que se usa (Subir con E), en el agua: si donde se pidió hay tierra, la más cercana orilla adentro.
@@ -256,19 +291,21 @@ func _fence_ring(center: Vector3, half: Vector2, ground: Callable, gap_side: int
 
 
 func _farm(at: Vector3, rng: RandomNumberGenerator, ground: Callable) -> void:
-	_model("buildings_pack_3", "1Story_GableRoof_Mat", at + Vector3(8, 0, -10), 6.0, 0.0)
+	var barn := _model("buildings_pack_3", "1Story_GableRoof_Mat", at + Vector3(8, 0, -10), 6.0, 0.0)
+	if barn:
+		_enterable.call_deferred(barn, "granero", "el granero", "barn", "box")
 	_model("kenney_cars", "tractor", at + Vector3(2, 0, -14), 2.4, 0.6)
 	_fence_ring(at + Vector3(-2, 0, 8), Vector2(10, 7), ground, 0)
 	PropsBuilder._box(self, at + Vector3(13, 0.4, 6), Vector3(2.4, 0.8, 0.8), Color("#6a4b2e"), true)  # comedero
 	Decor.landmark(self, at, "la granja: un granero, un tractor, un huerto y un corral con ovejas y vacas", "farm")
 	_sign(at + Vector3(-10, 0, -2), "Granja")
-	for i in 7:
-		var cow := i < 2
-		var a := _animal(cow, rng)
-		a.position = at + Vector3(-2 + rng.randf_range(-7, 7), 0, 8 + rng.randf_range(-5, 5))
-		a.set_meta("goal", a.position)
-		a.set_meta("pen", [at + Vector3(-2, 0, 8), Vector2(9, 6)])
-		_animals.append(a)
+	# El corral: vacas, ovejas, un cerdo, gallinas y un caballo, con cuerpo (chocan con la valla)
+	var kinds := ["cow", "cow", "sheep", "sheep", "sheep", "pig", "hen", "hen", "hen", "horse"]
+	for i in kinds.size():
+		var a := Animal.make(kinds[i], at + Vector3(-2, 0, 8), Vector2(8, 5), rng)
+		a.ground_at = _ground
+		add_child(a)
+		a.global_position = at + Vector3(-2 + rng.randf_range(-6, 6), 0.4, 8 + rng.randf_range(-4, 4))
 	_forage(at + Vector3(14, 0, -2), "Recoger moras", "Moras", "Un puñado de moras del zarzal de la granja.", "nourish", "BushBerries_1")
 
 
@@ -307,7 +344,9 @@ func _lake(at: Vector3, rng: RandomNumberGenerator, _ground: Callable) -> void:
 
 
 func _camp(at: Vector3, rng: RandomNumberGenerator) -> void:
-	_model("survival_pack", "Tent", at + Vector3(-3, 0, -2), 1.8, 0.4)
+	var tent := _model("survival_pack", "Tent", at + Vector3(-3, 0, -2), 1.8, 0.4)
+	if tent:
+		_enterable.call_deferred(tent, "tienda_campamento", "la tienda de campaña", "tent", "box")
 	_model("survival_pack", "Bonfire_Fire", at + Vector3(1, 0, 1), 0.6, 0.0, true)
 	for i in 3:
 		var a := TAU * i / 3.0 + 0.3
@@ -362,6 +401,74 @@ func _hut(at: Vector3, rng: RandomNumberGenerator) -> void:
 	rod.name = "Cana"
 	PropsBuilder._cylinder(self, at + Vector3(0.5, 1.0, 2.0), 0.02, 0.03, 2.0, Color("#6a4b2e"), false).rotation.z = 0.3
 	_forage(at + Vector3(10, 0, -4), "Recoger conchas", "Conchas", "Conchas de la playa. Bonitas; poco más.", "none", "")
+
+
+## Bosque denso con fauna (ciervos, conejos, un zorro) que huye si corres.
+func _forest(at: Vector3, rng: RandomNumberGenerator) -> void:
+	var r := 62.0
+	for i in 110:
+		var a := rng.randf() * TAU
+		var d := sqrt(rng.randf()) * r
+		var p := at + Vector3(cos(a) * d, 0, sin(a) * d)
+		if _path_dist(p.x, p.z) < PATH_W + 2.0:
+			continue
+		var tree := AssetLibrary.nature("temperate", 0, rng)
+		if tree:
+			p.y = _ground.call(p.x, p.z)
+			AssetLibrary.place(self, tree, p, rng.randf_range(5.0, 9.0), rng.randf() * TAU, true)
+	for k in ["deer", "deer", "deer", "rabbit", "rabbit", "rabbit", "fox"]:
+		var c := at + Vector3(rng.randf_range(-35, 35), 0, rng.randf_range(-35, 35))
+		var an := Animal.make(k, c, Vector2(14, 14), rng)
+		an.ground_at = _ground
+		add_child(an)
+		an.global_position = Vector3(c.x, _ground.call(c.x, c.z) + 0.5, c.z)
+	Decor.landmark(self, at, "el bosque: árboles altos y juntos, sombra, ciervos y conejos que huyen si corres", "forest")
+	_sign(at + Vector3(8, 0, 60), "Bosque")
+
+
+## La boca de una cueva en la ladera: se entra (oscura: mejor con linterna).
+func _cave(at: Vector3) -> void:
+	var rock := Color("#5a524a")
+	var mound := PropsBuilder._cylinder(self, at + Vector3(0, 3.0, -4.0), 3.0, 8.0, 6.0, rock, true)
+	mound.name = "Ladera"
+	var mouth := PropsBuilder._box(self, at + Vector3(0, 1.4, 0.05), Vector3(2.6, 2.8, 0.4), Color("#080706"), false)
+	mouth.name = "Boca"
+	for x in [-1.6, 1.6]:
+		PropsBuilder._box(self, at + Vector3(x, 1.4, 0.3), Vector3(0.7, 2.8, 0.8), rock, true)
+	if scene and scene.get("_interiors"):
+		var interiors = scene.get("_interiors")
+		interiors.add_door.call_deferred("cueva", at + Vector3(0, 0, 1.2), PI, "cave", 4411, "la cueva")
+	Decor.landmark(self, at, "la boca de una cueva en la ladera: oscura y fría; dentro se oye gotear", "cave")
+	_sign(at + Vector3(3, 0, 3), "Cueva")
+
+
+## Puerto Alto y el autobús que la une con el pueblo.
+func _city(at: Vector3) -> void:
+	var city := City.new()
+	add_child(city)
+	city.build(scene, at + Vector3(0, 0.0, 0), _ground)
+	var stop_town := Vector3(-12, 0, -78)
+	var stop_city := Vector3(-30, 0, -340)
+	var route := []
+	for i in 11:
+		var p := stop_town.lerp(stop_city, i / 10.0)
+		p.y = _ground.call(p.x, p.z)
+		route.append(p)
+	for s in [[stop_town, "Parada del pueblo"], [stop_city, "Parada de Puerto Alto"]]:
+		var sp: Vector3 = s[0] + Vector3(3.0, 0, 0)
+		sp.y = _ground.call(sp.x, sp.z)
+		PropsBuilder._box(self, sp + Vector3(0, 1.3, 0), Vector3(0.1, 2.6, 0.1), Color("#2b2b2b"), true)
+		var l := Label3D.new()
+		l.text = "BUS · %s" % s[1]
+		l.font_size = 40
+		l.pixel_size = 0.008
+		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		l.position = sp + Vector3(0, 2.8, 0)
+		add_child(l)
+		Decor.landmark(self, sp, "la %s del autobús Bahía ⇄ Puerto Alto" % str(s[1]).to_lower(), "bus_stop")
+	var bus := Bus.new()
+	add_child(bus)
+	bus.setup(route, ["el pueblo", "Puerto Alto"], _ground)
 
 
 func _crossing(at: Vector3) -> void:
@@ -519,13 +626,11 @@ func _town_life(ground: Callable) -> void:
 	var homes := [Vector3(-12, 0, -30), Vector3(-14, 0, 22), Vector3(4, 0, 40), Vector3(-30, 0, 0)]
 	for i in homes.size():
 		var dog := i % 2 == 0
-		var a := _pet(dog, rng)
 		var h: Vector3 = homes[i]
-		a.position = h + Vector3(rng.randf_range(-3, 3), 0, rng.randf_range(-3, 3))
-		a.set_meta("goal", a.position)
-		a.set_meta("pen", [h, Vector2(9, 9)])
-		_animals.append(a)
-		Decor.landmark(a, Vector3.ZERO, "un perro del barrio" if dog else "un gato callejero", "pet")
+		var a := Animal.make("dog" if dog else "cat", h, Vector2(6, 6), rng)
+		a.ground_at = ground
+		add_child(a)
+		a.global_position = h + Vector3(rng.randf_range(-3, 3), 0.4, rng.randf_range(-3, 3))
 	# Tendederos con ropa detrás de algunas casas
 	var doors: Dictionary = scene.get("_interiors").doors() if scene and scene.get("_interiors") else {}
 	var k := 0

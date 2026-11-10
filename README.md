@@ -224,6 +224,8 @@ godot --headless --path . -s tests/test_interact.gd     # leer, examinar, tomar,
 godot --headless --path . -s tests/test_fixes010.gd     # 3:33 en el faro, dormir bien, escalera de caracol, balcón, rocas sólidas, mapa y cabina
 godot --headless --path . -s tests/test_f_more.gd       # F: encender la tele, ir en coche, comprar, llamar, aprender
 godot --headless --path . -s tests/test_fixes011.gd     # textos sin cortar, hora de 12 h, encargos con hora, desconocidos, el mundo manda, choza y barcas, necesidades
+godot --headless --path . -s tests/test_fixes012.gd     # escenas fieles, sin bloqueos, PNJ sin empalmarse, edificios, animales, ciudad, economía y sociedad
+godot --headless --path . -s tests/test_cruise012.gd     # el crucero espacial frena ante planetas y lunas
 bash tests/smoke.sh                                    # arranca las escenas y busca errores de script
 ```
 

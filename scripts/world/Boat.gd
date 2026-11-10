@@ -93,6 +93,15 @@ func _add_water_mask(size: Vector3) -> void:
 	add_child(cap)
 
 
+## Velocidad actual (para la cámara: detrás y con más campo de visión al correr).
+func speed() -> float:
+	return _speed
+
+
+func camera_distance() -> float:
+	return 6.5
+
+
 func seat_position() -> Vector3:
 	return global_transform * Vector3(0, seat_height, 0)
 

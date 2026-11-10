@@ -200,6 +200,7 @@ func populate(door: String, kind: String) -> void:
 				npc.redress(false)
 				scene._npcs[id] = npc
 				_spawned[id] = npc
+				npc.set_meta("staff", kind)  # atiende: no sigue la rutina de una casa (ni cocina ni duerme aquí)
 				var spot: Vector3 = scene._interiors.npc_spot(1 if kind == "cafe" else 0)  # (en la cafetería, la barra es de Teo)
 				npc.settle(spot + Vector3(0, 0.1, 0), spot + Vector3(0, 0, 2), "", "atendiendo")
 				get_tree().create_timer(1.2).timeout.connect(func():
@@ -219,15 +220,15 @@ func place(npc: TownNPC, p: Dictionary, used: Dictionary) -> void:
 	var what: String = p.get("spot", "")
 	var i: int = used.get(what, 0)
 	used[what] = i + 1
-	var spot: Dictionary = scene._interiors.activity_spot(what, i)
+	var spot: Dictionary = scene._interiors.free_activity_spot(what, i)
 	if spot.is_empty():
-		spot = scene._interiors.activity_spot("", i)
+		spot = scene._interiors.free_activity_spot("", i)
 	if spot.is_empty():
 		return
 	var gesture: String = p.get("gesture", "")
 	if what == "bed" and scene._interiors.activity_spot("bed", i).is_empty():
 		gesture = "sit"  # más gente que camas: se queda dormido en el sofá
-		spot = scene._interiors.activity_spot("sofa", 0)
+		spot = scene._interiors.free_activity_spot("sofa", 0)
 	if spot.is_empty():
 		return
 	npc.settle(spot.pos, spot.face, gesture, str(p.get("activity", "")))
@@ -239,6 +240,16 @@ func refresh(door: String) -> void:
 	for id in _spawned.keys():
 		var npc: TownNPC = _spawned[id]
 		if not is_instance_valid(npc) or npc.talking or npc.is_following() or npc.has_meta("passerby"):
+			continue
+		if npc.has_meta("staff"):
+			var k := str(npc.get_meta("staff"))
+			var h := WorldClock.hour()
+			if not (Shops.is_open(k, h) if Shops.is_shop(k) else (h >= 9.0 and h < 20.0)):  # cierra: se va a casa
+				_spawned.erase(id)
+				npc.say("Cerramos. Hasta mañana.", 3.0)
+				scene.npc_go(id, scene._interiors.door_position(door) + Vector3(randf_range(-5, 5), 0, randf_range(6, 10)), func():
+					scene._npcs.erase(id)
+					npc.queue_free())
 			continue
 		var p := plan(WorldDB.get_entity("npc", id), WorldClock.hour())
 		if not p.home:  # se va (a trabajar, a la escuela): sale por la puerta

@@ -29,12 +29,14 @@ var start_call: Callable
 var places: Callable = func(): return {}
 var _glitch: ColorRect
 var _blocks := 0
+var _owners := {}   # quién bloquea el control (un panel, el diálogo, una escena): abrir dos veces no suma dos
 var _decay_t := 0.0
 var _damage_t := 0.0
 var _unanchoring := false
 
 
 func _ready() -> void:
+	add_to_group("gameplay_ui")
 	hud = HUD.new()
 	add_child(hud)
 	hud.player = player
@@ -52,8 +54,8 @@ func _ready() -> void:
 	Phone.message_received.connect(func(id, text):
 		Sfx.chime(self)
 		toast("%s: %s" % [WorldDB.get_entity("npc", id).get("name", "?").split(" ")[0], text], "memory"))
-	Inventory.phone_requested.connect(func(): if _blocks == 0 or inventory.is_open(): inventory.close(); phone.open())
-	Inventory.action_requested.connect(func(text): if not actions.is_busy(): inventory.close(); actions.open(text))
+	Inventory.phone_requested.connect(func(): if not _talking() and (_blocks == 0 or inventory.is_open()): inventory.close(); phone.open())
+	Inventory.action_requested.connect(func(text): if not actions.is_busy() and not _talking(): inventory.close(); actions.open(text))
 	Inventory.light_toggled.connect(func(on): if player: player.set_light(on))
 	Inventory.look_changed.connect(func(): if player: player.rebuild_look())
 	Jobs.fired.connect(func(_r): toast("Te han despedido del trabajo.", "warn"))
@@ -82,13 +84,19 @@ func _ready() -> void:
 	actions.player = player
 	add_child(actions)
 	for panel in [anchor, inventory, pause, actions, phone, stash]:
-		panel.opened.connect(block.bind(true))
-		panel.closed.connect(block.bind(false))
+		panel.opened.connect(block.bind(true, str(panel.get_script().resource_path.get_file())))
+		panel.closed.connect(block.bind(false, str(panel.get_script().resource_path.get_file())))
+	pause.opened.connect(func(): WorldClock.paused = true)   # la pausa pausa el mundo (reloj, necesidades, encargos)
+	pause.closed.connect(func(): WorldClock.paused = false)
 	inventory.message.connect(toast)
-	inventory.action_requested.connect(func(text): if not actions.is_busy(): actions.open(text))
+	inventory.action_requested.connect(func(text): if not actions.is_busy() and not _talking(): actions.open(text))
 
 	GameState.stat_changed.connect(_on_stat_changed)
 	Quests.quest_completed.connect(_on_quest_completed)
+	Economy.bill_paid.connect(func(t): toast(t, "money"))
+	Economy.bill_unpaid.connect(func(t): toast(t, "warn"))
+	Economy.evicted.connect(func(t): toast(t, "warn"))
+	Society.event_started.connect(func(_id, t): toast("Hoy: %s." % t, "info"))
 	Quests.quest_failed.connect(func(_q, text): toast(text, "warn"); refresh_tracker())
 	Quests.quest_accepted.connect(func(q): toast("Nuevo encargo de %s: %s" % [WorldDB.get_entity("npc", q.giver).get("name", "?"), q.title], "quest"); refresh_tracker())
 	# Los encargos que llegan por mensaje (o fuera de una conversación) también se avisan
@@ -103,10 +111,31 @@ func _ready() -> void:
 
 
 ## Bloquea o libera al jugador (paneles, diálogos). Admite varios bloqueos a la vez.
-func block(on: bool) -> void:
-	_blocks = maxi(_blocks + (1 if on else -1), 0)
+## Quita o devuelve el control. Con `who` (un panel, "dialogue", "cutscene"…), cada dueño cuenta
+## una sola vez: abrir dos veces o cerrar de más no desfasa nada (antes podía quedar bloqueado
+## para siempre). Sin dueño, cuenta como antes.
+func block(on: bool, who: String = "") -> void:
+	if who.is_empty():
+		_owners["_anon"] = maxi(int(_owners.get("_anon", 0)) + (1 if on else -1), 0)
+	elif on:
+		_owners[who] = 1
+	else:
+		_owners.erase(who)
+	_blocks = 0
+	for k in _owners:
+		_blocks += int(_owners[k])
 	if player:
 		player.controls_enabled = _blocks == 0
+
+
+## ¿Hay una conversación abierta (en persona o por teléfono)?
+func _talking() -> bool:
+	return _owners.has("dialogue")
+
+
+## ¿Hay una escena de cine en marcha? Mientras, no se abre ningún panel.
+func in_cutscene() -> bool:
+	return _owners.has("cutscene")
 
 
 ## Aviso en una tarjeta (ver HUD.notify): "item", "money", "quest", "memory", "warn" o "info".
@@ -137,7 +166,7 @@ func refresh_tracker() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_echo():
+	if event.is_echo() or in_cutscene():
 		return
 	if event.is_action_pressed("pause"):
 		if phone.is_open():
@@ -160,14 +189,14 @@ func _unhandled_input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 				return
 	elif event.is_action_pressed("inventory"):
-		if not pause.is_open():
+		if not pause.is_open() and (not _talking() or inventory.is_open()):
 			inventory.toggle()
 			get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("phone"):
 		if phone.is_open():
 			phone.close()
 			get_viewport().set_input_as_handled()
-		elif _blocks == 0:
+		elif _blocks == 0 and not _talking():
 			if Phone.has_phone():
 				phone.open()
 			else:

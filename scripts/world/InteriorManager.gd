@@ -227,7 +227,30 @@ func current_label() -> String:
 ## Sitio dentro del interior actual para un PNJ (el primero libre según el índice).
 func npc_spot(i: int) -> Vector3:
 	var spots: Array = _interior.get("npc_spots", [])
-	return spots[i % spots.size()] if not spots.is_empty() else Vector3.INF
+	if spots.is_empty():
+		return Vector3.INF
+	if i < spots.size():
+		return spots[i]
+	# Más gente que sitios: alrededor del sitio, sin repetirlo (antes se ponían uno encima de otro)
+	var base: Vector3 = spots[i % spots.size()]
+	var a := float(i) * 2.4
+	return base + Vector3(cos(a), 0, sin(a)) * (0.8 + 0.3 * float(i / spots.size()))
+
+
+## La i-ésima silla, cama… que esté libre (si la i-ésima está ocupada, la siguiente libre).
+func free_activity_spot(what: String, i: int) -> Dictionary:
+	for k in range(i, i + 10):
+		var s := activity_spot(what, k)
+		if s.is_empty():
+			return {}
+		var taken := false
+		for n in get_tree().get_nodes_in_group("townsfolk"):
+			if n is TownNPC and (n as TownNPC).is_settled() and (n as Node3D).global_position.distance_to(s.pos) < 0.45:
+				taken = true
+				break
+		if not taken:
+			return s
+	return {}
 
 
 ## Dónde hace algo una persona dentro del interior actual: "bed" (dormir), "sofa", "table"
@@ -485,7 +508,112 @@ func use_fixture(what: String, node: Node3D) -> void:
 		return
 	_busy = true
 	player.face_towards(node.global_position)
+	if what.begins_with("gather:"):  # recoger algo del sitio (huevos, tomates, mineral…): a tu inventario
+		var parts := what.trim_prefix("gather:").split("|")
+		player.play_gesture("pick_up" if parts[0] != "Mineral" else "hammer", 1.6)
+		await get_tree().create_timer(1.4).timeout
+		var day := int(WorldClock.absolute_minutes() / 1440.0)
+		var key := "%s|%s|%d" % [_current, parts[0], day]
+		var got: Dictionary = WorldDB.get_state("gathered", {})
+		if got.has(key):
+			message.emit("Ya no queda más por hoy.")
+		else:
+			got[key] = true
+			WorldDB.set_state("gathered", got)
+			var id := WorldDB.add_entity("item", {"name": parts[0], "kind": "consumable", "effect": parts[2] if parts.size() > 2 else "none",
+				"power": 15, "lore": parts[1] if parts.size() > 1 else parts[0], "tags": ["recogido"]}, "gather")
+			Inventory.add(id)
+			message.emit("Recoges: %s." % parts[0])
+		fixture_used.emit(what, _current)
+		_busy = false
+		return
 	match what:
+		"heal":
+			if Wallet.pay(40):
+				player.play_gesture("sit", 3.0)
+				await _fade_to(1.0)
+				WorldClock.advance(45)
+				if GameState.is_awakened():
+					GameState.change_stat("health", 50)
+				Body.change("rest", 10.0)
+				await _fade_to(0.0)
+				message.emit("Te atienden, te curan y te recetan reposo. ($40)")
+			else:
+				message.emit("La consulta cuesta $40 y no te llega.")
+		"report":
+			player.play_gesture("write", 3.0)
+			await get_tree().create_timer(2.5).timeout
+			Journal.add("Pusiste una denuncia en la comisaría de Puerto Alto.")
+			message.emit("El agente toma nota y te da una copia de la denuncia.")
+		"learn_school":
+			player.play_gesture("listen", 4.0)
+			await _fade_to(1.0)
+			WorldClock.advance(60)
+			await _fade_to(0.0)
+			var topics := ["historia de la Bahía", "primeros auxilios", "orientación con brújula", "cocina sencilla", "mecánica básica"]
+			var topic: String = topics[int(WorldClock.absolute_minutes() / 1440.0) % topics.size()]
+			PlayerProfile.learn(topic, "la escuela de Puerto Alto")
+			message.emit("Una hora de clase: aprendes %s." % topic)
+		"bank":
+			var have := Wallet.amount()
+			var note: String
+			if have >= 60:
+				note = Economy.deposit(have - 20)
+			elif Economy.savings() > 0:
+				note = Economy.withdraw(mini(Economy.savings(), 100))
+			elif Economy.loan() == 0:
+				note = Economy.take_loan(200)
+			else:
+				note = "Te quedan %s del préstamo por pagar." % Wallet.text(Economy.loan())
+			message.emit(note)
+		"movie":
+			if Wallet.pay(8):
+				await _fade_to(1.0)
+				WorldClock.advance(120)
+				Body.change("rest", 8.0)
+				await _fade_to(0.0)
+				message.emit("Dos horas de película. Sales con la cabeza en otra parte. ($8)")
+			else:
+				message.emit("La entrada cuesta $8.")
+		"workout":
+			if Wallet.pay(5):
+				player.play_gesture("push", 4.0)
+				await get_tree().create_timer(3.5).timeout
+				WorldClock.advance(45)
+				Body.change("rest", -15.0)
+				Body.change("thirst", -10.0)
+				Body.shape = clampf(Body.shape - 0.02, -1.0, 1.0)
+				message.emit("Sudas un buen rato. Cansado pero mejor. ($5)")
+			else:
+				message.emit("La entrada al gimnasio cuesta $5.")
+		"rent_flat":
+			message.emit(Economy.rent("piso_puerto_alto", "un piso en Puerto Alto", 90))
+		"cook":
+			var ingredients := Inventory.items().filter(func(i): return str(WorldDB.get_entity("item", i).get("effect", "")) == "nourish")
+			if ingredients.size() < 2:
+				message.emit("Para cocinar necesitas al menos dos ingredientes (huevos, leche, tomates, setas…).")
+			else:
+				player.play_gesture("cook", 4.0)
+				await get_tree().create_timer(3.5).timeout
+				var names := PackedStringArray()
+				for i in ingredients.slice(0, 2):
+					names.append(str(WorldDB.get_entity("item", i).name).to_lower())
+					Inventory.remove(i)
+				var dish := WorldDB.add_entity("item", {"name": "Plato casero", "kind": "consumable", "effect": "nourish", "power": 40,
+					"lore": "Hecho por ti con %s. Llena mucho más que comer las cosas crudas." % " y ".join(names), "tags": ["cocinado"]}, "cook")
+				Inventory.add(dish)
+				WorldClock.advance(30)
+				message.emit("Cocinas con %s: te sale un plato casero." % " y ".join(names))
+		"pray":
+			player.play_gesture("sit", 4.0)
+			await get_tree().create_timer(3.5).timeout
+			Body.change("rest", 5.0)
+			message.emit("Te quedas un rato en silencio. Se oye la respiración del sitio.")
+		"read_archive":
+			player.play_gesture("read", 4.0)
+			await get_tree().create_timer(3.5).timeout
+			Journal.log_event("Consultaste los registros de %s." % current_label(), "info")
+			message.emit("Pasas hojas de registros viejos: fechas, nombres, inventarios. Nada que no sepas, de momento.")
 		"eat":
 			# Abres la nevera (se ve la puerta girar y la luz de dentro), coges algo y la cierras
 			player.play_gesture("open", 0.8)

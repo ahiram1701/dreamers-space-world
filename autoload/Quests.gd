@@ -132,14 +132,15 @@ func create_custom(giver: String, title: String, description: String, reward: in
 
 ## El PNJ da por cumplido un encargo suyo: el que se parece a `title` o, si no, el más antiguo.
 func complete_custom(giver: String, title: String = "") -> Dictionary:
-	var mine := active_custom().filter(func(q): return q.giver == giver)
+	# Solo los que juzga la persona (los de entregar, ir o estar los comprueba el juego) y, si hay
+	# varios, el que nombra (antes cerraba el más antiguo aunque no fuera ese)
+	var mine := active_custom().filter(func(q): return q.giver == giver and q.get("kind", "custom") == "custom")
 	if mine.is_empty():
 		return {}
-	var pick: Dictionary = mine[0]
 	for q in mine:
 		if not title.is_empty() and _same_title(str(q.title), title):
-			pick = q
-	return _finish_custom(pick)
+			return _finish_custom(q)
+	return _finish_custom(mine[0]) if mine.size() == 1 else {}
 
 
 func _finish_custom(q: Dictionary) -> Dictionary:
@@ -183,8 +184,11 @@ func on_item_given(npc_id: String, item_name: String) -> Dictionary:
 ## Minutos absolutos de la próxima vez que el reloj marque `at_hour` (hoy si aún no ha pasado).
 static func due_from_hour(at_hour: float) -> float:
 	var now := WorldClock.absolute_minutes()
+	var tomorrow := at_hour >= 24.0  # «mañana a las 9» llega como 33
 	var due := now - fmod(now, 1440.0) + fposmod(at_hour, 24.0) * 60.0
-	if due < now - WINDOW:
+	if tomorrow:
+		due += 1440.0
+	elif due < now - WINDOW:
 		due += 1440.0
 	return due
 
@@ -269,17 +273,27 @@ func check_now() -> void:
 				_fail(q, "no estabas allí a la hora")
 		elif kind == "go_to" and at_place and (due < 0.0 or now <= due + WINDOW):
 			_finish_custom(q)
-		elif due >= 0.0 and now > due + 60.0:
-			_fail(q, "se pasó la hora")
+		elif due >= 0.0 and now > due + 60.0 and kind in ["bring_item", "go_to"]:
+			_fail(q, "se pasó la hora")  # (los «custom» los juzga quien los pidió, no el reloj)
 
 
 ## ¿Está el jugador en el sitio del encargo? (o junto a quien se lo pidió, si no dijo sitio)
 func _player_at(scene: Node, player: Node3D, q: Dictionary) -> bool:
 	var place := str(q.get("place", ""))
-	if not place.is_empty() and scene and scene.has_method("place_position"):
-		var p: Vector3 = scene.place_position(place)
-		if p != Vector3.INF:
-			return Vector2(player.global_position.x - p.x, player.global_position.z - p.z).length() < 12.0
+	if not place.is_empty() and scene:
+		# Un sitio con puerta (la farmacia, la cafetería): estar dentro cuenta, y su puerta también
+		var interiors: Node = scene.get("_interiors")
+		if interiors:
+			for id in interiors.doors():
+				if _same_title(str(interiors.doors()[id].get("label", "")), place) or _same_title(str(id), place):
+					if interiors.is_inside():
+						return interiors.current_door() == id
+					return player.global_position.distance_to(interiors.door_position(id)) < 6.0
+		if scene.has_method("place_position"):
+			var p: Vector3 = scene.place_position(place)
+			if p != Vector3.INF:
+				return Vector2(player.global_position.x - p.x, player.global_position.z - p.z).length() < 12.0
+		return false  # un sitio que no se encuentra: no se cumple solo (lo juzga quien lo pidió)
 	for n in get_tree().get_nodes_in_group("townsfolk"):
 		if n.get("npc_id") == q.giver and n.is_inside_tree():
 			return player.global_position.distance_to(n.global_position) < 6.0

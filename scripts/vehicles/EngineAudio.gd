@@ -37,6 +37,11 @@ func _ready() -> void:
 	_pb = get_stream_playback() as AudioStreamGeneratorPlayback
 
 
+## Cambio de marcha: las vueltas caen (subir) o suben (bajar) de golpe, y se oye.
+func shift(up: bool) -> void:
+	_rpm_s *= 0.72 if up else 1.25
+
+
 func _process(_delta: float) -> void:
 	if _pb == null:
 		return

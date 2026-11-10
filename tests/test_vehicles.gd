@@ -56,7 +56,7 @@ func _run() -> void:
 	Input.action_press("move_forward")
 	await create_timer(2.5).timeout
 	var v: float = car.speed()
-	_expect(v > 4.0 and v < 14.0, "acelera de forma realista (%.1f m/s en 2.5 s)" % v)
+	_expect(v > 6.0 and v < 16.0, "acelera con brío pero creíble (%.1f m/s en 2.5 s)" % v)
 	Input.action_press("move_left")
 	var yaw0: float = car.global_rotation.y
 	await create_timer(1.2).timeout

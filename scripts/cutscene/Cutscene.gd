@@ -34,6 +34,7 @@ var _waiting := false
 var _shake := 0.0
 var _base_pos := Vector3.ZERO
 var _moves: Array[Tween] = []
+var _ui: Node
 
 
 func _ready() -> void:
@@ -100,8 +101,16 @@ func _auto() -> bool:
 ## Empieza: quita el control al jugador, pone las bandas y una cámara propia donde está la suya.
 func begin(player: Node3D) -> void:
 	_player = player
-	if player and "controls_enabled" in player:
+	# Bloquea a través de la interfaz (con dueño): mientras dura no se abren celular, F ni T, y al
+	# terminar no devuelve el control si otra cosa (un diálogo) sigue abierta
+	_ui = get_tree().get_first_node_in_group("gameplay_ui")
+	if _ui:
+		_ui.block(true, "cutscene")
+	elif player and "controls_enabled" in player:
 		player.controls_enabled = false
+	# Fuera de la primera persona: en las tomas de ti, se te ve
+	if player and player.has_method("set_cinematic"):
+		player.set_cinematic(true)
 	_prev_cam = get_viewport().get_camera_3d()
 	_cam = Camera3D.new()
 	_cam.fov = 55.0
@@ -257,7 +266,12 @@ func finish(title: String = "", give_control: bool = true) -> void:
 	if _cam:
 		_cam.queue_free()
 		_cam = null
-	if give_control and _player and is_instance_valid(_player) and "controls_enabled" in _player:
-		_player.controls_enabled = true
+	if _player and is_instance_valid(_player) and _player.has_method("set_cinematic"):
+		_player.set_cinematic(false)
+	if give_control:
+		if _ui and is_instance_valid(_ui):
+			_ui.block(false, "cutscene")
+		elif _player and is_instance_valid(_player) and "controls_enabled" in _player:
+			_player.controls_enabled = true
 	if _flash.color.a > 0.0:
 		await _fade(0.0, 0.5)

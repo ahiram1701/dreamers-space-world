@@ -31,6 +31,7 @@ var frozen := false
 var _overcast := 0.0
 var _fogginess := 0.0
 var _rain_amount := 0.0
+var _lightning := 0.0
 var _rain: GPUParticles3D
 var _rain_sound: AudioStreamPlayer
 var _stars: MultiMeshInstance3D
@@ -129,9 +130,18 @@ func _update_weather(delta: float) -> void:
 		return
 	var w := Weather.current() if day_cycle else "clear"
 	var k := 1.0 - exp(-0.6 * delta)
-	_overcast = lerpf(_overcast, {"clear": 0.0, "cloudy": 0.6, "rain": 0.9, "fog": 0.55, "wind": 0.3}.get(w, 0.0), k)
-	_fogginess = lerpf(_fogginess, 1.0 if w == "fog" else (0.35 if w == "rain" else 0.0), k)
-	_rain_amount = lerpf(_rain_amount, 1.0 if w == "rain" else 0.0, k)
+	_overcast = lerpf(_overcast, {"clear": 0.0, "cloudy": 0.6, "rain": 0.9, "fog": 0.55, "wind": 0.3, "storm": 1.0}.get(w, 0.0), k)
+	_fogginess = lerpf(_fogginess, 1.0 if w == "fog" else (0.35 if w in ["rain", "storm"] else 0.0), k)
+	_rain_amount = lerpf(_rain_amount, (1.0 if w == "storm" else 1.0) if w in ["rain", "storm"] else 0.0, k)
+	# Tormenta: rayos (un destello del cielo y, poco después, el trueno)
+	if w == "storm" and randf() < delta * 0.12:
+		_lightning = 1.0
+		get_tree().create_timer(randf_range(0.6, 2.5)).timeout.connect(func():
+			if is_inside_tree():
+				Sfx.at(self, "crash", (get_viewport().get_camera_3d().global_position if get_viewport().get_camera_3d() else Vector3.ZERO) + Vector3(randf_range(-80, 80), 30, randf_range(-80, 80))))
+	if _lightning > 0.0:
+		_lightning = maxf(_lightning - delta * 4.0, 0.0)
+		env.ambient_light_energy = 1.0 + _lightning * 3.0
 	env.fog_density = fog_density * (1.0 + _fogginess * 9.0)
 	if _rain:
 		_rain.emitting = _rain_amount > 0.15
