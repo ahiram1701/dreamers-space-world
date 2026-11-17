@@ -677,7 +677,7 @@ func _check_trespass() -> void:
 	var mem := NPCMemory.get_mem(owner)
 	var rel := int(mem.relationship)
 	var h := WorldClock.hour()
-	var night := h >= 23.0 or h < 7.0
+	var night := h >= Households.BED_ADULT or h < Households.WAKE
 	npc.face(_player.global_position)
 	if _interiors.invited.has(door) and not forced:  # te abrió y te invitó: ya lo sabe
 		NPCMemory.add_event(owner, "El jugador tocó a tu puerta y le invitaste a pasar.", 0)
@@ -768,7 +768,7 @@ func _sleep_check(door: String, bed: Node3D, minutes: float) -> Dictionary:
 			return {"refuse": "Ahí está durmiendo %s." % _first_name(owner)}
 	if not NPCMemory.inside(owner).is_empty() and NPCMemory.inside(owner) != door:
 		return {}  # está fuera (en la clínica, de viaje): esta noche no viene
-	var bedtime := 22.5 + float(hash(owner) % 3) * 0.5
+	var bedtime := Households.bedtime(WorldDB.get_entity("npc", owner).merged({"id": owner}))
 	var until := fposmod(bedtime - WorldClock.hour(), 24.0) * 60.0
 	if until < minutes:
 		return {"minutes": maxf(until, 20.0), "by": owner}
@@ -781,11 +781,18 @@ func _bed_owner(door: String, bed: Node3D) -> String:
 	if residents.is_empty():
 		return ""
 	var beds: Array = _interiors.get("_interior").get("beds") if _interiors.get("_interior") else []
-	var i := 0
 	for k in beds.size():
 		if beds[k].node == bed:
-			i = k
-	return str(residents[i % residents.size()])
+			return str(residents[k]) if k < residents.size() else ""  # una cama de sobra no es de nadie
+	return ""
+
+
+## Qué cama es de esta persona en su casa: la k-ésima, en el orden de residents_of (o -1 si hay
+## más gente que camas). La misma regla para colocarla y para saber de quién es una cama.
+func bed_index_of(door: String, npc_id: String) -> int:
+	var k := residents_of(door).find(npc_id)
+	var beds: Array = _interiors.get("_interior").get("beds", []) if _interiors.get("_interior") else []
+	return k if k >= 0 and k < beds.size() else -1
 
 
 ## Dormiste en una cama ajena: si llega su dueño, te despierta (y reacciona según os llevéis); si

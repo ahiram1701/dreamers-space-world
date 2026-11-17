@@ -4,8 +4,8 @@ extends Node
 ## atienden en el umbral; un negocio cerrado está cerrado; y una puerta que nadie abre se puede
 ## forzar o colarse por una ventana, con el riesgo de que te oigan y luego todos lo sepan.
 
-const NIGHT_FROM := 23.0
-const NIGHT_TO := 7.0
+const NIGHT_FROM := Households.BED_ADULT  # el mismo horario de sueño de todo el juego
+const NIGHT_TO := Households.WAKE
 const BAN_DAYS := 3.0
 const TOOL_WORDS := ["palanca", "barreta", "hacha", "martillo", "destornillador", "desarmador"]
 

@@ -410,7 +410,7 @@ func _follow_one(id: String, teleport: bool) -> void:
 			place = slot[1]
 	var act: Array = _activities.get(id, {}).get(place, ["", ""])
 	npc.set_activity(act[0], act[1])
-	var night := h >= 23.0 or h < 7.0
+	var night := Households.is_sleeping_at(WorldDB.get_entity("npc", id).merged({"id": id}), h)
 	# Dentro de un edificio: su casa ("casa") o un sitio cubierto (la cafetería, la estación…)
 	var door_id := ""
 	if place == "casa":
@@ -422,7 +422,8 @@ func _follow_one(id: String, teleport: bool) -> void:
 		if _interiors.current_door() == door_id:  # estás dentro: está ahí, en su sitio
 			npc.set_present(true)
 			var home := door_id == home_door_of(id)
-			var spot := _interiors.activity_spot("bed", 0) if night and home else {}
+			var bed_i := bed_index_of(door_id, id)
+			var spot := _interiors.activity_spot("bed", maxi(bed_i, 0)) if night and home else {}
 			if not spot.is_empty():  # de noche, en su casa: dormido
 				npc.settle(spot.pos, spot.face, "sleep", "durmiendo")
 			elif npc.activity != act[0] or not npc.is_settled():

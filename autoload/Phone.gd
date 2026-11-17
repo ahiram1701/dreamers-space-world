@@ -8,8 +8,6 @@ signal message_received(npc_id: String, text: String)
 signal message_sent(npc_id: String, text: String)
 
 const MAX_MESSAGES := 30
-const NIGHT_FROM := 23.5
-const NIGHT_TO := 7.0
 const OWN_INITIATIVE_EVERY := 180.0   # minutos de juego entre mensajes que te mandan sin que escribas
 const PER_CONTACT_EVERY := 12 * 60.0
 
@@ -99,8 +97,8 @@ func mark_read(npc_id: String) -> void:
 # --- ¿Contesta? -----------------------------------------------------------------------------
 
 func _asleep(npc_id: String) -> bool:
-	var h := WorldClock.hour()
-	return (h >= NIGHT_FROM or h < NIGHT_TO) and not NPCMemory.is_following(npc_id)
+	# El mismo horario de sueño que en su casa (antes el teléfono tenía el suyo)
+	return Households.is_sleeping_at(WorldDB.get_entity("npc", npc_id).merged({"id": npc_id}), WorldClock.hour()) and not NPCMemory.is_following(npc_id)
 
 
 ## Motivo por el que no contesta una llamada ("" si contesta).

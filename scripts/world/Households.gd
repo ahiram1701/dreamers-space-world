@@ -95,15 +95,35 @@ static func _look(rng: RandomNumberGenerator, fem: bool, body: String) -> Dictio
 
 # --- Qué hace cada uno según la hora ------------------------------------------------------
 
+## El horario de sueño, uno solo para todo el juego (casas, teléfono, camas ajenas, allanar):
+## los adultos se acuestan a las 11 p. m. y los niños a las 9, cada uno con su media hora de
+## diferencia, y se levantan a las 7 a. m.
+const BED_ADULT := 23.0
+const BED_KID := 21.0
+const WAKE := 7.0
+
+
+## A qué hora se acuesta esta persona (con su desfase propio).
+static func bedtime(entity: Dictionary) -> float:
+	var shift := float(hash(str(entity.get("id", ""))) % 60) / 60.0 - 0.5
+	return (BED_KID if entity.get("household_role", "") == "niño" else BED_ADULT) + shift
+
+
+static func is_sleeping_at(entity: Dictionary, hour: float) -> bool:
+	var shift := float(hash(str(entity.get("id", ""))) % 60) / 60.0 - 0.5
+	var h := fposmod(hour - shift, 24.0)
+	var bed_at := BED_KID if entity.get("household_role", "") == "niño" else BED_ADULT
+	return h >= bed_at or h < WAKE
+
+
 ## { home: bool, spot: "bed"|"kitchen"|"table"|"sofa", activity: texto, gesture } para esa hora.
 ## Cada persona lleva su horario un poco desplazado (no todos se acuestan a la vez).
 static func plan(entity: Dictionary, hour: float) -> Dictionary:
 	var shift := float(hash(str(entity.get("id", ""))) % 60) / 60.0 - 0.5
 	var h := fposmod(hour - shift, 24.0)
-	var kid: bool = entity.get("household_role", "") == "niño"
 	var away: bool = entity.get("works_away", false)
-	var bed_at := 21.0 if kid else 23.0
-	if h >= bed_at or h < 7.0:
+	var kid: bool = entity.get("household_role", "") == "niño"
+	if is_sleeping_at(entity, hour):
 		return {"home": true, "spot": "bed", "activity": "durmiendo", "gesture": "sleep"}
 	if h < 8.0:
 		return {"home": true, "spot": "table", "activity": "desayunando", "gesture": "sit_eat"}
@@ -220,6 +240,10 @@ func place(npc: TownNPC, p: Dictionary, used: Dictionary) -> void:
 	var what: String = p.get("spot", "")
 	var i: int = used.get(what, 0)
 	used[what] = i + 1
+	if what == "bed":  # cada cual en SU cama: la del mismo orden que en la lista de la casa (así el juego sabe de quién es)
+		var mine: int = scene.bed_index_of(scene._interiors.current_door(), npc.npc_id)
+		if mine >= 0:
+			i = mine
 	var spot: Dictionary = scene._interiors.free_activity_spot(what, i)
 	if spot.is_empty():
 		spot = scene._interiors.free_activity_spot("", i)

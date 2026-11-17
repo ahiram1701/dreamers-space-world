@@ -121,6 +121,19 @@ func _run() -> void:
 		for b in range(a + 1, placed.size()):
 			min_d = minf(min_d, (placed[a] as Node3D).global_position.distance_to((placed[b] as Node3D).global_position))
 	_expect(min_d > 0.5, "tres personas mandadas al mismo sitio no se empalman (%.2f m)" % min_d)
+	# Cada cama es de quien la usa: la misma regla para colocar y para saber de quién es
+	var beds: Array = interiors.get("_interior").beds
+	var k: int = town.bed_index_of("faro", "npc_marina")
+	_expect(k >= 0 and town.call("_bed_owner", "faro", beds[k].node) == "npc_marina", "la cama de Marina es de Marina (y no de otro por el orden)")
+	# Un solo horario de sueño: el teléfono y la casa dicen lo mismo
+	var H = load("res://scripts/world/Households.gd")
+	var same := true
+	for hh in [21.0, 22.6, 23.4, 23.9, 2.0, 6.9, 7.6, 12.0]:
+		clock.set_hour(hh)
+		var e: Dictionary = db.get_entity("npc", "npc_teo").merged({"id": "npc_teo"})
+		same = same and root.get_node("/root/Phone")._asleep("npc_teo") == H.is_sleeping_at(e, hh)
+	_expect(same, "el teléfono sabe que duerme exactamente cuando duerme en su casa")
+	clock.set_hour(10.0)
 	await interiors.leave()
 	await interiors.wait_idle()
 

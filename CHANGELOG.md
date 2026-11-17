@@ -3,6 +3,12 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.12.1] - 2026-11-16
+
+### Corregido
+- **Camas ajenas:** el juego usaba una regla para colocar a cada persona en su cama y otra para saber de quién era, así que al dormir en una cama ajena podía venir a reclamarla quien no era. Ahora es la misma regla, y una cama de sobra no es de nadie.
+- **Un solo horario de sueño:** casas, teléfono, el dueño que llega a acostarse y las puertas por la noche siguen el mismo horario (adultos a las 11 p. m., niños a las 9, cada uno con su media hora; arriba a las 7 a. m.). Ya no contesta al teléfono alguien que en su casa está dormido.
+
 ## [0.12.0] - 2026-11-10
 
 ### Corregido
