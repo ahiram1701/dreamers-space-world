@@ -912,7 +912,9 @@ func _stabilize() -> void:
 	var fwd := global_basis.z.normalized()
 	var roll_err := global_basis.y.cross(Vector3.UP).dot(fwd)
 	var roll_rate := angular_velocity.dot(fwd)
-	apply_torque(fwd * (roll_err * mass * 2.0 - roll_rate * mass * 0.4))
+	# (más rígida que antes: con el centro de masas a la altura de los ejes, una SUV alta se
+	# inclinaba demasiado en curva; las de verdad llevan barras más gruesas por lo mismo)
+	apply_torque(fwd * (roll_err * mass * 3.2 - roll_rate * mass * 0.55))
 
 
 ## Volcado: se queda así (un coche no se da la vuelta solo). Si estás cerca, lo enderezas con E
