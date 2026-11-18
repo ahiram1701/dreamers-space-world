@@ -32,8 +32,28 @@ func _ready() -> void:
 	volume_db = -12.0
 	bus = Sfx.BUS_OUTSIDE  # dentro de un edificio se oye amortiguado
 	Sfx.ensure_buses()
+	add_to_group(Sfx.SYNTH_GROUP)
 	play()
 	_playback = get_stream_playback() as AudioStreamGeneratorPlayback
+
+
+## Al salir de la escena: se para y suelta el reproductor (si no, al cerrar el juego el hilo de
+## audio podía quedarse con él: «AudioStreamGeneratorPlayback leaked at exit»).
+func _exit_tree() -> void:
+	shutdown()
+
+
+## Calla y suelta el reproductor (al salir de la escena y al cerrar el juego: Sfx.quit_game).
+func shutdown() -> void:
+	_playback = null
+	stop()
+
+
+## Vuelve a la escena (se movió de sitio en el árbol): retoma el sonido.
+func _enter_tree() -> void:
+	if is_node_ready() and stream != null and _playback == null:
+		play()
+		_playback = get_stream_playback() as AudioStreamGeneratorPlayback
 
 
 func _process(_delta: float) -> void:

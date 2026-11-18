@@ -120,7 +120,7 @@ func download_and_install() -> void:
 	_note_installed_version()
 	OS.create_process(installed.executable, [])
 	WorldDB.flush()  # nada pendiente sin guardar antes de reiniciar
-	get_tree().quit()
+	Sfx.quit_game(get_tree())
 
 
 func _process(_delta: float) -> void:

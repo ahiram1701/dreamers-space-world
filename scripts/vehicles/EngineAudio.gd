@@ -33,8 +33,28 @@ func _ready() -> void:
 	max_distance = 70.0 if kind != "ship" else 160.0
 	volume_db = -4.0
 	attenuation_filter_cutoff_hz = 6000.0
+	add_to_group(Sfx.SYNTH_GROUP)
 	play()
 	_pb = get_stream_playback() as AudioStreamGeneratorPlayback
+
+
+## Al salir de la escena: se para y suelta el reproductor. (Si no, al cerrar el juego el hilo de
+## audio podía quedarse con él y Godot avisaba de una fuga: «AudioStreamGeneratorPlayback leaked».)
+func _exit_tree() -> void:
+	shutdown()
+
+
+## Calla y suelta el reproductor (al salir de la escena y al cerrar el juego: Sfx.quit_game).
+func shutdown() -> void:
+	_pb = null
+	stop()
+
+
+## Vuelve a la escena (se movió de sitio en el árbol): retoma el sonido.
+func _enter_tree() -> void:
+	if is_node_ready() and stream != null and _pb == null:
+		play()
+		_pb = get_stream_playback() as AudioStreamGeneratorPlayback
 
 
 ## Cambio de marcha: las vueltas caen (subir) o suben (bajar) de golpe, y se oye.

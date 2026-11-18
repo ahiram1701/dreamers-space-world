@@ -31,6 +31,8 @@ var _streams := {}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS  # también en pausa
+	# Cerrar la ventana no corta en seco: Sfx.quit_game calla el audio y luego cierra
+	get_tree().auto_accept_quit = false
 	_a = AudioStreamPlayer.new()
 	_b = AudioStreamPlayer.new()
 	for p in [_a, _b]:
@@ -45,7 +47,10 @@ func current() -> String:
 ## Al cerrar el juego: callar y soltar las pistas antes de que se desmonte todo (si no, el
 ## reproductor podía seguir mezclando audio a medio cerrar y el juego fallaba al salir).
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_EXIT_TREE or what == NOTIFICATION_PREDELETE:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		_shutdown()
+		Sfx.quit_game(get_tree())
+	elif what == NOTIFICATION_EXIT_TREE or what == NOTIFICATION_PREDELETE:
 		_shutdown()
 
 

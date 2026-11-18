@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Arranca las escenas principales sin ventana y falla si Godot imprime errores.
+# Arranca las escenas principales sin ventana y falla si Godot imprime errores o si, al cerrar,
+# algo se queda sin liberar.
 # Godot no cambia el código de salida ante errores de GDScript, así que hay que leer la salida.
 #   bash tests/smoke.sh        (requiere `godot` en el PATH, o GODOT=/ruta/al/binario)
 set -uo pipefail
@@ -22,11 +23,13 @@ status=0
 
 for scene in "${SCENES[@]}"; do
 	echo "::group::$scene"
-	log="$("$GODOT" --headless --path . "$scene" --quit-after 300 2>&1)"
+	# Se cierra como lo hace el jugador (en orden, ver tests/run_scene.gd): así se ve también si
+	# algo se queda sin liberar al salir («leaked at exit»)
+	log="$("$GODOT" --headless --path . -s tests/run_scene.gd -- "$scene" 300 2>&1)"
 	echo "$log"
 	echo "::endgroup::"
 	# Ruido conocido del renderizador "dummy" de --headless: no son errores del juego
-	errors="$(grep -E 'SCRIPT ERROR|Parse Error|ERROR:' <<<"$log" | grep -vE "$IGNORE" || true)"
+	errors="$(grep -E 'SCRIPT ERROR|Parse Error|ERROR:|leaked at exit' <<<"$log" | grep -vE "$IGNORE" || true)"
 	if [[ -n "$errors" ]]; then
 		echo "$errors" | sort | uniq -c
 		echo "::error::Errores al ejecutar $scene"

@@ -157,6 +157,30 @@ static func _ground_wet() -> float:
 	return EnvironmentFX.ground_wetness
 
 
+# --- Cerrar el juego sin dejar sonido a medias -----------------------------------------------
+
+## Los sonidos que se generan en tiempo real (motores, viento, olas) están en este grupo.
+const SYNTH_GROUP := "synth_audio"
+static var _quitting := false
+
+
+## Cierra el juego en orden: calla los sonidos que se generan en tiempo real y la música, deja
+## que el servidor de audio los suelte (unos fotogramas) y entonces cierra. Si se cierra con un
+## motor sonando, el hilo de audio podía quedarse a medio mezclarlo y Godot avisaba al salir de
+## una fuga («AudioStreamGeneratorPlayback leaked at exit»).
+static func quit_game(tree: SceneTree, exit_code: int = 0) -> void:
+	if _quitting:
+		return
+	_quitting = true
+	tree.call_group(SYNTH_GROUP, "shutdown")
+	var music := tree.root.get_node_or_null("Music")
+	if music and music.has_method("_shutdown"):
+		music.call("_shutdown")
+	for i in 4:
+		await tree.process_frame
+	tree.quit(exit_code)
+
+
 # --- Buses de audio: el eco de las habitaciones y lo que se oye de fuera desde dentro -------
 
 const BUS_WORLD := "Mundo"
