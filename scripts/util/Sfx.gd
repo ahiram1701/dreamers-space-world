@@ -176,7 +176,10 @@ static func quit_game(tree: SceneTree, exit_code: int = 0) -> void:
 	var music := tree.root.get_node_or_null("Music")
 	if music and music.has_method("_shutdown"):
 		music.call("_shutdown")
-	for i in 4:
+	# Tiempo real, no fotogramas: sin ventana ni vsync, unos fotogramas pasan en microsegundos y el
+	# hilo de audio (que mezcla cada ~20 ms) aún no los ha soltado. 0.3 s no se nota al cerrar.
+	await tree.create_timer(0.3, true, false, true).timeout
+	for i in 2:
 		await tree.process_frame
 	tree.quit(exit_code)
 
