@@ -5,6 +5,9 @@ extends Node3D
 ## solo. No circula de 23:00 a 6:00.
 
 const SPEED := 12.0
+const ACCEL := 1.3   # m/s² (un autobús lleno no sale disparado)
+const BRAKE := 2.5
+var _v := 0.0
 const WAIT := 25.0          # segundos parado en cada parada
 const FARE := 2
 
@@ -108,6 +111,7 @@ func _physics_process(delta: float) -> void:
 		var last := _i == route.size() - 1 if _dir > 0 else _i == 0
 		if last:
 			_wait = WAIT
+			_v = 0.0
 			if _passenger:
 				_get_off()
 			_dir = -_dir
@@ -123,8 +127,14 @@ func _physics_process(delta: float) -> void:
 		dp.y = 0.0
 		if dp.length() < 8.0 and dp.normalized().dot(dir) > 0.8:
 			blocked = true
-	if not blocked:
-		global_position += dir * minf(SPEED * delta, to.length())
+	# Acelera y frena como un autobús (no arranca ni se para en seco): frena con tiempo ante
+	# alguien delante y al llegar a la última parada
+	var want := 0.0 if blocked else SPEED
+	var last_leg := (_i == route.size() - 1) if _dir > 0 else (_i == 0)
+	if last_leg:
+		want = minf(want, sqrt(2.0 * BRAKE * maxf(to.length() - 0.8, 0.0)) + 0.4)
+	_v = move_toward(_v, want, (ACCEL if want > _v else BRAKE) * delta)
+	global_position += dir * minf(_v * delta, to.length())
 	if ground.is_valid():
 		global_position.y = float(ground.call(global_position.x, global_position.z)) + 0.05
 	rotation.y = lerp_angle(rotation.y, atan2(dir.x, dir.z), minf(1.0, 3.0 * delta))

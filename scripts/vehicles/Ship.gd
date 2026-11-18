@@ -374,7 +374,8 @@ func _aim_yaw() -> float:
 
 func _fly_air(c: Dictionary, delta: float, has_fuel: bool, active: bool) -> void:
 	var gscale := float(scene.get("_player").gravity_scale) if scene and scene.get("_player") else 1.0
-	var acc := 6.0 + power * 2.0
+	# Aceleración horizontal moderada: una nave de varias toneladas no arranca ni se para en seco
+	var acc := 4.0 + power * 1.5
 	var top := (12.0 + power * 6.0) * (1.8 if c.boost else 1.0)
 	var grounded := is_on_floor()
 	# Gira hacia donde apuntas con el ratón (en el aire, o en tierra si empujas)
@@ -383,7 +384,9 @@ func _fly_air(c: Dictionary, delta: float, has_fuel: bool, active: bool) -> void
 	var want := (global_basis.z * float(c.thrust) + global_basis.x * -float(c.side) * 0.6) * top
 	if not has_fuel or not active:
 		want = Vector3.ZERO
-	var horiz := Vector3(velocity.x, 0, velocity.z).move_toward(Vector3(want.x, 0, want.z), acc * delta * (0.25 if grounded and not active else 1.0))
+	# Soltando los mandos sigue de largo un rato (solo la frena el aire: a la mitad)
+	var coasting := Vector2(want.x, want.z).length() < 0.01
+	var horiz := Vector3(velocity.x, 0, velocity.z).move_toward(Vector3(want.x, 0, want.z), acc * delta * (0.25 if grounded and not active else (0.5 if coasting else 1.0)))
 	var vy := velocity.y
 	if active and has_fuel:
 		# Los motores compensan la gravedad (se queda flotando si no tocas nada)
@@ -430,6 +433,11 @@ func _fly_space(c: Dictionary, delta: float, has_fuel: bool) -> void:
 			if vspd > safe:
 				velocity = velocity.limit_length(maxf(vspd - CRUISE / 3.0 * 1.6 * delta, safe))
 	var top := CRUISE if boost else normal_top
+	# Gravedad de los planetas y lunas cercanos: sin motor (o sin asistencia) la nave cae hacia
+	# ellos, o los rodea si va de lado lo bastante rápido. Los propulsores la vencen al empujar.
+	var gravity: Vector3 = scene.call("gravity_at", global_position) if scene and scene.has_method("gravity_at") else Vector3.ZERO
+	if not autopilot:
+		velocity += gravity * delta
 	# El ratón cabecea y gira; A/D alabean. Todo suavizado (una nave tiene inercia al girar)
 	var s := steer
 	steer = Vector2.ZERO
@@ -496,9 +504,12 @@ func _fly_space(c: Dictionary, delta: float, has_fuel: bool) -> void:
 		velocity = velocity.move_toward(want, rate * delta)
 		if spd > top * 1.05:  # vienes de crucero: los amortiguadores bajan el exceso en ~2 s
 			velocity = velocity.limit_length(maxf(spd - maxf(spd - top, 200.0) * 0.5 * delta * 2.0, top))
-	elif assist:
+	elif assist and has_fuel:
+		# La asistencia mantiene la nave quieta: frena la inercia y compensa la gravedad con los
+		# propulsores (gasta combustible)
 		var bleed := acc * 0.35 if spd <= normal_top * 1.05 else maxf((spd - normal_top) * 1.2, acc)
-		velocity = velocity.move_toward(Vector3.ZERO if spd <= normal_top * 1.05 else velocity.normalized() * normal_top, bleed * delta)
+		velocity = velocity.move_toward(Vector3.ZERO if spd <= normal_top * 1.05 else velocity.normalized() * normal_top, (bleed + gravity.length()) * delta)
+		fuel = maxf(fuel - gravity.length() / maxf(acc, 1.0) * delta * 0.0009, 0.0)
 	elif spd > normal_top * 1.05:
 		# Sin asistencia, al soltar Shift la nave vuelve a su velocidad normal (antes seguía a 1.5 km/s)
 		velocity = velocity.move_toward(velocity.normalized() * normal_top, maxf((spd - normal_top) * 1.2, acc) * delta)

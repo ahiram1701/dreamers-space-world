@@ -503,6 +503,31 @@ func toast(text: String, seconds: float = 4.0) -> void:
 	_toast_t = maxf(seconds, Settings.read_time(text))
 
 
+## Gravedad (m/s²) en un punto del espacio: la de cada planeta y luna, g·R²/d², a partir de su
+## gravedad en la superficie. Se desvanece lejos (más de 8 radios: el sistema está comprimido y,
+## si no, todo tiraría de todo). La estación no atrae (su gravedad es de rotación) y el sol
+## tampoco se cuenta (a esta escala haría imposible volar).
+func gravity_at(pos: Vector3) -> Vector3:
+	var g := Vector3.ZERO
+	for p in system.planets:
+		if str(p.kind) == "station":
+			continue
+		g += _pull(pos, StarSystem.position_of(p), float(p.radius), float(p.get("gravity", 1.0)))
+	for m in _moons:
+		if is_instance_valid(m.node):
+			g += _pull(pos, (m.node as Node3D).global_position, float(m.r), 0.17)
+	return g
+
+
+static func _pull(pos: Vector3, center: Vector3, radius: float, surface_g: float) -> Vector3:
+	var to := center - pos
+	var d := to.length()
+	if d < radius * 0.9 or d > radius * 8.0:
+		return Vector3.ZERO
+	var fade := 1.0 - smoothstep(radius * 6.0, radius * 8.0, d)
+	return to / d * surface_g * 9.8 * radius * radius / (d * d) * fade
+
+
 ## Lo que la IA sabe al pulsar F en el espacio.
 func space_context() -> String:
 	var lines := PackedStringArray()

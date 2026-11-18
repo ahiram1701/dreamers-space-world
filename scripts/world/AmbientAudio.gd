@@ -10,7 +10,9 @@ const MIX_RATE := 22050.0
 var kind: Kind = Kind.WIND
 var _playback: AudioStreamGeneratorPlayback
 var _brown := 0.0
+var _brown2 := 0.0
 var _t := 0.0
+var _wind := 0.0   # m/s (Weather): el viento se oye más o menos
 
 
 static func for_location(def: Dictionary) -> AmbientAudio:
@@ -28,6 +30,8 @@ func _ready() -> void:
 	gen.buffer_length = 0.25
 	stream = gen
 	volume_db = -12.0
+	bus = Sfx.BUS_OUTSIDE  # dentro de un edificio se oye amortiguado
+	Sfx.ensure_buses()
 	play()
 	_playback = get_stream_playback() as AudioStreamGeneratorPlayback
 
@@ -35,15 +39,22 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if _playback == null:
 		return
+	_wind = lerpf(_wind, Weather.wind_speed() if kind != Kind.HUM else 0.0, 0.02)
+	var gusty := clampf(_wind / 14.0, 0.0, 1.0)
 	for i in _playback.get_frames_available():
 		_t += 1.0 / MIX_RATE
 		_brown = clampf(_brown + randf_range(-1.0, 1.0) * 0.02, -1.0, 1.0) * 0.998
+		# Viento: un soplido más agudo que sube y baja con las rachas
+		_brown2 = clampf(_brown2 + randf_range(-1.0, 1.0) * 0.06, -1.0, 1.0) * 0.99
+		var gust := 0.5 + 0.5 * sin(_t * 0.37) * sin(_t * 0.11 + 1.7)
 		var s := 0.0
 		match kind:
 			Kind.WIND:
-				s = _brown * (0.45 + 0.4 * sin(_t * 0.31) * sin(_t * 0.13))
+				s = _brown * (0.25 + 0.6 * gusty) * (0.55 + 0.45 * gust) + _brown2 * gusty * gust * 0.35
 			Kind.WAVES:
-				s = _brown * (0.25 + 0.75 * pow(maxf(sin(_t * 0.55), 0.0), 2.0))
+				# Con viento, el mar rompe más fuerte y además se oye el soplido
+				s = _brown * (0.25 + 0.75 * pow(maxf(sin(_t * 0.55), 0.0), 2.0)) * (0.8 + gusty * 0.6)
+				s += _brown2 * gusty * gust * 0.28
 			Kind.HUM:
 				s = sin(TAU * 55.0 * _t) * 0.18 + sin(TAU * 110.0 * _t) * 0.06 + _brown * 0.25
 		_playback.push_frame(Vector2(s, s))

@@ -4,8 +4,6 @@ extends Node
 ## atienden en el umbral; un negocio cerrado está cerrado; y una puerta que nadie abre se puede
 ## forzar o colarse por una ventana, con el riesgo de que te oigan y luego todos lo sepan.
 
-const NIGHT_FROM := Households.BED_ADULT  # el mismo horario de sueño de todo el juego
-const NIGHT_TO := Households.WAKE
 const BAN_DAYS := 3.0
 const TOOL_WORDS := ["palanca", "barreta", "hacha", "martillo", "destornillador", "desarmador"]
 
@@ -35,8 +33,9 @@ func may_enter(id: String) -> bool:
 	return scene.owner_of_door(id).is_empty() or Jobs.has_job() and Jobs.job().get("place", "") == id
 
 
+## De noche (el mismo horario de sueño de todo el juego, con su fin de semana).
 static func is_night(h: float) -> bool:
-	return h >= NIGHT_FROM or h < NIGHT_TO
+	return Households.is_quiet_hours(h)
 
 
 ## Quién vive tras esa puerta y está en casa: [{id, awake, named}].

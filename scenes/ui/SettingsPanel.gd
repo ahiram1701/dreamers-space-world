@@ -18,6 +18,7 @@ var _quality: OptionButton
 var _day: OptionButton
 var _fov: HSlider
 var _invert: CheckBox
+var _bob: CheckBox
 var _status: Label
 var _text_speed: HSlider
 var _ui_size: OptionButton
@@ -83,6 +84,7 @@ func _ready() -> void:
 
 	_sens = _slider(controls, "Sensibilidad del ratón y del stick", 0.3, 3.0, Settings.mouse_sensitivity)
 	_invert = _check(controls, "Invertir el eje vertical de la cámara", Settings.invert_y)
+	_bob = _check(controls, "Balanceo de la cabeza al andar (primera persona)", Settings.head_bob)
 	var hint := Label.new()
 	hint.text = "La lista completa de controles (teclado y mando) está en la pausa → Controles."
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -160,6 +162,7 @@ func _save() -> void:
 	Settings.show_fps = _show_fps.button_pressed
 	Settings.text_scale = _text_scale.value
 	Settings.invert_y = _invert.button_pressed
+	Settings.head_bob = _bob.button_pressed
 	Settings.save_settings()
 	_status.text = "Guardado."
 	_close()

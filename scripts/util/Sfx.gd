@@ -13,6 +13,7 @@ const NOISES := {
 	"step_stone": [0.06, 60.0, 0.55, 0.0, -18.0],
 	"step_sand": [0.11, 30.0, 0.15, 0.0, -21.0],
 	"step_water": [0.22, 14.0, 0.45, 0.0, -15.0],
+	"breath": [0.5, 5.0, 0.22, 0.0, -26.0],       # jadeo tras correr
 	"knock": [0.07, 50.0, 0.3, 110.0, -6.0],
 	"door": [0.35, 9.0, 0.2, 70.0, -12.0],
 	"hit": [0.12, 30.0, 0.4, 90.0, -6.0],
@@ -76,17 +77,19 @@ static func horn(parent: Node3D) -> void:
 
 
 ## Sonido del mundo en una posición (pasos, golpes, hacha…). `kind`: una clave de NOISES.
-static func at(parent: Node, kind: String, pos: Vector3, pitch_jitter: float = 0.12) -> void:
+static func at(parent: Node, kind: String, pos: Vector3, pitch_jitter: float = 0.12, gain_db: float = 0.0, pitch: float = 1.0) -> void:
 	if not NOISES.has(kind) or not parent.is_inside_tree():
 		return
 	if not _cache.has(kind):
 		_cache[kind] = _noise(NOISES[kind])
+	ensure_buses()
 	var p := AudioStreamPlayer3D.new()
 	p.stream = _cache[kind]
-	p.volume_db = NOISES[kind][4] + 6.0
+	p.bus = BUS_WORLD
+	p.volume_db = NOISES[kind][4] + 6.0 + gain_db
 	p.unit_size = 4.0
 	p.max_distance = 40.0
-	p.pitch_scale = 1.0 + randf_range(-pitch_jitter, pitch_jitter)
+	p.pitch_scale = pitch * (1.0 + randf_range(-pitch_jitter, pitch_jitter))
 	parent.add_child(p)
 	p.global_position = pos
 	p.finished.connect(p.queue_free)
@@ -102,17 +105,104 @@ static func footstep(body: CharacterBody3D, water_level: float = -INF) -> void:
 	else:
 		var hit := body.get_last_slide_collision()
 		var collider: Object = hit.get_collider() if hit else null
-		if collider is CollisionObject3D:
-			var shape: Shape3D = null
-			for c in collider.get_children():
-				if c is CollisionShape3D:
-					shape = c.shape
-					break
-			if shape is ConcavePolygonShape3D or shape is HeightMapShape3D:
-				kind = "step_sand" if water_level > -INF and pos.y < water_level + 1.0 else "step_grass"
-			else:
-				kind = "step_wood"  # suelos de interiores, muelle, tablas
-	at(body, kind, pos + Vector3(0, 0.05, 0), 0.18)
+		kind = surface_sound(body, collider, pos, water_level)
+	# Corriendo, el pie golpea más fuerte y más seco; con el suelo mojado, chapotea un poco
+	var speed := Vector2(body.velocity.x, body.velocity.z).length()
+	var gain := clampf((speed - 1.6) * 1.5, 0.0, 5.0)
+	at(body, kind, pos + Vector3(0, 0.05, 0), 0.18, gain, 1.0 + clampf((speed - 2.0) * 0.03, 0.0, 0.1))
+	if kind != "step_water" and not InteriorManager.is_interior_pos(pos) and _ground_wet() > 0.5 and randf() < 0.6:
+		at(body, "step_water", pos + Vector3(0, 0.02, 0), 0.2, -9.0 + gain)
+
+
+## Qué suena al pisar eso: la escena dice qué hay en el terreno (carretera, arena, roca…); en
+## lo construido, la madera suena a madera (muelle, tablas, suelos de casa) y lo demás a piedra.
+static func surface_sound(body: Node, collider: Object, pos: Vector3, water_level: float = -INF) -> String:
+	if collider is Node and (collider as Node).has_meta("surface"):
+		return "step_" + str((collider as Node).get_meta("surface"))
+	if not (collider is CollisionObject3D):
+		return "step_grass"
+	var shape: Shape3D = null
+	for c in (collider as Node).get_children():
+		if c is CollisionShape3D:
+			shape = c.shape
+			break
+	if shape is ConcavePolygonShape3D or shape is HeightMapShape3D:
+		var scene: Node = body.get_tree().current_scene if body.is_inside_tree() else null
+		if scene and scene.has_method("surface_at"):
+			var s: String = scene.call("surface_at", pos.x, pos.z)
+			if not s.is_empty():
+				return "step_" + s
+		return "step_sand" if water_level > -INF and pos.y < water_level + 1.0 else "step_grass"
+	if InteriorManager.is_interior_pos(pos):
+		return "step_wood"  # suelos de interiores
+	var c := _surface_color(collider as Node)
+	if c.a > 0.0 and c.s > 0.25 and c.h > 0.03 and c.h < 0.14 and c.v < 0.75:
+		return "step_wood"  # marrón: tablas del muelle, porches, pasarelas
+	return "step_stone"  # aceras, calles de la ciudad, escalones, roca
+
+
+## El color de lo que se pisa (la malla de la que cuelga el colisionador), o transparente.
+static func _surface_color(collider: Node) -> Color:
+	var n := collider.get_parent()
+	if n is MeshInstance3D:
+		var m: Material = (n as MeshInstance3D).material_override
+		if m == null and (n as MeshInstance3D).mesh and (n as MeshInstance3D).mesh.get_surface_count() > 0:
+			m = (n as MeshInstance3D).get_active_material(0)
+		if m is StandardMaterial3D:
+			return (m as StandardMaterial3D).albedo_color
+	return Color(0, 0, 0, 0)
+
+
+static func _ground_wet() -> float:
+	return EnvironmentFX.ground_wetness
+
+
+# --- Buses de audio: el eco de las habitaciones y lo que se oye de fuera desde dentro -------
+
+const BUS_WORLD := "Mundo"
+const BUS_OUTSIDE := "Fuera"
+
+
+## Crea (una vez) los buses: «Mundo» (pasos, golpes, voces del sitio) con reverberación de
+## habitación que se enciende dentro de los edificios, y «Fuera» (lluvia, olas, viento) con un
+## filtro que lo apaga y lo vuelve sordo cuando estás dentro.
+static func ensure_buses() -> void:
+	if AudioServer.get_bus_index(BUS_WORLD) == -1:
+		var i := AudioServer.bus_count
+		AudioServer.add_bus(i)
+		AudioServer.set_bus_name(i, BUS_WORLD)
+		AudioServer.set_bus_send(i, "Master")
+		var rv := AudioEffectReverb.new()
+		rv.room_size = 0.32
+		rv.damping = 0.65
+		rv.spread = 0.6
+		rv.predelay_msec = 18.0
+		rv.dry = 1.0
+		rv.wet = 0.16
+		AudioServer.add_bus_effect(i, rv)
+		AudioServer.set_bus_effect_enabled(i, 0, false)
+	if AudioServer.get_bus_index(BUS_OUTSIDE) == -1:
+		var j := AudioServer.bus_count
+		AudioServer.add_bus(j)
+		AudioServer.set_bus_name(j, BUS_OUTSIDE)
+		AudioServer.set_bus_send(j, "Master")
+		var lp := AudioEffectLowPassFilter.new()
+		lp.cutoff_hz = 700.0
+		AudioServer.add_bus_effect(j, lp)
+		AudioServer.set_bus_effect_enabled(j, 0, false)
+
+
+## Dentro de un edificio: eco de habitación y lo de fuera, amortiguado.
+static func set_indoors(on: bool) -> void:
+	ensure_buses()
+	AudioServer.set_bus_effect_enabled(AudioServer.get_bus_index(BUS_WORLD), 0, on)
+	AudioServer.set_bus_effect_enabled(AudioServer.get_bus_index(BUS_OUTSIDE), 0, on)
+	AudioServer.set_bus_volume_db(AudioServer.get_bus_index(BUS_OUTSIDE), -8.0 if on else 0.0)
+
+
+static func is_indoors() -> bool:
+	var i := AudioServer.get_bus_index(BUS_WORLD)
+	return i != -1 and AudioServer.is_bus_effect_enabled(i, 0)
 
 
 static func _play(parent: Node, key: String, stream: AudioStream = null, volume: float = -8.0, delay: float = 0.0) -> void:

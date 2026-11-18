@@ -32,7 +32,14 @@ const KIT := {
 const BODY_SCALE := Vector3(1.3, 1.35, 1.65)
 const BIG_SCALE := Vector3(1.45, 1.55, 2.0)
 const GEARS := [0.24, 0.43, 0.62, 0.81, 1.0]          # velocidad máxima de cada marcha (fracción)
-const GEAR_TORQUE := [1.35, 1.2, 1.05, 0.9, 0.75]
+## Motor: ralentí, par máximo y corte. Las vueltas salen de la velocidad de las ruedas y la marcha
+## (no al revés), y la fuerza sigue la curva de par: poca al ralentí, máxima a medio régimen y
+## cayendo hacia el corte. Las marchas cortas multiplican la fuerza (como su desmultiplicación).
+const IDLE_RPM := 850.0
+const PEAK_RPM := 4000.0
+const REDLINE := 6500.0
+## Solo llevan turbo (Shift) los que lo tienen de verdad; en un sedán Shift no hace nada.
+const TURBO := ["sports", "race", "police"]
 const BOOST_TIME := 3.0       # segundos de turbo (Shift) …
 const BOOST_RECHARGE := 8.0   # … que se recargan en este tiempo
 const SHIFT_CUT := 0.18       # corte de gas al cambiar de marcha (se oye y se nota)
@@ -63,6 +70,9 @@ var boosting := false
 var _shift_t := 0.0
 var rpm := 900.0
 var length := 4.0
+## Daño por zonas (0..100): el frontal resta potencia (el motor), un lateral tuerce la dirección
+## y, fuerte, revienta la rueda de ese lado. Se guarda con el vehículo y se arregla en el taller.
+var damage := {"front": 0.0, "rear": 0.0, "left": 0.0, "right": 0.0}
 
 var _rider: Player
 var _use: Interactable
@@ -83,6 +93,7 @@ var _lamps: Array = []          # materiales de los faros y pilotos (piezas que 
 var _beams: Array = []          # luces de los faros (de noche, conduciendo)
 var _lights_t := 0.0
 var _lights_on := true
+var _flipped := false
 
 
 ## Construye un vehículo a partir de una creación (Creations). Lo usa Creations.build.
@@ -124,6 +135,10 @@ static func build(s: Node, e: Dictionary) -> Node3D:
 	v.max_speed = 10.0 if v.pedals and not "engine" in types else 14.0 + v.power * 4.6
 	v.fuel = clampf(float(e.get("fuel", 1.0)), 0.0, 1.0)
 	v.health = clampf(float(e.get("health", 100.0)), 0.0, 100.0)
+	var dmg: Variant = e.get("damage", {})
+	if dmg is Dictionary:
+		for k in v.damage:
+			v.damage[k] = clampf(float(dmg.get(k, 0.0)), 0.0, 100.0)
 	s.add_child(v)
 	var start := Vector3(e.pos[0], e.pos[1], e.pos[2])
 	if s.has_method("ground_at") and not InteriorManager.is_interior_pos(start):
@@ -209,7 +224,9 @@ func _build_kit(model_path: String, kit: Dictionary, user_scale: float) -> bool:
 	_box(Vector3((hi.x - lo.x) * 0.84, hi.y - belt, (hi.z - lo.z) * (0.85 if big else 0.6)), Vector3((hi.x + lo.x) / 2.0, (hi.y + belt) / 2.0, (hi.z + lo.z) / 2.0 - (hi.z - lo.z) * 0.05))
 	mass = float(kit.get("mass", 1400.0))
 	center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
-	center_of_mass = Vector3(0, -0.1, (hi.z + lo.z) / 2.0)  # bajo los ejes: no vuelca en las curvas
+	# Centro de masas a la altura de los ejes (antes, por debajo del suelo: el coche no se inclinaba
+	# nunca). La barra estabilizadora (_stabilize) y el límite de giro evitan que vuelque en curva.
+	center_of_mass = Vector3(0, 0.2, (hi.z + lo.z) / 2.0)
 	angular_damp = 0.9   # sin trompos ni bamboleos de más
 	# Asientos: conductor a la izquierda (+x mirando hacia delante), copiloto y dos detrás
 	var sx := (hi.x - lo.x) * 0.2
@@ -400,6 +417,8 @@ static func _build_boat(s: Node, e: Dictionary) -> Node3D:
 
 
 func _prompt() -> String:
+	if _flipped:
+		return "Enderezar %s (está volcado)" % the_name()
 	if health <= 0.0:
 		return "%s está averiado (no arranca)" % the_name().capitalize()
 	if owner_id.is_empty() or owner_id == "player":
@@ -467,6 +486,16 @@ func passengers() -> Array:
 
 
 func _on_use(player: Player) -> void:
+	if _rider == null and _flipped:
+		# Volcado: empujas hasta darle la vuelta (cuesta un momento y deja sin aliento)
+		player.face_towards(global_position)
+		player.play_gesture("push", 1.6)
+		Body.spend_breath(30.0)
+		Sfx.at(self, "thump", global_position + Vector3(0, 0.6, 0))
+		await get_tree().create_timer(1.4).timeout
+		if is_instance_valid(self) and _flipped:
+			set_upright()
+		return
 	if _rider == null:
 		if health <= 0.0:
 			if scene and scene.get("_ui"):
@@ -560,8 +589,8 @@ func _physics_process(delta: float) -> void:
 	_lights_t -= delta
 	if _lights_t <= 0.0:
 		_lights_t = 1.0
-		var h := WorldClock.hour()
-		_set_lights(_rider != null and health > 0.0 and (h >= 19.5 or h < 7.0 or Weather.current() in ["rain", "storm", "fog"]))
+		# Faros cuando el sol está bajo (según la estación, no a una hora fija) o con mal tiempo
+		_set_lights(_rider != null and health > 0.0 and (WorldClock.sun_height() < 0.08 or Weather.current() in ["rain", "storm", "fog"]))
 	# Si el suelo de delante aún no tiene colisión (terreno por trozos), espera quieto en vez de caer
 	_ground_t -= delta
 	if _ground_t <= 0.0:
@@ -589,29 +618,41 @@ func _physics_process(delta: float) -> void:
 	var throttle := input.y
 	var has_fuel := (fuel > 0.0 or not uses_fuel) and health > 0.0
 	var handbrake := _rider.controls_enabled and Input.is_action_pressed("jump")
-	# Marchas automáticas: cada una empuja menos pero llega más lejos
+	# Marchas automáticas: con poco gas cambia pronto (pocas vueltas, como un conductor normal); a
+	# fondo estira cada marcha hasta cerca del corte y, si pisas a fondo, reduce (kick-down)
 	var av := absf(v)
 	var old_gear := gear
-	if gear < GEARS.size() and av > max_speed * float(GEARS[gear - 1]) * 0.97:
+	var up_at := lerpf(0.5, 0.95, clampf(throttle, 0.0, 1.0))
+	if gear < GEARS.size() and av > max_speed * float(GEARS[gear - 1]) * up_at:
 		gear += 1
-	elif gear > 1 and av < max_speed * float(GEARS[gear - 2]) * 0.85:
+	elif gear > 1 and av < max_speed * float(GEARS[gear - 2]) * up_at * 0.72:
 		gear -= 1
 	if gear != old_gear and not pedals:
 		_shift_t = SHIFT_CUT
 		if _audio and _audio.has_method("shift"):
 			_audio.call("shift", gear > old_gear)
 	_shift_t = maxf(_shift_t - delta, 0.0)
-	# Turbo con Shift: empuje extra unos segundos (se recarga), con llamarada y sonido
+	# Turbo con Shift (solo deportivos, carreras y patrullas): empuje extra unos segundos
+	var has_turbo := factory_kind in TURBO
 	boosting = false
-	if not pedals and has_fuel and throttle > 0.0 and _rider.controls_enabled and Input.is_action_pressed("run") and boost > 0.0:
+	if has_turbo and has_fuel and throttle > 0.0 and _rider.controls_enabled and Input.is_action_pressed("run") and boost > 0.0:
 		boosting = true
 		boost = maxf(boost - delta, 0.0)
 	elif not Input.is_action_pressed("run"):
 		boost = minf(boost + delta * BOOST_TIME / BOOST_RECHARGE, BOOST_TIME)
 	_flame(boosting)
-	var lo_speed: float = 0.0 if gear == 1 else max_speed * float(GEARS[gear - 2])
 	var hi_speed: float = max_speed * float(GEARS[gear - 1])
-	var force := power * 260.0 * mass / 1000.0 * 1.5 * float(GEAR_TORQUE[gear - 1]) * (1.6 if boosting else 1.0) * (0.15 if _shift_t > 0.0 else 1.0)
+	# Vueltas del motor: las da la rueda a través de la marcha (al arrancar, el embrague patina)
+	if pedals and not uses_fuel:
+		rpm = 0.0
+	else:
+		var wheel_rpm := IDLE_RPM + (REDLINE - IDLE_RPM) * clampf(av / maxf(hi_speed, 0.1), 0.0, 1.05)
+		var launch := IDLE_RPM + 1600.0 * maxf(throttle, 0.0)
+		rpm = lerpf(rpm, maxf(wheel_rpm, launch if av < hi_speed * 0.25 else IDLE_RPM), clampf(12.0 * delta, 0.0, 1.0))
+	var torque := torque_at(rpm)
+	var ratio := pow(float(GEARS[GEARS.size() - 1]) / float(GEARS[gear - 1]), 0.6)  # 1.ª ≈ 2.4 veces la 5.ª
+	var engine_health := 1.0 - float(damage.front) / 100.0 * 0.6  # el frontal toca el motor
+	var force := power * 260.0 * mass / 1000.0 * 1.5 * 0.8 * ratio * torque * engine_health * (1.6 if boosting else 1.0) * (0.15 if _shift_t > 0.0 else 1.0)
 	if pedals and not uses_fuel:  # piernas: mucha fuerza al arrancar, menos cuanto más rápido
 		force = minf(180.0, 350.0 / maxf(av, 0.5)) * mass / 80.0
 	var foot_brake := 0.0
@@ -620,9 +661,10 @@ func _physics_process(delta: float) -> void:
 		foot_brake = 40.0 * absf(throttle) * mass / 1300.0  # frenar antes de cambiar de sentido
 		engine_force = 0.0
 	else:
-		engine_brake = 0.0 if throttle != 0.0 or pedals else 2.2 * mass / 1300.0  # el motor retiene (solo las motrices)
+		# Retención del motor: más cuanto más alto de vueltas (las motrices)
+		engine_brake = 0.0 if throttle != 0.0 or pedals else (1.2 + 2.0 * rpm / REDLINE) * mass / 1300.0
 		# El par cae suave al acercarse a la velocidad máxima (antes, un corte en seco)
-		var top := max_speed * (1.18 if boosting else 1.0)
+		var top := max_speed * (1.18 if boosting else 1.0) * lerpf(0.75, 1.0, engine_health)
 		var taper := clampf((top - av) / maxf(top * 0.08, 0.5), 0.0, 1.0)  # el corte empieza al 92 %
 		var reverse_ok := 1.0 if (throttle > 0.0 or av < 6.0) else 0.0  # marcha atrás: despacio (máx. ~20 km/h)
 		engine_force = throttle * force * (1.0 if throttle > 0.0 else 0.3 * reverse_ok) * (taper if throttle > 0.0 else 1.0) if has_fuel else 0.0
@@ -636,11 +678,14 @@ func _physics_process(delta: float) -> void:
 			engine_force *= lerpf(0.35, 1.0, grip / 0.6)
 	# Dirección: menos ángulo cuanto más rápido, y vuelve sola al centro al soltar
 	var steer_max := lerpf(0.4, 0.08, clampf(av / max_speed, 0.0, 1.0)) if _two_wheel else lerpf(0.55, 0.18, clampf(av / max_speed, 0.0, 1.0))
-	# Nunca más curva de la que se puede tomar a esta velocidad (≈0.9 g): no se vuelca girando
-	steer_max = minf(steer_max, LATERAL_G * 1.55 * maxf(length * 0.6, 1.0) / maxf(av * av, 1.0))  # ≈1.4 g: gira con ganas
+	# Nunca más curva de la que aguantan los neumáticos a esta velocidad (menos en mojado): no se
+	# vuelca girando
+	steer_max = minf(steer_max, LATERAL_G * 1.3 * _wet_grip() * maxf(length * 0.6, 1.0) / maxf(av * av, 1.0))
 	if handbrake and av > 6.0:
 		steer_max = maxf(steer_max, 0.32)  # con freno de mano, derrape controlable
-	var want := -input.x * steer_max
+	# Un golpe lateral fuerte tuerce la dirección: tira hacia el lado dañado
+	var pull := (float(damage.left) - float(damage.right)) / 100.0 * 0.05 * clampf(av / 5.0, 0.0, 1.0)
+	var want := -input.x * steer_max + pull
 	steering = move_toward(steering, want, (2.6 if absf(want) > absf(steering) else 5.0) * delta)
 	# Frenos por rueda: pie, motor (las motrices) y freno de mano (las de atrás, que patinan)
 	for w in find_children("Wheel_*", "VehicleWheel3D", false, false):
@@ -651,19 +696,15 @@ func _physics_process(delta: float) -> void:
 			b += 30.0 * mass / 1300.0
 		wh.brake = b
 		if wh.has_meta("grip"):
-			wh.wheel_friction_slip = 2.2 if handbrake and rear else float(wh.get_meta("grip"))
+			# En mojado los neumáticos agarran menos; con la rueda reventada, casi nada
+			var flat := 0.45 if _is_flat(wh) else 1.0
+			wh.wheel_friction_slip = (2.2 if handbrake and rear else float(wh.get_meta("grip"))) * _wet_grip() * flat
 	if handbrake:
 		engine_force = 0.0
 	if uses_fuel and engine_force != 0.0:
 		fuel = maxf(fuel - absf(engine_force) / maxf(force, 1.0) * delta * 0.0012, 0.0)
 		if fuel <= 0.0 and scene and scene.get("_ui") and scene.get("_ui").has_method("toast"):
 			scene.get("_ui").toast("Se acabó la gasolina.")
-	if pedals and not uses_fuel:
-		rpm = 0.0
-	elif av < 0.5:
-		rpm = 850.0 + 2600.0 * maxf(throttle, 0.0)
-	else:
-		rpm = 1100.0 + 5200.0 * clampf((av - lo_speed * 0.6) / maxf(hi_speed - lo_speed * 0.6, 0.1), 0.0, 1.0)
 	_update_audio(v, absf(throttle) if has_fuel else 0.0)
 	if _rider.controls_enabled and Input.is_action_just_pressed("horn") and uses_fuel:
 		Sfx.horn(self)
@@ -675,6 +716,48 @@ func _physics_process(delta: float) -> void:
 	if _save_t > 3.0:
 		_save_t = 0.0
 		_save()
+
+
+## Par del motor (0..1) según las vueltas: sube hasta el par máximo y cae hacia el corte.
+static func torque_at(r: float) -> float:
+	if r <= PEAK_RPM:
+		return lerpf(0.62, 1.0, smoothstep(IDLE_RPM, PEAK_RPM, r))
+	return lerpf(1.0, 0.72, clampf((r - PEAK_RPM) / (REDLINE - PEAK_RPM), 0.0, 1.0))
+
+
+## Agarre con el suelo mojado (lluvia, o charcos que aún no se secaron): hasta un 25 % menos.
+func _wet_grip() -> float:
+	var wet := EnvironmentFX.ground_wetness
+	if Weather.is_raining():
+		wet = maxf(wet, 0.6)
+	return 1.0 - 0.25 * clampf(wet, 0.0, 1.0)
+
+
+## ¿Esa rueda está reventada? (un golpe lateral muy fuerte en su lado)
+func _is_flat(wh: VehicleWheel3D) -> bool:
+	var left := wh.position.x > 0.0  # (+x es la izquierda del conductor)
+	return float(damage.left if left else damage.right) >= 60.0
+
+
+## El estado del vehículo en palabras (para la IA): "" si está bien.
+func damage_desc() -> String:
+	var parts := PackedStringArray()
+	if float(damage.front) >= 50.0:
+		parts.append("el frontal destrozado (el motor apenas tira)")
+	elif float(damage.front) >= 20.0:
+		parts.append("el frontal abollado")
+	if float(damage.rear) >= 30.0:
+		parts.append("la parte de atrás abollada")
+	for side in ["left", "right"]:
+		var d := float(damage[side])
+		var side_name := "izquierdo" if side == "left" else "derecho"
+		if d >= 60.0:
+			parts.append("la rueda del lado %s reventada" % side_name)
+		elif d >= 25.0:
+			parts.append("el lado %s abollado (la dirección tira)" % side_name)
+	if _flipped:
+		parts.append("está volcado")
+	return ", ".join(parts)
 
 
 func _update_audio(v: float, load: float) -> void:
@@ -693,7 +776,8 @@ func _save() -> void:
 		return
 	var p := global_position
 	Creations.update(entry_id, {"pos": [snappedf(p.x, 0.01), snappedf(p.y - 0.15, 0.01), snappedf(p.z, 0.01)],
-		"yaw": snappedf(global_rotation.y, 0.001), "fuel": snappedf(fuel, 0.001), "health": snappedf(health, 0.1)})
+		"yaw": snappedf(global_rotation.y, 0.001), "fuel": snappedf(fuel, 0.001), "health": snappedf(health, 0.1),
+		"damage": {"front": snappedf(damage.front, 0.1), "rear": snappedf(damage.rear, 0.1), "left": snappedf(damage.left, 0.1), "right": snappedf(damage.right, 0.1)}})
 
 
 ## Un golpe. Contra algo duro: chapa, daño y (si vas dentro) te duele. Contra una persona: la
@@ -727,6 +811,10 @@ func _on_hit(body: Node) -> void:
 	Sfx.at(self, "crash" if lost > 7.0 else "hit", global_position + global_basis.z * length * 0.4 + Vector3(0, 0.7, 0))
 	var dmg := (lost - 2.5) * 4.5
 	health = maxf(health - dmg, 0.0)
+	# ¿Por dónde fue el golpe? Hacia donde se frenó de golpe, visto desde el coche
+	var local := global_basis.inverse() * (_prev_vel - linear_velocity)
+	var zone := ("front" if local.z > 0.0 else "rear") if absf(local.z) >= absf(local.x) else ("left" if local.x > 0.0 else "right")
+	damage[zone] = minf(float(damage[zone]) + dmg * 1.4, 100.0)
 	_update_smoke()
 	if lost > 9.0:
 		_debris(global_position + _prev_vel.normalized() * length * 0.45 + Vector3(0, 0.6, 0))
@@ -827,26 +915,46 @@ func _stabilize() -> void:
 	apply_torque(fwd * (roll_err * mass * 2.0 - roll_rate * mass * 0.4))
 
 
-## Volcado: tras unos segundos se endereza (con o sin nadie dentro), mirando hacia donde apuntaba
-## y en un sitio libre.
+## Volcado: se queda así (un coche no se da la vuelta solo). Si estás cerca, lo enderezas con E
+## (empujando); si no hay nadie a la vista, al rato alguien lo pone derecho (o se lo lleva la grúa).
+const FLIP_ALONE := 12.0   # segundos volcado, sin nadie cerca, hasta que lo enderezan
+
+
 func _check_flip(delta: float) -> void:
 	var upright := global_basis.y.dot(Vector3.UP)
-	if upright < 0.3 and linear_velocity.length() < 1.5:
-		_flip_t += delta
-		if _flip_t > 3.0:
-			_flip_t = 0.0
-			var f := global_basis.z
-			f.y = 0.0
-			if f.length() < 0.1:
-				f = -global_basis.y
-				f.y = 0.0
-			var yaw := atan2(f.x, f.z) if f.length() > 0.01 else 0.0
-			var at := InteriorManager.free_spot_near(self, global_position, Vector3.ZERO, [self]) if is_inside_tree() else global_position
-			global_transform = Transform3D(Basis(Vector3.UP, yaw), at + Vector3(0, 0.8, 0))
-			linear_velocity = Vector3.ZERO
-			angular_velocity = Vector3.ZERO
-	else:
+	var flipped := upright < 0.3 and linear_velocity.length() < 1.5
+	if flipped != _flipped:
+		_flipped = flipped
+		if _use:
+			_use.set_prompt("Bajar" if _rider else _prompt())
+	if not flipped:
 		_flip_t = 0.0
+		return
+	var near := false
+	for p in get_tree().get_nodes_in_group("player"):
+		if (p as Node3D).global_position.distance_to(global_position) < 45.0:
+			near = true
+	_flip_t = 0.0 if near or _rider != null else _flip_t + delta
+	if _flip_t > FLIP_ALONE:
+		set_upright()
+
+
+## Lo pone derecho, mirando hacia donde apuntaba y en un sitio libre.
+func set_upright() -> void:
+	_flip_t = 0.0
+	var f := global_basis.z
+	f.y = 0.0
+	if f.length() < 0.1:
+		f = -global_basis.y
+		f.y = 0.0
+	var yaw := atan2(f.x, f.z) if f.length() > 0.01 else 0.0
+	var at := InteriorManager.free_spot_near(self, global_position, Vector3.ZERO, [self]) if is_inside_tree() else global_position
+	global_transform = Transform3D(Basis(Vector3.UP, yaw), at + Vector3(0, 0.8, 0))
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	_flipped = false
+	if _use:
+		_use.set_prompt("Bajar" if _rider else _prompt())
 
 
 ## Bici y moto: un par las mantiene derechas (no simulamos el equilibrio del ciclista) y, a la
@@ -909,6 +1017,8 @@ func _small_debris(at: Vector3) -> void:
 ## Reparar en el taller (o con herramientas).
 func repair(amount: float = 100.0) -> void:
 	health = clampf(health + amount, 0.0, 100.0)
+	for k in damage:  # el taller endereza chapa y cambia ruedas en proporción
+		damage[k] = 0.0 if amount >= 100.0 else maxf(float(damage[k]) - amount, 0.0)
 	_update_smoke()
 	_use.set_prompt("Bajar" if _rider else _prompt())
 	_save()

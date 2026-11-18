@@ -8,12 +8,19 @@ signal interact_requested(target: Node)
 ## Termina una caminata automática (una acción con F): true si llegó.
 signal auto_walk_done(arrived: bool)
 
-const WALK_SPEED := 4.5
-const RUN_SPEED := 8.0
-const JUMP_VELOCITY := 4.5
+## Velocidades de una persona de verdad (m/s): andar a paso vivo, correr y nadar. (Antes se
+## andaba a 4.5 m/s, casi el triple que los vecinos, y se saltaba un metro.)
+const WALK_SPEED := 1.6
+const RUN_SPEED := 5.5
+const JUMP_VELOCITY := 3.2      # ~0.5 m de salto
+## Inercia: el cuerpo tarda en arrancar, en frenar y en cambiar de dirección; en el aire casi no
+## se puede corregir (m/s²).
+const ACCEL := 6.0
+const DECEL := 9.0
+const AIR_ACCEL := 1.2
 const MOUSE_SENSITIVITY := 0.0025
 const STICK_SENSITIVITY := 2.6   # rad/s con el stick derecho a fondo
-const SWIM_SPEED := 2.2
+const SWIM_SPEED := 1.2
 const SWIM_DEPTH := 1.1         # el agua cubre hasta el pecho: a partir de ahí se nada
 const FLOAT_DEPTH := 0.2        # nadando, el cuerpo flota justo bajo la superficie
 const ZOOM_MIN := 1.2
@@ -74,6 +81,11 @@ signal fell(impact: float, damage: int)
 var _cam_vehicle: Node3D = null   # en el que va (la cámara no choca con él y le sigue por detrás)
 var _look_idle := 10.0            # segundos sin mover la cámara (al conducir vuelve detrás)
 var _safe_pos := Vector3.INF      # último sitio pisando suelo firme (si caes al vacío, vuelves aquí)
+var _bob_phase := 0.0             # zancada (balanceo de la cabeza en primera persona)
+var _bob := Vector2.ZERO
+var _land_dip := 0.0              # al caer de un salto, la cabeza baja un poco y vuelve
+var _frame_cur := 0.0             # encuadre vertical actual (se acerca a _frame_v)
+var _breath_t := 0.0
 
 
 func _ready() -> void:
@@ -473,13 +485,31 @@ func _process(delta: float) -> void:
 	if vspeed > 25.0 and _shake_time <= 0.0:  # a mucha velocidad, una vibración suave
 		_cam.h_offset = randf_range(-1.0, 1.0) * 0.012 * (vspeed - 25.0) / 20.0
 		_cam.v_offset = randf_range(-1.0, 1.0) * 0.012 * (vspeed - 25.0) / 20.0
+	_update_bob(delta)
+	_frame_cur = lerpf(_frame_cur, _frame_v, 1.0 - exp(-6.0 * delta))
 	if _shake_time > 0.0:
 		_shake_time -= delta
 		_cam.h_offset = randf_range(-_shake_strength, _shake_strength)
 		_cam.v_offset = randf_range(-_shake_strength, _shake_strength)
-	else:  # encuadre (bajar la cámara un poco en las conversaciones)
-		_cam.h_offset = 0.0
-		_cam.v_offset = lerpf(_cam.v_offset, _frame_v, 1.0 - exp(-6.0 * delta))
+	elif vspeed <= 25.0:  # encuadre (bajar la cámara en las conversaciones) y la cabeza al andar
+		_cam.h_offset = _bob.x
+		_cam.v_offset = _frame_cur + _bob.y - _land_dip
+
+
+## La cabeza al andar: sube y baja con cada paso y se mece de lado cada dos (solo en primera
+## persona, y si no lo quitaste en Ajustes). Al caer de un salto, baja un poco y vuelve.
+func _update_bob(delta: float) -> void:
+	_land_dip = lerpf(_land_dip, 0.0, 1.0 - exp(-7.0 * delta))
+	var speed := Vector2(velocity.x, velocity.z).length()
+	var on := _first_person and Settings.head_bob and riding == null and is_on_floor() and not _swimming and speed > 0.3
+	if not on:
+		_bob = _bob.lerp(Vector2.ZERO, 1.0 - exp(-8.0 * delta))
+		return
+	var run := clampf((speed - WALK_SPEED) / (RUN_SPEED - WALK_SPEED), 0.0, 1.0)
+	var stride := lerpf(0.72, 1.35, run)             # metros por paso
+	_bob_phase += speed / stride * delta * PI        # media vuelta por paso
+	var amp := lerpf(0.022, 0.045, run)
+	_bob = _bob.lerp(Vector2(sin(_bob_phase) * amp * 0.55, -absf(cos(_bob_phase)) * amp), 1.0 - exp(-14.0 * delta))
 
 
 ## En un vehículo: la cámara no choca con él (si no, se metía dentro), va más alta y, si no la
@@ -512,6 +542,7 @@ func _set_body_shadow_only(on: bool) -> void:
 
 func _physics_process(delta: float) -> void:
 	if riding != null:  # sentado en la barca: ella se mueve, el jugador va encima
+		Body.breathe(delta, "idle")
 		velocity = Vector3.ZERO
 		global_position = riding.call("seat_position")
 		_body.global_rotation.y = riding.global_rotation.y
@@ -525,6 +556,7 @@ func _physics_process(delta: float) -> void:
 	if not _body.visible:
 		_body.visible = true
 	if _down_t > 0.0:  # tirado en el suelo tras la caída: te levantas en un momento
+		Body.breathe(delta, "idle")
 		_down_t -= delta
 		velocity.x = 0.0
 		velocity.z = 0.0
@@ -539,6 +571,7 @@ func _physics_process(delta: float) -> void:
 		cancel_auto_walk()  # el jugador retoma el control
 	if hold_position:
 		if input == Vector2.ZERO:
+			Body.breathe(delta, "idle")
 			velocity = Vector3.ZERO
 			if _rig:
 				_rig.speed = 0.0
@@ -565,29 +598,40 @@ func _physics_process(delta: float) -> void:
 	else:
 		if controls_enabled and Input.is_action_pressed("jump") and is_on_floor() and not swimming:
 			velocity.y = JUMP_VELOCITY
+			Body.spend_breath(4.0)
 		dir = _yaw.global_basis * Vector3(input.x, 0, input.y)
 		dir.y = 0
 		dir = dir.limit_length(1.0) if dir.length() > 0.01 else Vector3.ZERO
+	running = running and Body.can_run()  # sin aliento se anda (también en la caminata automática)
 	var speed := RUN_SPEED if running else WALK_SPEED
 	if swimming:
-		speed = SWIM_SPEED
+		speed = SWIM_SPEED * (0.6 if Body.winded else 1.0)  # agotado, apenas se avanza
 	speed *= Body.speed_factor()
-	Body.exertion = 1.8 if (swimming or (running and dir != Vector3.ZERO)) else 1.0
-	if dir != Vector3.ZERO:
-		velocity.x = dir.x * speed
-		velocity.z = dir.z * speed
-		_body.rotation.y = lerp_angle(_body.rotation.y, atan2(dir.x, dir.z), 12.0 * delta)
-	else:
-		velocity.x = move_toward(velocity.x, 0, speed * 8.0 * delta)
-		velocity.z = move_toward(velocity.z, 0, speed * 8.0 * delta)
+	var moving := dir != Vector3.ZERO
+	Body.exertion = 1.8 if (swimming or (running and moving)) else 1.0
+	Body.breathe(delta, "swim" if swimming and moving else ("sprint" if running and moving else ("walk" if moving else "idle")))
+	_pant(delta)
+	# Inercia: se acelera hacia la velocidad que pides (arrancar, frenar y girar llevan su tiempo;
+	# en el aire casi no se corrige)
+	var want := dir * speed
+	var grounded := is_on_floor() or swimming
+	var rate := (ACCEL if moving else DECEL) if grounded else AIR_ACCEL
+	var hv := Vector2(velocity.x, velocity.z).move_toward(Vector2(want.x, want.z), rate * delta)
+	velocity.x = hv.x
+	velocity.z = hv.y
+	if moving:
+		# Corriendo se gira más despacio (no se cambia de sentido en seco)
+		_body.rotation.y = lerp_angle(_body.rotation.y, atan2(dir.x, dir.z), (7.0 if running else 11.0) * delta)
 	var before := global_position
 	var fall_v := -velocity.y
 	var was_air := not is_on_floor()
 	move_and_slide()
 	if dir != Vector3.ZERO and not swimming:
 		_try_step(dir)
-	if was_air and is_on_floor() and not swimming and fall_v > FALL_SAFE:
-		_landed_hard(fall_v)
+	if was_air and is_on_floor() and not swimming:
+		_land_dip = maxf(_land_dip, clampf(fall_v * 0.012, 0.0, 0.14))
+		if fall_v > FALL_SAFE:
+			_landed_hard(fall_v)
 	_check_stuck(dir, speed, before, delta)
 	if is_on_floor() and not swimming:
 		_safe_pos = global_position
@@ -597,6 +641,17 @@ func _physics_process(delta: float) -> void:
 		_rig.swimming = swimming
 		if dir != Vector3.ZERO and _rig.gesture() in ["sit", "sleep", "crouch", "search", "chop", "hammer", "dig", "fish", "think", "kneel", "read", "write", "listen"]:
 			_rig.stop_gesture()  # moverse interrumpe lo que estaba haciendo
+
+
+## Tras correr, se oye el jadeo hasta recobrar el aliento.
+func _pant(delta: float) -> void:
+	if Body.stamina > 45.0 and not Body.winded:
+		_breath_t = 0.0
+		return
+	_breath_t -= delta
+	if _breath_t <= 0.0:
+		_breath_t = lerpf(0.55, 1.1, Body.stamina / 45.0)  # sin aire, más deprisa
+		Sfx.at(self, "breath", global_position + Vector3(0, 1.55, 0), 0.1, lerpf(4.0, 0.0, Body.stamina / 45.0))
 
 
 ## Escalones: si al andar chocas con algo bajo (un peldaño, un bordillo), subes encima sin saltar.

@@ -309,7 +309,8 @@ func _drive_to(target: String) -> Array:
 			return []
 		v.call("_on_use", player)
 		await get_tree().create_timer(0.8).timeout
-	var dist := v.global_position.distance_to(dest)
+	# Por carretera se recorre más que en línea recta (curvas, cruces): ~1.3 veces; a ~40 km/h
+	var dist := v.global_position.distance_to(dest) * 1.3
 	var fuel_used := dist * 0.00012
 	v.set("fuel", maxf(float(v.get("fuel")) - fuel_used, 0.0))
 	var fade := ColorRect.new()

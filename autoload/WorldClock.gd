@@ -68,7 +68,16 @@ const WEEKDAYS := ["lunes", "martes", "miércoles", "jueves", "viernes", "sábad
 
 ## Día de la semana (cada mundo empieza un jueves).
 func weekday() -> String:
-	return WEEKDAYS[(_day + 3) % 7]
+	return WEEKDAYS[weekday_index()]
+
+
+## 0 = lunes … 4 = viernes, 5 = sábado, 6 = domingo.
+func weekday_index() -> int:
+	return (_day + 3) % 7
+
+
+func is_weekend() -> bool:
+	return weekday_index() >= 5
 
 
 ## Minutos de juego desde el principio del mundo (no vuelve a 0 a medianoche).
@@ -96,10 +105,69 @@ static func span(from_h: float, to_h: float) -> String:
 	return "de %s a %s" % [fmt(from_h), fmt(to_h)]
 
 
-## Altura del sol: 1 a mediodía, 0 al amanecer/atardecer (6:00 y 20:00), negativa de noche.
+## Sol de verdad: latitud del pueblo (costa del Pacífico mexicano), mediodía solar (con el horario
+## local cae pasada la una) y un año de juego de 4 estaciones de 30 días (Weather.season()).
+const LATITUDE := 20.0
+const SOLAR_NOON := 13.25
+const YEAR_DAYS := 120.0
+const TILT := 23.44
+
+
+## Día del año de juego (0 = equinoccio de primavera, 30 = solsticio de verano…).
+func day_of_year() -> float:
+	return fposmod(absolute_minutes() / 1440.0, YEAR_DAYS)
+
+
+## Declinación del sol (grados) ese día: +23.4 en pleno verano, -23.4 en invierno.
+static func declination(doy: float) -> float:
+	return TILT * sin(doy / YEAR_DAYS * TAU)
+
+
+## Seno de la elevación del sol a una hora y día: 1 = en el cénit, 0 = en el horizonte,
+## negativo de noche (-0.2 ≈ noche cerrada).
+static func solar_height(h: float, doy: float) -> float:
+	var lat := deg_to_rad(LATITUDE)
+	var dec := deg_to_rad(declination(doy))
+	var ha := deg_to_rad((h - SOLAR_NOON) * 15.0)
+	return sin(lat) * sin(dec) + cos(lat) * cos(dec) * cos(ha)
+
+
+## Horas de sol (amanecer, ocaso) de un día: más largo en verano, más corto en invierno.
+static func daylight(doy: float) -> Vector2:
+	var lat := deg_to_rad(LATITUDE)
+	var dec := deg_to_rad(declination(doy))
+	var half := rad_to_deg(acos(clampf(-tan(lat) * tan(dec), -1.0, 1.0))) / 15.0
+	return Vector2(SOLAR_NOON - half, SOLAR_NOON + half)
+
+
+## Amanecer y ocaso de hoy (horas con decimales).
+func sunrise() -> float:
+	return daylight(day_of_year()).x
+
+
+func sunset() -> float:
+	return daylight(day_of_year()).y
+
+
+## Altura del sol ahora (ver solar_height): 0 al amanecer y al ocaso, negativa de noche.
 func sun_height() -> float:
-	var h := hour()
-	return sin((h - 6.5) / 13.5 * PI) if h >= 6.5 and h <= 20.0 else -sin(fposmod(h - 20.0, 24.0) / 10.5 * PI) * 0.6
+	return solar_height(hour(), day_of_year())
+
+
+## Hacia dónde está el sol (vector unitario) a una hora y día. Los ejes del pueblo de siempre:
+## sale por -X, a mediodía está hacia +Z (el sur) y se pone por +X.
+static func solar_direction(h: float, doy: float) -> Vector3:
+	var lat := deg_to_rad(LATITUDE)
+	var dec := deg_to_rad(declination(doy))
+	var ha := deg_to_rad((h - SOLAR_NOON) * 15.0)
+	var east := -cos(dec) * sin(ha)
+	var north := cos(lat) * sin(dec) - sin(lat) * cos(dec) * cos(ha)
+	var up := sin(lat) * sin(dec) + cos(lat) * cos(dec) * cos(ha)
+	return Vector3(-east, up, -north).normalized()
+
+
+func sun_direction() -> Vector3:
+	return solar_direction(hour(), day_of_year())
 
 
 ## 0 de día, 1 de noche cerrada.

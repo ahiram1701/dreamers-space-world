@@ -97,23 +97,69 @@ static func _look(rng: RandomNumberGenerator, fem: bool, body: String) -> Dictio
 
 ## El horario de sueño, uno solo para todo el juego (casas, teléfono, camas ajenas, allanar):
 ## los adultos se acuestan a las 11 p. m. y los niños a las 9, cada uno con su media hora de
-## diferencia, y se levantan a las 7 a. m.
+## diferencia, y se levantan a las 7 a. m. El fin de semana se trasnocha (viernes y sábado,
+## una hora más; los niños media) y se duerme más (sábado y domingo, hora y media; los niños una).
 const BED_ADULT := 23.0
 const BED_KID := 21.0
 const WAKE := 7.0
+const WEEKEND_LATE := 1.0
+const WEEKEND_SLEEP_IN := 1.5
 
 
-## A qué hora se acuesta esta persona (con su desfase propio).
+## (acostarse, levantarse) de la noche en la que cae `hour` (o de la que viene, si es de día).
+## Las horas de antes del mediodía son del final de la noche de ayer.
+static func night_hours(kid: bool, hour: float) -> Vector2:
+	var today := WorldClock.weekday_index()
+	var eve := today if hour >= 12.0 else (today + 6) % 7
+	var morning := (eve + 1) % 7
+	var bed := (BED_KID if kid else BED_ADULT) + ((0.5 if kid else WEEKEND_LATE) if eve in [4, 5] else 0.0)  # viernes, sábado
+	var wake := WAKE + ((1.0 if kid else WEEKEND_SLEEP_IN) if morning in [5, 6] else 0.0)  # sábado, domingo
+	return Vector2(bed, wake)
+
+
+static func _shift(entity: Dictionary) -> float:
+	return float(hash(str(entity.get("id", ""))) % 60) / 60.0 - 0.5
+
+
+static func _is_kid(entity: Dictionary) -> bool:
+	return entity.get("household_role", "") == "niño"
+
+
+## A qué hora se acuesta esta persona esta noche (con su desfase propio; puede pasar de 24).
 static func bedtime(entity: Dictionary) -> float:
-	var shift := float(hash(str(entity.get("id", ""))) % 60) / 60.0 - 0.5
-	return (BED_KID if entity.get("household_role", "") == "niño" else BED_ADULT) + shift
+	return night_hours(_is_kid(entity), WorldClock.hour()).x + _shift(entity)
 
 
 static func is_sleeping_at(entity: Dictionary, hour: float) -> bool:
-	var shift := float(hash(str(entity.get("id", ""))) % 60) / 60.0 - 0.5
-	var h := fposmod(hour - shift, 24.0)
-	var bed_at := BED_KID if entity.get("household_role", "") == "niño" else BED_ADULT
-	return h >= bed_at or h < WAKE
+	var h := fposmod(hour - _shift(entity), 24.0)
+	var n := night_hours(_is_kid(entity), h)
+	var t := fposmod(h - 12.0, 24.0)  # horas desde el mediodía: la noche no se parte a las 0:00
+	return t >= n.x - 12.0 and t < n.y + 12.0
+
+
+## Cómo está esta persona por su día (para la IA): cansancio tras muchas horas despierta y
+## hambre cuando se acerca la hora de comer o de cenar. "" si nada se le nota.
+static func condition(entity: Dictionary, hour: float) -> String:
+	if is_sleeping_at(entity, hour):
+		return ""
+	var h := fposmod(hour - _shift(entity), 24.0)
+	var n := night_hours(_is_kid(entity), h)
+	var awake := fposmod(h - n.y, 24.0)
+	var parts := PackedStringArray()
+	if awake > 14.5 or h < 3.0:
+		parts.append("se le nota el cansancio, lleva todo el día en pie")
+	elif awake < 0.6:
+		parts.append("acaba de levantarse y aún está algo dormido")
+	if (h >= 12.5 and h < 14.0) or (h >= 19.0 and h < 20.0):
+		parts.append("tiene hambre, se acerca la hora de comer" if h < 14.0 else "tiene hambre, ya casi es hora de cenar")
+	return ", ".join(parts)
+
+
+## Horas de silencio del pueblo (los adultos duermen): puertas cerradas, no se toca.
+static func is_quiet_hours(hour: float) -> bool:
+	var n := night_hours(false, hour)
+	var t := fposmod(hour - 12.0, 24.0)
+	return t >= n.x - 12.0 and t < n.y + 12.0
 
 
 ## { home: bool, spot: "bed"|"kitchen"|"table"|"sofa", activity: texto, gesture } para esa hora.
@@ -123,11 +169,16 @@ static func plan(entity: Dictionary, hour: float) -> Dictionary:
 	var h := fposmod(hour - shift, 24.0)
 	var away: bool = entity.get("works_away", false)
 	var kid: bool = entity.get("household_role", "") == "niño"
+	var weekend := WorldClock.is_weekend()
 	if is_sleeping_at(entity, hour):
 		return {"home": true, "spot": "bed", "activity": "durmiendo", "gesture": "sleep"}
-	if h < 8.0:
+	if h < night_hours(kid, h).y + 1.0:
 		return {"home": true, "spot": "table", "activity": "desayunando", "gesture": "sit_eat"}
-	if away and h < (14.0 if kid else 18.0):
+	if weekend and not kid and h >= 10.5 and h < 12.5 and hash(str(entity.get("id", ""))) % 3 == 0:
+		return {"home": false, "activity": "de paseo, es fin de semana"}
+	if weekend and h < 12.5:
+		return {"home": true, "spot": "sofa", "activity": "descansando, es fin de semana" if not kid else "jugando", "gesture": "sit"}
+	if away and not weekend and h < (14.0 if kid else 18.0):
 		return {"home": false, "activity": "en la escuela" if kid else "trabajando fuera de casa"}
 	if h < 12.5:
 		return {"home": true, "spot": "kitchen", "activity": "limpiando la casa", "gesture": "wipe"}

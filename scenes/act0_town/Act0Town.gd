@@ -28,7 +28,7 @@ var _beacon: OmniLight3D
 var _beacon_glass: StandardMaterial3D
 var _sun: DirectionalLight3D
 var _env: Environment
-var _sky_mat: ProceduralSkyMaterial
+var _sky_mat: ShaderMaterial
 var _awakening: AwakeningSequence
 var _hour_hint := false
 var _was_awake_hour := false
@@ -70,7 +70,7 @@ func _ready() -> void:
 	add_child(_player)
 	_interiors.player = _player
 	_interiors.entered.connect(func(_k, _id): _follow_schedules(true))
-	_interiors.exited.connect(func(_k, _id): _follow_schedules(true))
+	_interiors.exited.connect(func(_k, _id): _soft_place = true; _follow_schedules(true); _soft_place = false)
 
 	for entry in _load_npc_entries():
 		_schedules[entry.id] = entry.get("schedule", [])
@@ -380,6 +380,10 @@ func _on_lighthouse_entered(body: Node3D) -> void:
 
 # --- Vida en el pueblo ---------------------------------------------------------------
 
+## Al salir de un edificio: quien está cerca y a la vista camina hasta su sitio (no aparece allí).
+var _soft_place := false
+
+
 ## Rutinas: cada vecino va a su sitio según la hora (salvo si te acompaña o está hablando).
 func _follow_schedules(teleport: bool) -> void:
 	for id in _npcs.keys():
@@ -477,6 +481,8 @@ func _follow_one(id: String, teleport: bool) -> void:
 			if not teleport and npc.global_position.distance_to(target) > 2.0:
 				npc.walk_to(target, true)  # deprisa, que se moja
 				return
+	if teleport and _soft_place and npc.is_present() and npc.global_position.distance_to(_player.global_position) < 35.0 			and not InteriorManager.is_interior_pos(npc.global_position):
+		teleport = false  # lo estás viendo: camina hasta allí
 	if teleport:
 		npc.global_position = target + Vector3(0, 0.2, 0)
 	elif npc.global_position.distance_to(target) > 4.0:
@@ -544,6 +550,19 @@ func _town_height(x: float, z: float) -> float:
 	if d < 12.0:
 		h = lerpf(0.55, h, smoothstep(6.5, 12.0, d))
 	return h
+
+
+## Qué se pisa ahí (para el sonido de los pasos): sale del mismo color con el que se pinta el
+## suelo: la carretera, la roca y el empedrado del faro suenan a piedra; la arena y los caminos
+## de tierra, blandos; lo verde, a hierba.
+func surface_at(x: float, z: float) -> String:
+	var h := _ground_height(x, z)
+	var c := _ground_color(x, z, h)
+	if c.s < 0.22:
+		return "sand" if c.v > 0.85 else "stone"  # (la nieve cruje blanda)
+	if c.g >= c.r:
+		return "grass"
+	return "sand"
 
 
 func _ground_color(x: float, z: float, h: float) -> Color:

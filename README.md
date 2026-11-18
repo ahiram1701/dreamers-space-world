@@ -126,11 +126,11 @@ Desde la **v0.2.0**, el juego comprueba al arrancar si hay una versión estable 
 ### Controles
 | Acción | Tecla |
 |---|---|
-| Moverse / correr | <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / <kbd>Shift</kbd> |
+| Moverse / correr | <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / <kbd>Shift</kbd> (correr gasta el aliento; sin aliento, se anda) |
 | Saltar | <kbd>Espacio</kbd> |
 | Cámara / acercar y alejar | Ratón / rueda (al mínimo, primera persona) |
 | Hablar / recoger / entrar / sentarse / subir a una barca, un coche o una nave | <kbd>E</kbd> (lo que tienes delante, indicado abajo en pantalla) |
-| Conducir | <kbd>W</kbd><kbd>S</kbd> acelerar y frenar (o los gatillos del mando), <kbd>A</kbd><kbd>D</kbd> volante, <kbd>Espacio</kbd> freno de mano, <kbd>H</kbd> claxon |
+| Conducir | <kbd>W</kbd><kbd>S</kbd> acelerar y frenar (o los gatillos del mando), <kbd>A</kbd><kbd>D</kbd> volante, <kbd>Espacio</kbd> freno de mano, <kbd>H</kbd> claxon, <kbd>Shift</kbd> turbo (solo deportivos, carreras y patrullas); un coche volcado se endereza con <kbd>E</kbd> |
 | Pilotar una nave | Apuntas con el ratón; <kbd>W</kbd><kbd>S</kbd> empujar, <kbd>A</kbd><kbd>D</kbd> de lado (en el espacio, alabear), <kbd>Espacio</kbd> sube y <kbd>Ctrl</kbd>/<kbd>Q</kbd> baja, <kbd>Shift</kbd> potencia o crucero, <kbd>V</kbd> vista de cabina; en el espacio <kbd>X</kbd> frena en seco, <kbd>M</kbd> mapa del sistema, <kbd>Tab</kbd> elige destino, <kbd>G</kbd> piloto automático y <kbd>Z</kbd> la asistencia de vuelo |
 | Pescar | <kbd>E</kbd> en el muelle o el lago con una caña, y otra vez <kbd>E</kbd> cuando pica |
 | Leer un letrero, examinar algo, tomar una cosa pequeña | <kbd>E</kbd> delante («Leer», «Examinar», «Tomar») |

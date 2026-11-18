@@ -24,6 +24,14 @@ var wet := 0.0
 var dirt := 0.0
 ## Complexión que cambia despacio con cómo vives (-1 más delgado … +1 más ancho).
 var shape := 0.0
+## Aliento (0..100), en segundos reales de esfuerzo: correr seguido lo agota en ~25 s y nadar en
+## un minuto; andando o parado se recupera. Agotado, no se corre hasta recobrar un poco el aire.
+var stamina := 100.0
+var winded := false
+const SPRINT_SECONDS := 25.0
+const SWIM_SECONDS := 60.0
+const RECOVER_SECONDS := 14.0   # de 0 a 100 parado (andando, algo más)
+const WINDED_UNTIL := 35.0
 
 var _values := {"hunger": 85.0, "thirst": 85.0, "rest": 90.0, "hygiene": 90.0}
 var _last_minutes := -1.0
@@ -111,6 +119,32 @@ func _decay(minutes: float) -> void:
 	shape = clampf(shape + (fed * 0.6 - active * 1.2 - 0.05) * minutes / (60.0 * 24.0 * 14.0), -1.0, 1.0)
 
 
+## Un momento de esfuerzo (cada fotograma): "sprint", "swim", "walk" o "idle".
+func breathe(delta: float, effort: String) -> void:
+	var old := stamina
+	var tired := get_need("rest") < LOW or get_need("hunger") < LOW
+	match effort:
+		"sprint":
+			stamina -= 100.0 / SPRINT_SECONDS * delta * (1.35 if tired else 1.0)
+		"swim":
+			stamina -= 100.0 / SWIM_SECONDS * delta * (1.35 if tired else 1.0)
+		_:
+			stamina += 100.0 / RECOVER_SECONDS * delta * (0.55 if effort == "walk" else 1.0) * (0.6 if tired else 1.0)
+	stamina = clampf(stamina, 0.0, 100.0)
+	if stamina <= 0.0:
+		winded = true
+	elif winded and stamina >= WINDED_UNTIL:
+		winded = false
+	if int(old / 2.0) != int(stamina / 2.0):
+		need_changed.emit("stamina", stamina)
+
+
+## Un esfuerzo puntual (un salto, trepar): gasta aliento de golpe.
+func spend_breath(amount: float) -> void:
+	stamina = maxf(stamina - amount, 0.0)
+	need_changed.emit("stamina", stamina)
+
+
 ## Acabas de dormir `minutes` (el reloj ya avanzó): mientras duermes no te cansas, pero el hambre,
 ## la sed y la higiene siguen su curso.
 func slept(minutes: float) -> void:
@@ -166,6 +200,8 @@ func set_clean_clothes() -> void:
 
 
 func get_need(n: String) -> float:
+	if n == "stamina":
+		return stamina
 	return float(_values.get(n, 100.0))
 
 
@@ -201,9 +237,9 @@ func speed_factor() -> float:
 	return maxf(f, 0.5)
 
 
-## Con hambre, sed o agotamiento no se puede correr.
+## Con hambre, sed o agotamiento no se puede correr; sin aliento, tampoco (hasta recobrarlo).
 func can_run() -> bool:
-	return get_need("rest") >= 10.0 and get_need("hunger") >= LOW * 0.6 and get_need("thirst") >= LOW * 0.6
+	return not winded and get_need("rest") >= 10.0 and get_need("hunger") >= LOW * 0.6 and get_need("thirst") >= LOW * 0.6
 
 
 ## Lo que siente el cuerpo, en palabras (para la IA y los avisos).
@@ -223,6 +259,8 @@ func describe() -> String:
 			parts.append(words[n][1])
 		elif v < 45.0:
 			parts.append(words[n][2])
+	if winded or stamina < 20.0:
+		parts.append("te falta el aliento")
 	if wet > 0.6:
 		parts.append("estás empapado/a")
 	elif wet > 0.25:

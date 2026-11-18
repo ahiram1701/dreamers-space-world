@@ -120,7 +120,8 @@ func _ready() -> void:
 			["hunger", "Comida", Color("#e7a35b"), "Llena: comiste bien. Vacía: tienes hambre."],
 			["thirst", "Agua", Color("#5fb8e8"), "Llena: bebiste. Vacía: tienes sed."],
 			["rest", "Energía", Color("#a5b4fc"), "Llena: descansado. Vacía: agotado (te quedarás dormido)."],
-			["hygiene", "Higiene", Color("#8fd6b4"), "Llena: limpio. Vacía: hueles mal y la gente lo nota."]]:
+			["hygiene", "Higiene", Color("#8fd6b4"), "Llena: limpio. Vacía: hueles mal y la gente lo nota."],
+			["stamina", "Aliento", Color("#f0f0f0"), "Correr y nadar lo gastan; andando o parado se recupera. Sin aliento no puedes correr."]]:
 		_add_row(s[0], s[1], s[2], s[3])
 
 	GameState.stat_changed.connect(func(stat, _v): _touch(stat))

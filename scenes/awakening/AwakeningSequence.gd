@@ -14,7 +14,7 @@ const WATER_SHADER := preload("res://shaders/water.gdshader")
 var player: Player
 var sun: DirectionalLight3D
 var env: Environment
-var sky_mat: ProceduralSkyMaterial
+var sky_mat: ShaderMaterial  # (el cielo de EnvironmentFX: shaders/sky.gdshader)
 var beacon: OmniLight3D
 var breach_position: Vector3
 var tower_position := Vector3.ZERO      # pie del faro
@@ -55,9 +55,9 @@ func play() -> void:
 	# 1. El pulso: cae la noche y las luces mueren (la lámpara aún no)
 	var night := create_tween().set_parallel()
 	night.tween_property(sun, "light_energy", 0.03, 2.5)
-	night.tween_property(sky_mat, "sky_top_color", Color("#04060d"), 2.5)
-	night.tween_property(sky_mat, "sky_horizon_color", Color("#121a30"), 2.5)
-	night.tween_property(sky_mat, "ground_horizon_color", Color("#121a30"), 2.5)
+	night.tween_property(sky_mat, "shader_parameter/sky_top_color", Color("#04060d"), 2.5)
+	night.tween_property(sky_mat, "shader_parameter/sky_horizon_color", Color("#121a30"), 2.5)
+	night.tween_property(sky_mat, "shader_parameter/ground_horizon_color", Color("#121a30"), 2.5)
 	night.tween_property(env, "fog_light_color", Color("#1a2340"), 2.5)
 	var c0 := _cam_for("lighthouse")
 	await _cut.shot(c0.pos, c0.look, 2.5)

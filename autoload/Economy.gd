@@ -10,7 +10,7 @@ signal bill_unpaid(text: String)
 signal evicted(text: String)
 
 const UTILITIES := 15          # luz y agua por semana
-const SAVINGS_RATE := 0.01     # 1 % semanal de interés
+const SAVINGS_RATE := 0.001    # 0.1 % semanal (≈5 % al año, como una cuenta de ahorro de verdad)
 const LOAN_RATE := 0.08        # 8 % por pedirlo
 const LOAN_WEEKS := 8
 const MAX_UNPAID := 2          # a la tercera semana sin pagar, desahucio
@@ -140,7 +140,10 @@ func check_week() -> void:
 		return
 	s.last_bill_day = int(s.last_bill_day) + 7
 	if int(s.savings) > 0:
-		s.savings = int(s.savings) + int(floor(int(s.savings) * SAVINGS_RATE))
+		# Los centavos de interés se acumulan aparte hasta sumar un peso (con poco ahorro no se pierden)
+		var cents := float(s.get("interest_cents", 0.0)) + int(s.savings) * SAVINGS_RATE
+		s.savings = int(s.savings) + int(floor(cents))
+		s["interest_cents"] = cents - floor(cents)
 	var bill := weekly_bill()
 	if bill <= 0:
 		_save(s)

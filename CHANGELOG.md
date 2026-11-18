@@ -3,6 +3,61 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.13.0] - 2026-11-17
+
+### Cambiado
+- **Moverse como una persona.**
+  - Se anda a 1.6 m/s (antes a 4.5, casi el triple que los vecinos), se corre a 5.5 y se salta medio metro (antes, uno).
+  - El cuerpo tiene inercia: arrancar, frenar y cambiar de sentido llevan su momento, y en el aire casi no se corrige.
+  - **Aliento:** correr seguido lo agota en unos 25 s y nadar en un minuto. Sin aliento se anda y se oye el jadeo; parado o andando se recupera. Se ve en una barra nueva, «Aliento».
+  - En primera persona la cabeza se mece al andar y baja un poco al caer de un salto. Se puede quitar en Ajustes → Controles.
+- **Un sol de verdad.** Sale y se pone según la estación: en verano hay unas 13 horas de sol y en invierno menos de 11, y en invierno sube menos. Los faros de los coches se encienden cuando el sol está bajo, no a una hora fija.
+- **El tiempo cambia poco a poco.**
+  - Cada franja de 2 horas sale de la anterior: de despejado se nubla antes de llover, y la tormenta llega después de la lluvia.
+  - En verano es temporada de lluvias, con tormentas por la tarde; el invierno es seco, con niebla al amanecer.
+  - La lluvia empieza en llovizna, arrecia y amaina.
+  - Hay viento con dirección y rachas: mueve la hierba, inclina la lluvia, empuja las nubes y se oye.
+  - La temperatura depende de las nubes y del viento, y es la de la costa del Pacífico.
+- **El cielo.**
+  - Nubes que cubren según el tiempo, se iluminan por el lado del sol (rosadas al alba, doradas al ocaso) y avanzan con el viento.
+  - El halo del sol y el resplandor del ocaso por el horizonte.
+  - Con el cielo cubierto la luz es difusa y las sombras se suavizan.
+- **La lluvia moja.** El suelo se oscurece y brilla, se forman charcos en la tierra y el asfalto (no en el césped), y tarda en secarse. Las gotas salpican al caer y los pasos chapotean.
+- **El agua:**
+  - Usa sus tres olas.
+  - Se riza con el viento.
+  - Refleja más el cielo cuanto más rasante la miras.
+  - La lluvia le abre anillos.
+- **Luz.**
+  - Las sombras llegan a 120, 200 o 300 m según la calidad (antes acababan a 90).
+  - En calidad media, luz rebotada en pantalla; en alta, iluminación global y reflejos.
+  - Los relámpagos iluminan el pueblo y parpadean.
+  - Dentro de un edificio la luz es la de dentro, sin sol ni cielo.
+- **El suelo tiene relieve fino** (piedrecitas, terrones) sin texturas, manteniendo el estilo.
+- **Sonido.**
+  - Los pasos suenan según lo que pisas: piedra en la carretera, la acera y la roca; arena en la playa y los caminos; madera en el muelle; hierba en el césped. Antes una acera sonaba a madera.
+  - Corriendo suenan más fuertes.
+  - Dentro de un edificio hay eco de habitación, y la lluvia y el mar se oyen amortiguados.
+- **Los vecinos.**
+  - **Fin de semana:** el viernes y el sábado se trasnocha, el sábado y el domingo se duerme más, quien trabaja o estudia fuera se queda en casa y algunos salen de paseo.
+  - Se les nota el hambre antes de comer y de cenar, y el cansancio al final del día (lo sabe la IA).
+  - Al salir de un edificio, quien tienes a la vista camina a su sitio en vez de aparecer allí.
+  - Se abrigan cuando hace fresco y no con calor, y con tormenta también se ponen impermeable.
+- **Coches.**
+  - El motor tiene curva de par: las vueltas salen de las ruedas y la marcha.
+  - La caja cambia pronto con poco gas y estira las marchas a fondo (y reduce si pisas a fondo).
+  - El motor retiene más cuanto más alto de vueltas.
+  - El **turbo** solo lo llevan los deportivos, los de carreras y las patrullas.
+  - **Daño por zonas:** un golpe de frente le quita fuerza al motor; uno de lado tuerce la dirección y, fuerte, revienta la rueda de ese lado. Se guarda, lo sabe la IA y lo arregla el taller.
+  - En mojado los neumáticos agarran menos.
+  - Un coche volcado ya no se da la vuelta solo: se endereza con E, empujando. Si lo dejas y te vas, al rato alguien lo pone derecho.
+- **El autobús** acelera y frena con suavidad, también en las paradas.
+- **La nave:**
+  - En el aire acelera y frena con más inercia.
+  - En el espacio, los planetas y las lunas te atraen; la asistencia de vuelo lo compensa, gastando combustible.
+- **El ahorro** da un 0.1 % semanal (unos 5 % al año; antes, un 1 % semanal).
+- **Conducir con F** tiene en cuenta que por carretera se recorre más que en línea recta.
+
 ## [0.12.1] - 2026-11-16
 
 ### Corregido

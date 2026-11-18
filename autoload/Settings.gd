@@ -26,6 +26,8 @@ var player_figure: String = ""
 ## Cámara: campo de visión (grados), invertir el eje vertical y distancia preferida.
 var fov: float = 70.0
 var invert_y: bool = false
+## En primera persona la cámara se mece un poco al andar (como la cabeza); se puede quitar.
+var head_bob: bool = true
 var camera_distance: float = 4.0
 ## Interfaz: escala general, tamaño del texto y velocidad a la que aparecen las frases (1 = normal).
 var ui_scale: float = 0.0   # 0 = automático (según el tamaño de la pantalla)
@@ -100,6 +102,7 @@ func load_settings() -> void:
 	day_minutes = cfg.get_value("game", "day_minutes", 120.0)
 	fov = cfg.get_value("game", "fov", 70.0)
 	invert_y = cfg.get_value("game", "invert_y", false)
+	head_bob = cfg.get_value("game", "head_bob", true)
 	camera_distance = cfg.get_value("game", "camera_distance", 4.0)
 	ui_scale = cfg.get_value("game", "ui_scale", 0.0)
 	window_mode = cfg.get_value("game", "window_mode", "maximized")
@@ -134,6 +137,7 @@ func save_settings() -> void:
 	cfg.set_value("game", "day_minutes", day_minutes)
 	cfg.set_value("game", "fov", fov)
 	cfg.set_value("game", "invert_y", invert_y)
+	cfg.set_value("game", "head_bob", head_bob)
 	cfg.set_value("game", "camera_distance", camera_distance)
 	cfg.set_value("game", "ui_scale", ui_scale)
 	cfg.set_value("game", "window_mode", window_mode)

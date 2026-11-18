@@ -44,6 +44,11 @@ func ground_at(_x: float, _z: float) -> float:
 	return 0.0
 
 
+## Qué se pisa en el terreno en ese punto ("grass", "sand", "stone"…; "" = lo decide el sonido).
+func surface_at(_x: float, _z: float) -> String:
+	return ""
+
+
 ## Descripción fija del lugar para la IA.
 func scene_context() -> String:
 	return ""
@@ -677,7 +682,7 @@ func _check_trespass() -> void:
 	var mem := NPCMemory.get_mem(owner)
 	var rel := int(mem.relationship)
 	var h := WorldClock.hour()
-	var night := h >= Households.BED_ADULT or h < Households.WAKE
+	var night := Households.is_quiet_hours(h)
 	npc.face(_player.global_position)
 	if _interiors.invited.has(door) and not forced:  # te abrió y te invitó: ya lo sabe
 		NPCMemory.add_event(owner, "El jugador tocó a tu puerta y le invitaste a pasar.", 0)
@@ -1095,7 +1100,9 @@ func npc_described(npc: TownNPC) -> String:
 	var vehicle: Node3D = npc.riding_vehicle()
 	if vehicle:
 		where = "dentro de %s" % vehicle.call("the_name")
-	return "%s; %s; %s; viste %s" % [where, npc.doing(), npc.held_desc(), Wardrobe.describe(WorldDB.get_entity("npc", npc.npc_id).get("appearance", {}), npc.layers).split(";")[0]]
+	var s := "%s; %s; %s; viste %s" % [where, npc.doing(), npc.held_desc(), Wardrobe.describe(WorldDB.get_entity("npc", npc.npc_id).get("appearance", {}), npc.layers).split(";")[0]]
+	var how := Households.condition(WorldDB.get_entity("npc", npc.npc_id).merged({"id": npc.npc_id}), WorldClock.hour())
+	return s + ("; " + how if not how.is_empty() else "")
 
 
 ## Dónde está un punto, en palabras: «dentro de la cafetería», «fuera, junto al muelle».
@@ -2132,7 +2139,8 @@ func vehicles_described(pos: Vector3, radius: float = 30.0) -> String:
 		if c.has_method("passengers"):
 			for p in c.call("passengers"):
 				who.append(str(WorldDB.get_entity("npc", p.npc_id).get("name", "alguien")).split(" ")[0])
-		out.append("%s%s, a %d m, %s" % [nm, whose, int(c.global_position.distance_to(pos)), ("con " + ", ".join(PackedStringArray(who))) if not who.is_empty() else "vacío"])
+		var state: String = c.call("damage_desc") if c.has_method("damage_desc") else ""
+		out.append("%s%s, a %d m, %s%s" % [nm, whose, int(c.global_position.distance_to(pos)), ("con " + ", ".join(PackedStringArray(who))) if not who.is_empty() else "vacío", (" (" + state + ")") if not state.is_empty() else ""])
 	return "; ".join(out)
 
 

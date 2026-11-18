@@ -64,9 +64,14 @@ static func for_weather(entity: Dictionary, outdoors: bool = true) -> Array:
 	var h := WorldClock.hour()
 	var night := h >= 20.0 or h < 7.0
 	var w := Weather.current()
+	var temp := Weather.temperature()
+	var chilly := temp < 17.0  # con este fresco, la gente se abriga (de día también)
+	night = night or chilly
 	var out := own.duplicate()
 	var has := func(layer: String) -> bool: return out.any(func(l): return garment(str(l.id)).get("layer", "") == layer)
-	if w == "rain":
+	if temp > 27.0 and w not in ["rain", "storm"]:
+		return own  # con calor nadie se pone una chamarra
+	if w in ["rain", "storm"]:
 		if not has.call("outer") or rng.randf() < 0.75:
 			out = out.filter(func(l): return garment(str(l.id)).get("layer", "") != "outer")
 			out.append(_layer("raincoat", rng, true))

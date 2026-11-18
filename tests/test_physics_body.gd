@@ -117,7 +117,7 @@ func _run() -> void:
 		sedan._debris(sedan.global_position + Vector3(0, 1, 0))
 	_expect(town.get_children().any(func(c): return c.has_meta("debris") and c.get_meta("debris") == "kit"), "un coche, sus piezas de coche")
 
-	# 5. Bici con brío; coches que no vuelcan; un coche volcado se endereza solo
+	# 5. Bici con brío; coches que no vuelcan; un coche volcado lo enderezas tú (o alguien, si te vas)
 	# (en campo abierto: por la calle se topaba con una farola antes de coger velocidad)
 	bike.global_transform = Transform3D(Basis(), Vector3(-75, town.ground_at(-75, -55) + 0.4, -55))
 	bike.linear_velocity = Vector3.ZERO
@@ -156,11 +156,24 @@ func _run() -> void:
 		for i in 10:
 			await physics_frame
 		if kind == "sedan":
+			# v0.13: un coche no se da la vuelta solo. Si estás cerca, lo enderezas tú (E, empujando);
+			# si no hay nadie a la vista, al rato alguien lo pone derecho.
 			c.global_transform = Transform3D(Basis(Vector3.FORWARD, PI), c.global_position + Vector3(0, 1.5, 0))
 			c.linear_velocity = Vector3.ZERO
 			for i in 300:
 				await physics_frame
-			_expect(c.global_basis.y.dot(Vector3.UP) > 0.8, "un coche volcado, sin nadie dentro, se endereza solo")
+			_expect(c.global_basis.y.dot(Vector3.UP) < 0.3 and str(c._prompt()).begins_with("Enderezar"), "un coche volcado sigue volcado mientras estás al lado: «%s»" % c._prompt())
+			player.global_position = c.global_position + Vector3(-2.5, 0.3, 0)
+			c._on_use(player)
+			await create_timer(1.8).timeout
+			_expect(c.global_basis.y.dot(Vector3.UP) > 0.8, "con E lo enderezas empujando")
+			c.global_transform = Transform3D(Basis(Vector3.FORWARD, PI), c.global_position + Vector3(0, 1.5, 0))
+			c.linear_velocity = Vector3.ZERO
+			player.global_position = c.global_position + Vector3(-90, 0, 0)
+			player.global_position.y = town.ground_at(player.global_position.x, player.global_position.z) + 0.5
+			await create_timer(c.FLIP_ALONE + 3.0).timeout
+			_expect(c.global_basis.y.dot(Vector3.UP) > 0.8, "y si lo dejas volcado y te vas, al rato alguien lo endereza")
+			player.global_position = c.global_position + Vector3(-2.5, 0.3, 0)
 
 	town.queue_free()
 	await process_frame
