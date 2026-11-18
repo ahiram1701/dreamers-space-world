@@ -102,6 +102,9 @@ func _run() -> void:
 		await process_frame
 	_expect(Creations.all_here().size() == count and Creations.node_of(town, id) != null, "al volver, lo creado sigue ahí (%d cosas)" % count)
 
+	# La respuesta simulada usa al propio agente: sin soltarla, el uno sujeta al otro y ninguno se
+	# libera (Godot avisaba al salir: «7 ObjectDB instances were leaked»)
+	agent.responder = Callable()
 	town.queue_free()
 	await process_frame
 	db.delete_world(world_id)

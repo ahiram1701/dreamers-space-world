@@ -8,6 +8,8 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 ### Corregido
 - **Cerrar el juego en el espacio** con el motor de la nave sonando dejaba el audio a medio liberar y Godot avisaba de una fuga al salir (8 de cada 10 veces). Ahora el juego cierra en orden: calla los motores, el viento, las olas y la música, y cierra cuando el audio los ha soltado. Vale para cerrar la ventana, «Salir» del menú y el reinicio tras actualizar.
 - El smoke test cierra cada escena como el jugador y falla si algo se queda sin liberar al salir.
+- **Las SUV y camionetas** se inclinaban de más en las curvas cerradas: con el centro de masas de la 0.13.0 a la altura de los ejes, hacía falta una barra estabilizadora más rígida, como la de las de verdad.
+- La prueba del agente creador dejaba al agente y su respuesta simulada sujetándose el uno al otro, y al salir Godot avisaba de 7 objetos sin liberar.
 
 ## [0.13.0] - 2026-11-17
 
