@@ -3,7 +3,9 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
-## [0.13.1] - 2026-11-18
+## [0.13.2] - 2026-11-18
+
+La 0.13.1 no llegó a publicarse (sus pruebas fallaron en Linux); esta versión la sustituye.
 
 ### Corregido
 - **Cerrar el juego en el espacio** con el motor de la nave sonando dejaba el audio a medio liberar y Godot avisaba de una fuga al salir (8 de cada 10 veces). Ahora el juego cierra en orden: calla los motores, el viento, las olas y la música, y cierra cuando el audio los ha soltado. Vale para cerrar la ventana, «Salir» del menú y el reinicio tras actualizar.
