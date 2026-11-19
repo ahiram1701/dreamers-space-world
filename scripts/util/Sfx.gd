@@ -164,6 +164,24 @@ const SYNTH_GROUP := "synth_audio"
 static var _quitting := false
 
 
+## El generador (la configuración del sonido sintetizado) que comparten todos los reproductores
+## del mismo formato; cada uno saca de él su propia reproducción. Vive hasta el final del
+## programa, guardado en Engine (Godot lo suelta después de cerrar el servidor de audio): la
+## reproducción solo guarda un puntero a él, y el hilo de audio aún la mezcla un poco tras
+## stop(). Con un generador por nodo, al liberar el nodo (salir de una escena) el hilo leía
+## memoria ya liberada y podía quedarse mezclando sin fin; al cerrar, Godot esperaba a ese hilo
+## para siempre (se veía en el CI de Linux: una prueba que no terminaba).
+static func generator(mix_rate: float, buffer_length: float) -> AudioStreamGenerator:
+	var key := StringName("sfx_generator_%d_%d" % [int(mix_rate), int(buffer_length * 1000.0)])
+	if Engine.has_meta(key):
+		return Engine.get_meta(key) as AudioStreamGenerator
+	var gen := AudioStreamGenerator.new()
+	gen.mix_rate = mix_rate
+	gen.buffer_length = buffer_length
+	Engine.set_meta(key, gen)
+	return gen
+
+
 ## Cierra el juego en orden: calla los sonidos que se generan en tiempo real y la música, deja
 ## que el servidor de audio los suelte (unos fotogramas) y entonces cierra. Si se cierra con un
 ## motor sonando, el hilo de audio podía quedarse a medio mezclarlo y Godot avisaba al salir de
@@ -243,7 +261,9 @@ static func _play(parent: Node, key: String, stream: AudioStream = null, volume:
 	parent.add_child(p)
 	p.finished.connect(p.queue_free)
 	if delay > 0.0:
-		parent.get_tree().create_timer(delay).timeout.connect(func(): if is_instance_valid(p): p.play())
+		# Conectado al propio reproductor: si el lugar se libera antes, la conexión desaparece con él
+		# (una lambda que lo guardara avisaría de un objeto liberado)
+		parent.get_tree().create_timer(delay).timeout.connect(p.play.bind(0.0))
 	else:
 		p.play()
 

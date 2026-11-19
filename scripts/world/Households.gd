@@ -274,9 +274,9 @@ func populate(door: String, kind: String) -> void:
 				npc.set_meta("staff", kind)  # atiende: no sigue la rutina de una casa (ni cocina ni duerme aquí)
 				var spot: Vector3 = scene._interiors.npc_spot(1 if kind == "cafe" else 0)  # (en la cafetería, la barra es de Teo)
 				npc.settle(spot + Vector3(0, 0.1, 0), spot + Vector3(0, 0, 2), "", "atendiendo")
-				get_tree().create_timer(1.2).timeout.connect(func():
-					if is_instance_valid(npc):
-						npc.say(["¡Hola! Pasa, pasa.", "Buenas, ¿te ayudo en algo?", "¡Bienvenido/a! Mira con calma."][randi() % 3], 3.5))
+				# Conectado al vecino: si sales antes de que hable, se libera y la conexión con él
+				var hello: String = ["¡Hola! Pasa, pasa.", "Buenas, ¿te ayudo en algo?", "¡Bienvenido/a! Mira con calma."][randi() % 3]
+				get_tree().create_timer(1.2).timeout.connect(npc.say.bind(hello, 3.5))
 	for g in guests(door):  # de visita o de cliente: sentados donde haya sitio
 		var npc := TownNPC.new()
 		scene.add_child(npc)

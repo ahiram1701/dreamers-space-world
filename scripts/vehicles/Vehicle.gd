@@ -794,10 +794,11 @@ func _on_hit(body: Node) -> void:
 		(body as TownNPC).knock_down(push, impact)
 		if scene and scene.has_method("on_npc_hit"):
 			scene.call("on_npc_hit", self, body, impact)
-		var npc_ref: Node = body
+		var npc_ref: WeakRef = weakref(body)  # (débil: el vecino puede desaparecer antes)
 		get_tree().create_timer(2.0).timeout.connect(func():
-			if is_instance_valid(self) and is_instance_valid(npc_ref):
-				remove_collision_exception_with(npc_ref))
+			var n: Node = npc_ref.get_ref()
+			if is_instance_valid(self) and n != null:
+				remove_collision_exception_with(n))
 		return
 	if _hit_cool > 0.0 or impact < 5.0:
 		return
@@ -904,7 +905,7 @@ func _debris(at: Vector3) -> void:
 		rb.global_position = at + Vector3(randf_range(-0.5, 0.5), 0.3, randf_range(-0.5, 0.5))
 		rb.linear_velocity = _prev_vel * 0.4 + Vector3(randf_range(-2, 2), 3.0, randf_range(-2, 2))
 		rb.angular_velocity = Vector3(randf_range(-6, 6), randf_range(-6, 6), randf_range(-6, 6))
-		get_tree().create_timer(90.0).timeout.connect(func(): if is_instance_valid(rb): rb.queue_free())
+		get_tree().create_timer(90.0).timeout.connect(rb.queue_free)  # (si ya no está, no pasa nada)
 
 
 ## Coches: una barra estabilizadora (un par suave contra el balanceo) para que no se tumben.
@@ -1013,7 +1014,7 @@ func _small_debris(at: Vector3) -> void:
 		rb.global_position = at + Vector3(randf_range(-0.3, 0.3), 0.2, randf_range(-0.3, 0.3))
 		rb.linear_velocity = _prev_vel * 0.3 + Vector3(randf_range(-1.5, 1.5), 2.0, randf_range(-1.5, 1.5))
 		rb.angular_velocity = Vector3(randf_range(-6, 6), randf_range(-6, 6), randf_range(-6, 6))
-		get_tree().create_timer(90.0).timeout.connect(func(): if is_instance_valid(rb): rb.queue_free())
+		get_tree().create_timer(90.0).timeout.connect(rb.queue_free)  # (si ya no está, no pasa nada)
 
 
 ## Reparar en el taller (o con herramientas).

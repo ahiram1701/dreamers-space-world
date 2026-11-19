@@ -8,16 +8,21 @@ signal interact_requested(target: Node)
 ## Termina una caminata automática (una acción con F): true si llegó.
 signal auto_walk_done(arrived: bool)
 
-## Velocidades de una persona de verdad (m/s): andar a paso vivo, correr y nadar. (Antes se
-## andaba a 4.5 m/s, casi el triple que los vecinos, y se saltaba un metro.)
-const WALK_SPEED := 1.6
-const RUN_SPEED := 5.5
-const JUMP_VELOCITY := 3.2      # ~0.5 m de salto
-## Inercia: el cuerpo tarda en arrancar, en frenar y en cambiar de dirección; en el aire casi no
+## Velocidades de una persona de verdad (m/s): paso vivo (lo normal), paseo (Alt) y correr.
+## (A 1.6 m/s se sentía a cámara lenta; 2.6 es el paso de quien va con prisa, sin trotar.)
+const WALK_SPEED := 2.6
+const STROLL_SPEED := 1.4
+const RUN_SPEED := 6.5
+## Salto de ~1 m (v²/2g): salva una valla o una caja. Soltar antes la tecla lo deja en menos.
+const JUMP_VELOCITY := 4.45
+const JUMP_CUT := 0.5           # al soltar la tecla subiendo, la velocidad vertical se queda en esto
+const COYOTE := 0.12            # s: aún puedes saltar justo después de dejar el borde
+const JUMP_BUFFER := 0.12       # s: una pulsación justo antes de aterrizar no se pierde
+## Inercia: el cuerpo tarda en arrancar, en frenar y en cambiar de dirección; en el aire apenas
 ## se puede corregir (m/s²).
-const ACCEL := 6.0
-const DECEL := 9.0
-const AIR_ACCEL := 1.2
+const ACCEL := 9.0
+const DECEL := 11.0
+const AIR_ACCEL := 2.0
 const MOUSE_SENSITIVITY := 0.0025
 const STICK_SENSITIVITY := 2.6   # rad/s con el stick derecho a fondo
 const SWIM_SPEED := 1.2
@@ -86,6 +91,11 @@ var _bob := Vector2.ZERO
 var _land_dip := 0.0              # al caer de un salto, la cabeza baja un poco y vuelve
 var _frame_cur := 0.0             # encuadre vertical actual (se acerca a _frame_v)
 var _breath_t := 0.0
+var _coyote_t := 0.0              # tiempo que aún vale saltar tras dejar el suelo
+var _jump_buffer_t := 0.0         # pulsación de salto pendiente
+var _jump_held := false           # este salto aún sube con la tecla pulsada (soltar lo corta)
+## Paseo (Alt): andar despacio, a ritmo de vecino.
+var stroll := false
 
 
 func _ready() -> void:
@@ -133,6 +143,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			interact_requested.emit(riding)  # bajarse de la barca
 		elif controls_enabled and interact_target != null:
 			interact_requested.emit(interact_target)
+	elif event.is_action_pressed("walk_toggle") and not event.is_echo() and controls_enabled:
+		stroll = not stroll
 	elif event.is_action_pressed("zoom_in") and controls_enabled:
 		_zoom = 0.0 if _zoom <= ZOOM_MIN + 0.01 else maxf(_zoom * 0.8, ZOOM_MIN)
 		_save_zoom()
@@ -506,7 +518,7 @@ func _update_bob(delta: float) -> void:
 		_bob = _bob.lerp(Vector2.ZERO, 1.0 - exp(-8.0 * delta))
 		return
 	var run := clampf((speed - WALK_SPEED) / (RUN_SPEED - WALK_SPEED), 0.0, 1.0)
-	var stride := lerpf(0.72, 1.35, run)             # metros por paso
+	var stride := HumanoidRig.stride_for(speed)      # metros por paso (la misma zancada que las piernas)
 	_bob_phase += speed / stride * delta * PI        # media vuelta por paso
 	var amp := lerpf(0.022, 0.045, run)
 	_bob = _bob.lerp(Vector2(sin(_bob_phase) * amp * 0.55, -absf(cos(_bob_phase)) * amp), 1.0 - exp(-14.0 * delta))
@@ -596,14 +608,12 @@ func _physics_process(delta: float) -> void:
 		dir = _auto_direction(delta)
 		running = _flat_distance(_auto_target) > 8.0 if _auto_target != Vector3.INF else false
 	else:
-		if controls_enabled and Input.is_action_pressed("jump") and is_on_floor() and not swimming:
-			velocity.y = JUMP_VELOCITY
-			Body.spend_breath(4.0)
 		dir = _yaw.global_basis * Vector3(input.x, 0, input.y)
 		dir.y = 0
 		dir = dir.limit_length(1.0) if dir.length() > 0.01 else Vector3.ZERO
+		_update_jump(delta, swimming, running)
 	running = running and Body.can_run()  # sin aliento se anda (también en la caminata automática)
-	var speed := RUN_SPEED if running else WALK_SPEED
+	var speed := RUN_SPEED if running else (STROLL_SPEED if stroll and _auto_target == Vector3.INF else WALK_SPEED)
 	if swimming:
 		speed = SWIM_SPEED * (0.6 if Body.winded else 1.0)  # agotado, apenas se avanza
 	speed *= Body.speed_factor()
@@ -641,6 +651,35 @@ func _physics_process(delta: float) -> void:
 		_rig.swimming = swimming
 		if dir != Vector3.ZERO and _rig.gesture() in ["sit", "sleep", "crouch", "search", "chop", "hammer", "dig", "fish", "think", "kneel", "read", "write", "listen"]:
 			_rig.stop_gesture()  # moverse interrumpe lo que estaba haciendo
+
+
+## Saltar: una pulsación, un salto (mantener la tecla ya no rebota). Vale un instante después de
+## dejar el borde y una pulsación justo antes de aterrizar no se pierde. Soltar la tecla mientras
+## subes corta el salto; sin aliento se salta menos, y corriendo se gana un poco de impulso.
+func _update_jump(delta: float, swimming: bool, running: bool) -> void:
+	_coyote_t = COYOTE if is_on_floor() else maxf(_coyote_t - delta, 0.0)
+	if controls_enabled and Input.is_action_just_pressed("jump"):
+		_jump_buffer_t = JUMP_BUFFER
+	else:
+		_jump_buffer_t = maxf(_jump_buffer_t - delta, 0.0)
+	if _jump_held and (not Input.is_action_pressed("jump") or not controls_enabled):
+		_jump_held = false
+		if velocity.y > 0.0:
+			velocity.y *= JUMP_CUT
+	if velocity.y <= 0.0 and not is_on_floor():
+		_jump_held = false
+	if _jump_buffer_t <= 0.0 or _coyote_t <= 0.0 or swimming or not controls_enabled:
+		return
+	_jump_buffer_t = 0.0
+	_coyote_t = 0.0
+	_jump_held = true
+	velocity.y = JUMP_VELOCITY * (0.75 if Body.winded else 1.0)
+	Body.spend_breath(4.0)
+	if running:  # el impulso de la carrera: el salto llega más lejos
+		var hv := Vector2(velocity.x, velocity.z)
+		hv = (hv * 1.08).limit_length(RUN_SPEED * 1.08)
+		velocity.x = hv.x
+		velocity.z = hv.y
 
 
 ## Tras correr, se oye el jadeo hasta recobrar el aliento.

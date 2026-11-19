@@ -230,16 +230,24 @@ func _process(delta: float) -> void:
 
 # --- Capa 1: locomoción --------------------------------------------------------------
 
+## Metros por paso según la velocidad, como una persona: ~0.7 m paseando (2 pasos/s), ~0.9 a paso
+## vivo y ~1.5 corriendo. (Antes era casi fija: a más velocidad los pies se movían a toda prisa.)
+static func stride_for(v: float) -> float:
+	return clampf(0.45 + 0.17 * v, 0.6, 1.6)
+
+
 func _locomotion(delta: float) -> Dictionary:
 	var p := _empty()
-	var walk := clampf(speed / 4.0, 0.0, 1.0)
-	var run := clampf((speed - 4.8) / 3.0, 0.0, 1.0)
+	# Las piernas dan el paso completo desde ~1.3 m/s (antes, speed / 4: andando a 1.6 m/s se
+	# movían al 40 % y parecía que arrastraba los pies)
+	var walk := clampf(speed / 1.3, 0.0, 1.0)
+	var run := clampf((speed - 3.2) / 3.0, 0.0, 1.0)
 	var before := sin(_phase)
 	# Cadencia según el paso real: cada zancada avanza lo que mide la pierna (los pies no patinan)
-	var stride := 0.62 + 0.32 * run
+	var stride := stride_for(speed)
 	_phase += delta * maxf(1.8, TAU * speed / (2.0 * stride))
 	if walk > 0.3 and not swimming and not airborne and signf(sin(_phase)) != signf(before):
-		footstep.emit(speed > 5.0)
+		footstep.emit(speed > 4.5)
 	var s := sin(_phase)
 	var c := cos(_phase)
 	var still := 1.0 - walk

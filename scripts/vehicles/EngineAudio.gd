@@ -25,10 +25,7 @@ var _load_s := 0.0
 
 
 func _ready() -> void:
-	var gen := AudioStreamGenerator.new()
-	gen.mix_rate = RATE
-	gen.buffer_length = 0.12
-	stream = gen
+	stream = Sfx.generator(RATE, 0.12)  # (compartido y vivo hasta el final: ver Sfx.generator)
 	unit_size = 6.0 if kind != "ship" else 14.0
 	max_distance = 70.0 if kind != "ship" else 160.0
 	volume_db = -4.0

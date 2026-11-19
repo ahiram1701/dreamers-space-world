@@ -8,7 +8,7 @@ signal closed
 
 ## Lo que hace cada acción, para la tabla de controles (el orden es el de la tabla).
 const ACTIONS := [
-	["move_forward", "Moverse", "WASD", "Stick izquierdo"], ["run", "Correr", "", ""], ["jump", "Saltar", "", ""],
+	["move_forward", "Moverse", "WASD", "Stick izquierdo"], ["run", "Correr", "", ""], ["walk_toggle", "Pasear (andar despacio) / paso normal", "", "Stick a medias"], ["jump", "Saltar", "", ""],
 	["", "Mirar", "Ratón", "Stick derecho"], ["zoom_in", "Acercar / alejar la cámara (al mínimo, primera persona)", "Rueda", "Cruceta ↑ ↓"],
 	["interact", "Hablar, entrar, sentarse, subir a una barca, recoger", "", ""],
 	["act", "Hacer cualquier cosa: escríbela y tu personaje la hace", "", ""],

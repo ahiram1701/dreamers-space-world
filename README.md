@@ -126,8 +126,8 @@ Desde la **v0.2.0**, el juego comprueba al arrancar si hay una versión estable 
 ### Controles
 | Acción | Tecla |
 |---|---|
-| Moverse / correr | <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / <kbd>Shift</kbd> (correr gasta el aliento; sin aliento, se anda) |
-| Saltar | <kbd>Espacio</kbd> |
+| Moverse / correr / pasear | <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> (paso vivo) / <kbd>Shift</kbd> correr (gasta el aliento; sin aliento, se anda) / <kbd>Alt</kbd> pasear despacio (en el mando, el stick a medias) |
+| Saltar | <kbd>Espacio</kbd> (~1 m; suéltala antes para un salto corto) |
 | Cámara / acercar y alejar | Ratón / rueda (al mínimo, primera persona) |
 | Hablar / recoger / entrar / sentarse / subir a una barca, un coche o una nave | <kbd>E</kbd> (lo que tienes delante, indicado abajo en pantalla) |
 | Conducir | <kbd>W</kbd><kbd>S</kbd> acelerar y frenar (o los gatillos del mando), <kbd>A</kbd><kbd>D</kbd> volante, <kbd>Espacio</kbd> freno de mano, <kbd>H</kbd> claxon, <kbd>Shift</kbd> turbo (solo deportivos, carreras y patrullas); un coche volcado se endereza con <kbd>E</kbd> |

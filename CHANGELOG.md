@@ -3,6 +3,25 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.14.0] - 2026-11-18
+
+### Cambiado
+- **Moverse a pie, más ágil.**
+  - Se anda a paso vivo, 2.6 m/s (antes 1.6, que se sentía a cámara lenta), y se corre a 6.5 m/s.
+  - <kbd>Alt</kbd> alterna un paseo despacio, a 1.4 m/s; con el mando, basta con el stick a medias.
+  - El cuerpo arranca y frena antes, y en el aire se corrige algo más.
+- **Saltar.**
+  - Se salta alrededor de un metro (antes, medio): salvas una valla o una caja.
+  - Si sueltas la tecla mientras subes, el salto es más corto. Sin aliento se salta menos, y corriendo se llega más lejos.
+  - Aún puedes saltar un instante después de dejar un borde, y una pulsación justo antes de aterrizar no se pierde.
+
+### Corregido
+- Con la tecla de saltar pulsada, el personaje rebotaba sin parar. Ahora es un salto por pulsación.
+- **Las piernas arrastraban los pies.** La animación de andar no daba el paso entero hasta los 4 m/s, así que a paso normal (el jugador y los vecinos) las piernas se movían al 40 %. Ahora dan la zancada completa desde que andas, y su largo depende de la velocidad, como en una persona: unos 2 pasos por segundo paseando y unos 4 corriendo. Los pies ya no patinan ni van a toda prisa.
+- En primera persona, la cabeza se mece al mismo ritmo que los pasos.
+- **En Linux, el juego podía no terminar de cerrarse.** Al salir de una escena, el hilo de audio podía quedarse colgado mezclando un sonido sintetizado ya liberado (viento, olas, motores). Ahora los generadores de audio se comparten y duran hasta que se cierra el juego. En 65 ejecuciones con 2 núcleos no se colgó ninguna; antes se colgaban 2 de cada 32.
+- Salir de una tienda o de una casa justo después de entrar dejaba avisos de objetos ya liberados: el saludo del dependiente, los sonidos con retraso, los paseantes y el camarero esperaban a alguien que ya no estaba.
+
 ## [0.13.2] - 2026-11-18
 
 La 0.13.1 no llegó a publicarse (sus pruebas fallaron en Linux); esta versión la sustituye.

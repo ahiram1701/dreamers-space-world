@@ -25,10 +25,7 @@ static func for_location(def: Dictionary) -> AmbientAudio:
 
 
 func _ready() -> void:
-	var gen := AudioStreamGenerator.new()
-	gen.mix_rate = MIX_RATE
-	gen.buffer_length = 0.25
-	stream = gen
+	stream = Sfx.generator(MIX_RATE, 0.25)  # (compartido y vivo hasta el final: ver Sfx.generator)
 	volume_db = -12.0
 	bus = Sfx.BUS_OUTSIDE  # dentro de un edificio se oye amortiguado
 	Sfx.ensure_buses()

@@ -150,7 +150,7 @@ func _run() -> void:
 	# --- Moverse a pie: velocidades de persona, inercia y aliento ------------------------------
 	var body = root.get_node("/root/Body")
 	var P = load("res://scripts/player/Player.gd")
-	_expect(P.WALK_SPEED <= 1.8 and P.RUN_SPEED <= 6.0 and P.JUMP_VELOCITY * P.JUMP_VELOCITY / 19.6 < 0.6, "se anda a %.1f m/s, se corre a %.1f y se salta %.2f m" % [P.WALK_SPEED, P.RUN_SPEED, P.JUMP_VELOCITY * P.JUMP_VELOCITY / 19.6])
+	_expect(P.WALK_SPEED >= 2.2 and P.WALK_SPEED <= 3.0 and P.RUN_SPEED <= 7.0 and absf(P.JUMP_VELOCITY * P.JUMP_VELOCITY / 19.6 - 1.0) < 0.2, "se anda a %.1f m/s, se corre a %.1f y se salta %.2f m" % [P.WALK_SPEED, P.RUN_SPEED, P.JUMP_VELOCITY * P.JUMP_VELOCITY / 19.6])
 	samir.global_position += Vector3(30, 0, 0)
 	player.global_position = Vector3(-75, town.ground_at(-75, -55) + 0.2, -55)  # campo abierto (sin agua ni muros)
 	player.velocity = Vector3.ZERO
@@ -166,16 +166,16 @@ func _run() -> void:
 	var v_start: float = Vector2(player.velocity.x, player.velocity.z).length()
 	await create_timer(1.0).timeout
 	var v_walk: float = Vector2(player.velocity.x, player.velocity.z).length()
-	_expect(v_start < 0.8 and v_walk > 1.4 and v_walk < 2.0, "arrancar lleva su momento (%.2f m/s al principio, %.2f al segundo)" % [v_start, v_walk])
+	_expect(v_start < 0.8 and v_walk > 2.2 and v_walk < 2.9, "arrancar lleva su momento (%.2f m/s al principio, %.2f al segundo)" % [v_start, v_walk])
 	Input.action_press("run")
 	await create_timer(3.0).timeout
 	var v_run: float = Vector2(player.velocity.x, player.velocity.z).length()
-	_expect(v_run > 4.0 and body.stamina < 92.0, "corriendo se gasta el aliento (%.1f m/s, aliento %d)" % [v_run, roundi(body.stamina)])
+	_expect(v_run > 5.0 and body.stamina < 92.0, "corriendo se gasta el aliento (%.1f m/s, aliento %d)" % [v_run, roundi(body.stamina)])
 	body.stamina = 1.0
 	await create_timer(1.2).timeout  # (la inercia: de correr a andar se frena en algo menos de un segundo)
 	_expect(body.winded and not body.can_run(), "sin aliento no se puede correr")
 	var v_tired: float = Vector2(player.velocity.x, player.velocity.z).length()
-	_expect(v_tired < 2.0, "y vas andando (%.1f m/s)" % v_tired)
+	_expect(v_tired < 3.0, "y vas andando (%.1f m/s)" % v_tired)
 	Input.action_release("run")
 	Input.action_release("move_forward")
 	await create_timer(3.0).timeout

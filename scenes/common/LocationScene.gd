@@ -472,12 +472,14 @@ func _serve_order(order: Array, staff: TownNPC) -> void:
 		staff.say("Aquí tiene. ¡Buen provecho!", 3.0)
 		staff.hold("", "")
 		var back := _waiter_spot()
-		var waiter := staff
+		var waiter_ref: WeakRef = weakref(staff)  # (débil: si sales de la cafetería, se libera)
 		get_tree().create_timer(1.5).timeout.connect(func():
-			if is_instance_valid(waiter) and back != Vector3.INF:
+			var waiter: TownNPC = waiter_ref.get_ref()
+			if waiter != null and back != Vector3.INF:
 				waiter.walk_to(back)
 				await waiter.arrived
-				if is_instance_valid(waiter):
+				waiter = waiter_ref.get_ref()
+				if waiter != null:
 					waiter.settle(back + Vector3(0, 0.1, 0), back + Vector3(0, 0, 2), "", "atendiendo"))
 	_serving = false
 	var only_drinks := order.all(func(o): return is_drink(o))

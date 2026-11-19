@@ -69,6 +69,13 @@ func _spawn() -> void:
 	_wander(npc)
 
 
+## (Con referencia débil: el paseante puede irse a casa y liberarse antes.)
+func _wander_later(ref: WeakRef) -> void:
+	var npc := ref.get_ref() as TownNPC
+	if npc != null:
+		_wander(npc)
+
+
 func _wander(npc: TownNPC) -> void:
 	var names := _places()
 	if names.is_empty() or not is_instance_valid(npc):
@@ -82,7 +89,7 @@ func _wander(npc: TownNPC) -> void:
 			_send_home(npc)  # entra en algún sitio y desaparece
 		else:
 			npc.set_activity("parado un momento", ["think", "search", ""][randi() % 3])
-			get_tree().create_timer(randf_range(4.0, 12.0)).timeout.connect(func(): _wander(npc)), CONNECT_ONE_SHOT)
+			get_tree().create_timer(randf_range(4.0, 12.0)).timeout.connect(_wander_later.bind(weakref(npc))), CONNECT_ONE_SHOT)
 
 
 ## Entra por la puerta más cercana y se queda dentro un rato (si entras, la ves ahí: de visita

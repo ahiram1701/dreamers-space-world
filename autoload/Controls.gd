@@ -5,7 +5,7 @@ extends Node
 const KEYS := {
 	"move_forward": [KEY_W, KEY_UP], "move_back": [KEY_S, KEY_DOWN],
 	"move_left": [KEY_A, KEY_LEFT], "move_right": [KEY_D, KEY_RIGHT],
-	"run": [KEY_SHIFT], "jump": [KEY_SPACE], "interact": [KEY_E], "act": [KEY_F],
+	"run": [KEY_SHIFT], "walk_toggle": [KEY_ALT], "jump": [KEY_SPACE], "interact": [KEY_E], "act": [KEY_F],
 	"inventory": [KEY_I], "anchor": [KEY_T], "pause": [KEY_ESCAPE], "phone": [KEY_C], "fullscreen": [KEY_F11],
 	"choice_1": [KEY_1], "choice_2": [KEY_2], "choice_3": [KEY_3], "choice_4": [KEY_4],
 	"descend": [KEY_CTRL, KEY_Q],   # en una nave: bajar (subir es "jump")
