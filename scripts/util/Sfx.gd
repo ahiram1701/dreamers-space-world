@@ -48,7 +48,7 @@ static func door(parent: Node) -> void:
 
 ## Claxon de un coche: dos notas a la vez, con un poco de aspereza (se oye en 3D desde el coche).
 static func horn(parent: Node3D) -> void:
-	if not parent.is_inside_tree():
+	if _quitting or not parent.is_inside_tree():
 		return
 	if not _cache.has("horn"):
 		var rate := 22050
@@ -72,13 +72,24 @@ static func horn(parent: Node3D) -> void:
 	p.max_distance = 90.0
 	parent.add_child(p)
 	p.position = Vector3(0, 0.8, 1.5)
-	p.finished.connect(p.queue_free)
+	_track(p)
 	p.play()
+
+
+## Sonidos cortos (pasos, golpes, el claxon): se liberan al acabar y, al cerrar el juego, se
+## paran con los demás. (Si uno seguía sonando al cerrar, el hilo de audio se quedaba con su
+## reproducción y Godot avisaba de una fuga: «AudioStreamPlaybackWAV leaked», visto en Linux.)
+const ONESHOT_GROUP := "sfx_oneshot"
+
+
+static func _track(p: Node) -> void:
+	p.add_to_group(ONESHOT_GROUP)
+	p.connect("finished", p.queue_free)
 
 
 ## Sonido del mundo en una posición (pasos, golpes, hacha…). `kind`: una clave de NOISES.
 static func at(parent: Node, kind: String, pos: Vector3, pitch_jitter: float = 0.12, gain_db: float = 0.0, pitch: float = 1.0) -> void:
-	if not NOISES.has(kind) or not parent.is_inside_tree():
+	if _quitting or not NOISES.has(kind) or not parent.is_inside_tree():
 		return
 	if not _cache.has(kind):
 		_cache[kind] = _noise(NOISES[kind])
@@ -92,7 +103,7 @@ static func at(parent: Node, kind: String, pos: Vector3, pitch_jitter: float = 0
 	p.pitch_scale = pitch * (1.0 + randf_range(-pitch_jitter, pitch_jitter))
 	parent.add_child(p)
 	p.global_position = pos
-	p.finished.connect(p.queue_free)
+	_track(p)
 	p.play()
 
 
@@ -190,10 +201,20 @@ static func quit_game(tree: SceneTree, exit_code: int = 0) -> void:
 	if _quitting:
 		return
 	_quitting = true
+	# Nada vuelve a lanzar sonidos (pájaros, grillos, truenos…) mientras se cierra
+	if tree.current_scene:
+		tree.current_scene.process_mode = Node.PROCESS_MODE_DISABLED
 	tree.call_group(SYNTH_GROUP, "shutdown")
+	tree.call_group(ONESHOT_GROUP, "queue_free")  # (también los que iban a sonar con retraso)
 	var music := tree.root.get_node_or_null("Music")
 	if music and music.has_method("_shutdown"):
 		music.call("_shutdown")
+	# Y todo lo que aún suena, también en bucle (la lluvia, el murmullo de la cafetería): si el
+	# hilo de audio se quedaba con su reproducción al cerrar, Godot avisaba de una fuga
+	# («AudioStreamPlaybackWAV leaked», visto en Linux)
+	for kind in ["AudioStreamPlayer", "AudioStreamPlayer2D", "AudioStreamPlayer3D"]:
+		for p in tree.root.find_children("*", kind, true, false):
+			p.stop()
 	# Tiempo real, no fotogramas: sin ventana ni vsync, unos fotogramas pasan en microsegundos y el
 	# hilo de audio (que mezcla cada ~20 ms) aún no los ha soltado. 0.3 s no se nota al cerrar.
 	await tree.create_timer(0.3, true, false, true).timeout
@@ -251,7 +272,7 @@ static func is_indoors() -> bool:
 
 
 static func _play(parent: Node, key: String, stream: AudioStream = null, volume: float = -8.0, delay: float = 0.0) -> void:
-	if not parent.is_inside_tree():
+	if _quitting or not parent.is_inside_tree():
 		return
 	if not _cache.has(key):
 		_cache[key] = stream if stream != null else _noise(NOISES[key])
@@ -259,7 +280,7 @@ static func _play(parent: Node, key: String, stream: AudioStream = null, volume:
 	p.stream = _cache[key]
 	p.volume_db = volume if NOISES.get(key, null) == null else NOISES[key][4]
 	parent.add_child(p)
-	p.finished.connect(p.queue_free)
+	_track(p)
 	if delay > 0.0:
 		# Conectado al propio reproductor: si el lugar se libera antes, la conexión desaparece con él
 		# (una lambda que lo guardara avisaría de un objeto liberado)

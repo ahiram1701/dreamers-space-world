@@ -3,6 +3,11 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.14.1] - 2026-11-19
+
+### Corregido
+- **Cerrar el juego con sonidos aún sonando.** Si al cerrar seguía sonando la lluvia, el murmullo de la cafetería, un pájaro o un paso, el hilo de audio podía quedarse con ese sonido y Godot avisaba de una fuga al salir. Pasaba sobre todo en Linux, y así falló el CI de la 0.14.0. Ahora el cierre detiene antes la escena para que nada lance sonidos nuevos, para todo lo que suena (también en bucle) y espera a que el audio lo suelte. En 60 cierres con carga en Linux no hubo ninguna fuga; antes, 10.
+
 ## [0.14.0] - 2026-11-18
 
 ### Cambiado
