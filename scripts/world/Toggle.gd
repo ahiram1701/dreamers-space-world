@@ -4,18 +4,26 @@ extends RefCounted
 ## («enciendo la tele»). El estado se guarda (al volver, sigue como lo dejaste) y se ve.
 
 static func _key(node: Node3D) -> String:
-	var p := node.global_position * 10.0
-	return "%s|%d,%d,%d" % [GameState.current_location(), int(p.x), int(p.y), int(p.z)]
+	return place_key(node.global_position)
+
+
+## Clave de un sitio concreto del mundo: el lugar, el interior en que estás (todos se construyen
+## en el mismo punto: sin él, la lámpara encendida de una casa salía encendida en todas) y el punto.
+static func place_key(pos: Vector3) -> String:
+	var p := pos * 10.0
+	var inside := InteriorManager.inside_id if pos.y < InteriorManager.ORIGIN.y + 100.0 else ""
+	return "%s%s|%d,%d,%d" % [GameState.current_location(), ("/" + inside) if not inside.is_empty() else "", int(p.x), int(p.y), int(p.z)]
 
 
 static func is_on(node: Node3D) -> bool:
 	return bool(node.get_meta("toggle_on", false))
 
 
-## Hace que `node` se pueda encender y apagar. `apply(on)` cambia lo que se ve.
-static func make(node: Node3D, what: String, apply: Callable, verbs: Array = ["Encender", "Apagar"]) -> void:
+## Hace que `node` se pueda encender y apagar. `apply(on)` cambia lo que se ve. `default_on`: cómo
+## está si nunca lo tocaste (la luz de una casa, encendida; unas cortinas, abiertas).
+static func make(node: Node3D, what: String, apply: Callable, verbs: Array = ["Encender", "Apagar"], default_on: bool = false) -> void:
 	var states: Dictionary = WorldDB.get_state("obj_state", {})
-	var on := bool(states.get(_key(node), false)) if node.is_inside_tree() else false
+	var on := bool(states.get(_key(node), default_on)) if node.is_inside_tree() else default_on
 	node.set_meta("toggle_on", on)
 	node.set_meta("toggle_apply", apply)
 	node.set_meta("toggle_name", what)
@@ -36,7 +44,8 @@ static func set_on(node: Node3D, on: bool) -> String:
 	var what := str(node.get_meta("toggle_name"))
 	var verbs: Array = node.get_meta("toggle_verbs")
 	if is_on(node) == on:
-		return "%s ya está %s." % [what.capitalize(), "encendida" if on else "apagada"]
+		var opens := str(verbs[0]) == "Abrir"
+		return "%s ya está así: %s." % [what.capitalize(), ("abierto" if on else "cerrado") if opens else ("encendido" if on else "apagado")]
 	node.set_meta("toggle_on", on)
 	(node.get_meta("toggle_apply") as Callable).call(on)
 	var states: Dictionary = WorldDB.get_state("obj_state", {})

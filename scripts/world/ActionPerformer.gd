@@ -264,6 +264,9 @@ func _do_step(s: Dictionary, rest: Array) -> Array:
 ## Usar una cosa cualquiera: encender o apagar (la tele, una lámpara), abrir, sentarse… o, si no
 ## hay nada que hacer con ella, mirarla de cerca.
 func _interact(s: Dictionary) -> Array:
+	var v0 := str(s.get("verb", "")).to_lower()
+	if v0 in ["drop", "put_down"] or (v0 == "throw" and player.hands and player.hands.carried and str(s.get("target", "")).is_empty()):
+		return await _hands_do(v0, null)  # dejar o lanzar lo que llevas: no hace falta buscar nada
 	var e := scene.resolve_target(str(s.get("target", "")))
 	if e.is_empty():
 		return ["No ves eso por aquí."]
@@ -272,6 +275,10 @@ func _interact(s: Dictionary) -> Array:
 		return []
 	var verb := str(s.get("verb", "use")).to_lower()
 	var node: Variant = e.get("node")
+	# Con las manos: coger, dejar, lanzar o empujar lo que está suelto
+	var thing: Node3D = (node.get_parent() if node is Interactable else node) as Node3D
+	if verb in ["pick_up", "carry", "take", "drop", "put_down", "throw", "push", "move"] and player.hands:
+		return await _hands_do(verb, thing)
 	var holder: Node = node.get_parent() if node is Interactable and node.get_parent() and node.get_parent().has_meta("toggle_apply") else node
 	if holder is Node3D and (holder as Node3D).has_meta("toggle_apply"):
 		player.play_gesture("open", 0.8)
@@ -283,6 +290,29 @@ func _interact(s: Dictionary) -> Array:
 		return []
 	Examine.examine(player, str(e.label), e.pos)
 	return []
+
+
+## Coger, dejar, lanzar o empujar (Hands): lo mismo que con G y clic, pero contado con F.
+func _hands_do(verb: String, thing: Node3D) -> Array:
+	var hands: Hands = player.hands
+	if verb in ["drop", "put_down"]:
+		return [hands.drop()] if hands.carried else ["No llevas nada en las manos."]
+	if verb == "throw" and hands.carried and (thing == null or thing == hands.carried):
+		return [hands.throw()]
+	if thing == null or not thing.has_meta("movable_kg"):
+		return ["Eso no se puede mover: está fijo o pesa demasiado."]
+	var kg := float(thing.get_meta("movable_kg"))
+	if verb in ["push", "move"] or kg > Hands.CARRY_MAX:
+		# Empujar: andar contra ello un par de metros (lo empuja Hands al chocar)
+		var away := (thing.global_position - player.global_position)
+		away.y = 0.0
+		await player.auto_walk_to(thing.global_position + away.normalized() * 1.5, 0.3)
+		return ["Empujas %s." % thing.get_meta("thing", "eso")] if not _cancelled else []
+	var note := hands.grab(thing)
+	if verb == "throw" and hands.carried == thing:
+		await get_tree().create_timer(0.5).timeout
+		note = hands.throw()
+	return [note]
 
 
 ## Ir en vehículo: sube a tu coche (o a uno cercano: si no es tuyo, es robo), conduce hasta allí
@@ -470,18 +500,38 @@ func _climb(target: String) -> Array:
 		player.stop_gesture()
 		return []
 	var top: float = b.base.y + height
-	if not _roofs.has(id):
+	var land := Vector3(b.base.x, top + 0.1, b.base.z) + front * maxf(b.size.z / 2.0 - 1.4, 0.0)
+	# El techo es el del edificio (choca con su forma): si donde subes es llano, te quedas en él; si
+	# es a dos aguas, una plataforma de tablones (que se ve) para no resbalar.
+	var q := PhysicsRayQueryParameters3D.create(land + Vector3(0, 3.0, 0), land - Vector3(0, height, 0), Layers.WORLD,
+		[player.get_rid()])
+	var hit := player.get_world_3d().direct_space_state.intersect_ray(q)
+	if not hit.is_empty() and (hit.normal as Vector3).y > 0.8:
+		land = hit.position + Vector3(0, 0.1, 0)
+	elif not _roofs.has(id):
 		var body := StaticBody3D.new()
 		var cs := CollisionShape3D.new()
 		var shape := BoxShape3D.new()
-		shape.size = Vector3(maxf(b.size.x - 0.6, 1.5), 0.3, maxf(b.size.z - 0.6, 1.5))
+		shape.size = Vector3(2.0, 0.12, 2.0)
 		cs.shape = shape
 		body.add_child(cs)
+		var boards := MeshInstance3D.new()
+		boards.mesh = BoxMesh.new()
+		boards.mesh.size = shape.size
+		var wood := StandardMaterial3D.new()
+		wood.albedo_color = Color("#7a5a3c")
+		wood.roughness = 0.9
+		boards.material_override = wood
+		body.add_child(boards)
 		scene.add_child(body)
-		body.global_position = Vector3(b.base.x, top - 0.15, b.base.z)
+		var y: float = (float(hit.position.y) if not hit.is_empty() else top) + 0.06
+		body.global_position = Vector3(land.x, y, land.z)
 		body.rotation.y = yaw
 		_roofs[id] = body
-	player.global_position = Vector3(b.base.x, top + 0.1, b.base.z) + front * maxf(b.size.z / 2.0 - 1.4, 0.0)
+		land.y = y + 0.16
+	elif _roofs.has(id):
+		land = (_roofs[id] as Node3D).global_position + Vector3(0, 0.16, 0)
+	player.global_position = land
 	player.velocity = Vector3.ZERO
 	player.stop_gesture()
 	on_roof = id
@@ -627,6 +677,21 @@ static func local_plan(what: String, scene_ref: LocationScene, guess: String) ->
 				var lab := str(e.label).to_lower().get_slice(" (", 0)  # «la tele (apagada)» → «la tele»
 				var noun := lab.get_slice(" ", lab.get_slice_count(" ") - 1)
 				if e.kind == "thing" and (e.node as Node).has_meta("toggle_apply") and noun.length() > 2 and low.contains(noun):
+					return [{"type": "interact", "target": id, "verb": pair[1]}]
+	# Con las manos: «cojo la silla», «empujo el sofá», «lanzo la caja», «suelto la silla»
+	if ["suelto", "dejo lo que", "lo dejo", "la dejo", "dejo en el suelo"].any(func(w): return low.contains(w)):
+		return [{"type": "interact", "target": "", "verb": "drop"}]
+	for pair in [[["cojo", "agarro", "levanto", "cargo", "recojo"], "pick_up"], [["empujo", "arrastro", "muevo"], "push"], [["lanzo", "tiro", "aviento", "arrojo"], "throw"]]:
+		if (pair[0] as Array).any(func(w): return low.contains(w)):
+			for id in scene_ref.nearby_targets():
+				var e: Dictionary = scene_ref.nearby_targets()[id]
+				var n: Variant = e.get("node")
+				var holder: Variant = (n as Node).get_parent() if n is Interactable else n
+				if not (holder is Node3D) or not (holder as Node3D).has_meta("movable_kg"):
+					continue
+				var lab := str(e.label).to_lower().get_slice(" (", 0)
+				var noun := lab.get_slice(" ", lab.get_slice_count(" ") - 1)
+				if noun.length() > 2 and low.contains(noun):
 					return [{"type": "interact", "target": id, "verb": pair[1]}]
 	# Ir en coche: «manejo hasta la granja», «voy en coche al lago»
 	if ["manejo", "conduzco", "en coche", "en auto", "en carro", "maneja", "conducir"].any(func(w): return low.contains(w)):

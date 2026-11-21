@@ -276,18 +276,19 @@ static func build(root: Node3D, kind: String, rng: RandomNumberGenerator, stone:
 			for x in [-2.5, 2.5]:
 				for z in [-1.8, 1.8]:
 					_box(root, Vector3(x, 1.2, z), Vector3(0.08, 2.4, 0.08), frame, false)
-			var glass := _box(root, Vector3(0, 1.2, 0), Vector3(5.0, 2.4, 3.6), Color(0.75, 0.95, 0.85, 0.25), false)
+			# El cristal (se ve, y no se atraviesa)…
+			var glass := _box(root, Vector3(0, 1.2, 0), Vector3(5.0, 2.4, 3.6), Color(0.75, 0.95, 0.85, 0.25), true)
 			var gm := _mat(Color(0.75, 0.95, 0.85, 0.22))
 			gm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 			glass.material_override = gm
-			_box(root, Vector3(0, 1.2, 0), Vector3(5.0, 2.4, 3.6), Color.WHITE, true).visible = false  # el cristal no se atraviesa…
 			out.door = {"offset": Vector3(0, 0, 2.3), "kind": "greenhouse", "size": Vector3(5.0, 2.4, 3.6), "shape": "box"}  # …se entra por la puerta
 			for k in 6:
 				var plant := _cyl(root, Vector3(-2.0 + (k % 3) * 2.0, 0.45, -0.8 + (k / 3) * 1.6), 0.35, 0.2, 0.9, Color("#3f8f4a"), false)
 				plant.name = "Planta"
 			out.stand = Vector3(0, 0, 2.4)
 		"mine":
-			var mound := _cyl(root, Vector3(0, 1.6, -2.5), 1.5, 4.5, 3.2, stone.darkened(0.2), true)
+			# (la cara del montículo, justo detrás de la boca: antes la tapaba y la puerta quedaba dentro)
+			var mound := _cyl(root, Vector3(0, 1.6, -3.8), 1.5, 4.5, 3.2, stone.darkened(0.2), true)
 			mound.name = "Ladera"
 			_box(root, Vector3(0, 1.1, -0.4), Vector3(2.2, 2.2, 0.3), Color("#0d0d0d"), false)  # la boca
 			for x in [-1.2, 1.2]:
@@ -348,8 +349,7 @@ static func _box(root: Node3D, pos: Vector3, size: Vector3, c: Color, solid: boo
 		sh.size = size
 		cs.shape = sh
 		body.add_child(cs)
-		body.position = pos
-		root.add_child(body)
+		mi.add_child(body)  # (hijo de la malla: si se gira, se oculta o se borra, la colisión va con ella)
 	return mi
 
 
@@ -366,11 +366,7 @@ static func _cyl(root: Node3D, pos: Vector3, r_top: float, r_bottom: float, h: f
 	if solid:
 		var body := StaticBody3D.new()
 		var cs := CollisionShape3D.new()
-		var sh := CylinderShape3D.new()
-		sh.radius = maxf(r_top, r_bottom)
-		sh.height = h
-		cs.shape = sh
+		cs.shape = PropsBuilder.cylinder_shape(cm)
 		body.add_child(cs)
-		body.position = pos
-		root.add_child(body)
+		mi.add_child(body)
 	return mi

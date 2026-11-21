@@ -46,7 +46,7 @@ static func build(def: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 		var col := AssetLibrary.instance("modular_sci_fi", "Column_1")
 		var cp := Vector3(cos(a), 0, sin(a)) * 20.0
 		if col:
-			AssetLibrary.place(root, col, cp, 9.0, a, true)
+			AssetLibrary.place(root, col, cp, 9.0, a, "mesh")
 		var lamp := OmniLight3D.new()
 		lamp.light_color = Color("#9fd8ff") if i % 2 == 0 else Color("#f2a65a")
 		lamp.omni_range = 14.0

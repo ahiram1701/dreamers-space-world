@@ -15,6 +15,10 @@ const FOLLOW_SPEED := 4.6
 const FOLLOW_DISTANCE := 2.6
 const RUN_SPEED := 4.2
 const BUBBLE_RANGE := 22.0
+## Inercia al andar (m/s²): arranca y frena en un momento, como el jugador, un poco más suave.
+const ACCEL := 7.0
+const DECEL := 9.0
+const STEP_MAX := 0.36   # sube bordillos y peldaños andando (antes daba un saltito fuera y dentro no subía)
 
 ## Llegó a donde iba con walk_to (para entrar en un edificio al llegar a la puerta, etc.).
 signal arrived
@@ -53,6 +57,9 @@ var _bubble: Label3D
 var _bubble_t := 0.0
 var _present := true
 var _shape: CollisionShape3D
+## Su paso de siempre (m/s): cada persona el suyo; los mayores, más despacio.
+var walk_speed := WALK_SPEED
+var _want_dir := Vector3.ZERO   # hacia dónde quiere ir (la velocidad, tras chocar, ya va de lado)
 var _settled := false      # quieto en un mueble (dormido, sentado, cocinando)
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _riding: Node3D = null    # va de pasajero en un vehículo
@@ -91,6 +98,12 @@ func setup(entity: Dictionary) -> void:
 	shape.position.y = HEIGHT * s.y / 2.0
 	add_child(shape)
 	_shape = shape
+	floor_snap_length = 0.3   # (bajando un bordillo no da un saltito)
+	floor_constant_speed = true
+	floor_max_angle = deg_to_rad(46.0)
+	var pace_rng := RandomNumberGenerator.new()
+	pace_rng.seed = hash(str(entity.id) + "/paso")
+	walk_speed = {"elderly": 1.15, "child": 1.4}.get(look.get("body", ""), pace_rng.randf_range(1.35, 1.65))
 
 	_body = Node3D.new()
 	add_child(_body)
@@ -289,7 +302,7 @@ func walk_to(pos: Vector3, run: bool = false, pace: float = 0.0) -> void:
 	_walk_time = 0.0
 	_speed_override = RUN_SPEED if run else pace
 	var dist := Vector2(pos.x - global_position.x, pos.z - global_position.z).length()
-	_walk_limit = dist / maxf(_speed_override if _speed_override > 0.0 else WALK_SPEED, 0.5) * 2.5 + 15.0
+	_walk_limit = dist / maxf(_speed_override if _speed_override > 0.0 else walk_speed, 0.5) * 2.5 + 15.0
 
 
 ## Bocadillo sobre la cabeza durante unos segundos (lo que suelta al reaccionar: "¡Eh!").
@@ -520,24 +533,24 @@ func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= _gravity * delta
 	var goal := Vector3.INF
-	var speed := WALK_SPEED
+	var speed := walk_speed
 	if talking:
 		goal = Vector3.INF
 	elif _follow and is_instance_valid(_follow):
 		var to_player := _follow.global_position - global_position
-		if Vector2(to_player.x, to_player.z).length() > 30.0:  # se quedó atrás: alcanza al jugador
+		var far := Vector2(to_player.x, to_player.z).length()
+		if far > 30.0 and not _seen():  # se quedó muy atrás y no se le ve: te alcanza (por otro camino)
 			global_position = _follow.global_position + Vector3(1.5, 0.5, 1.5)
-		elif Vector2(to_player.x, to_player.z).length() > FOLLOW_DISTANCE:
+		elif far > FOLLOW_DISTANCE:  # (si se le ve, corre hasta alcanzarte: nadie aparece de la nada)
 			goal = _follow.global_position
-			speed = FOLLOW_SPEED if Vector2(to_player.x, to_player.z).length() > 6.0 else WALK_SPEED * 1.6
+			speed = FOLLOW_SPEED if far > 6.0 else walk_speed * 1.6
 	elif _target != Vector3.INF:
 		_walk_time += delta
 		var left := Vector2(_target.x - global_position.x, _target.z - global_position.z).length()
 		if left >= 0.8 and _walk_time > _walk_limit:
 			# Atascado: si no se le ve, llega por otro camino (se le pone allí); si se le ve, lo
 			# vuelve a intentar un poco más antes de rendirse. Nunca «llega» a 20 m de su destino.
-			var cam := get_viewport().get_camera_3d()
-			var seen := cam != null and cam.is_position_in_frustum(global_position + Vector3(0, 1, 0)) and cam.global_position.distance_to(global_position) < 40.0
+			var seen := _seen()
 			if seen and _walk_time < _walk_limit * 1.6:
 				pass
 			else:
@@ -561,17 +574,24 @@ func _physics_process(delta: float) -> void:
 			_detour -= delta
 			dir = dir.rotated(Vector3.UP, deg_to_rad(75.0) * _detour_side)
 		if _limp > 0.0:
-			speed = minf(speed, WALK_SPEED * 0.6)
+			speed = minf(speed, walk_speed * 0.6)
 		dir = (dir + _avoid_people() * 0.8).normalized()
-		velocity.x = dir.x * speed
-		velocity.z = dir.z * speed
+		_want_dir = dir
+		# Con inercia: arranca, frena y gira en un momento (antes cambiaba de velocidad en seco)
+		var hv := Vector2(velocity.x, velocity.z).move_toward(Vector2(dir.x, dir.z) * speed, (ACCEL if is_on_floor() else 1.5) * delta)
+		velocity.x = hv.x
+		velocity.z = hv.y
 		_body.rotation.y = lerp_angle(_body.rotation.y, atan2(dir.x, dir.z), 8.0 * delta)
 	else:
-		velocity.x = move_toward(velocity.x, 0, 10.0 * delta)
-		velocity.z = move_toward(velocity.z, 0, 10.0 * delta)
+		var hv := Vector2(velocity.x, velocity.z).move_toward(Vector2.ZERO, DECEL * delta)
+		velocity.x = hv.x
+		velocity.z = hv.y
+	var stepped := 0.0
 	move_and_slide()
-	# Atascado contra algo mientras va a un sitio: lo rodea (y salta si es bajo)
-	if goal != Vector3.INF and is_on_wall() and _detour <= 0.0:
+	if goal != Vector3.INF and _detour <= 0.0:  # un bordillo o un peldaño: sube andando
+		stepped = Steps.try_step(self, _want_dir, (_shape.shape as CapsuleShape3D).radius, STEP_MAX)
+	# Atascado contra algo mientras va a un sitio: lo rodea
+	if goal != Vector3.INF and stepped <= 0.0 and is_on_wall() and _detour <= 0.0:
 		_detour = 0.9
 		var now := Time.get_ticks_msec()
 		if now - _last_bump < 2500:
@@ -587,11 +607,17 @@ func _physics_process(delta: float) -> void:
 			_bumps = 0
 		_last_bump = now
 		_path_for = Vector3.INF  # y busca otro camino
-		if is_on_floor() and not InteriorManager.is_interior_pos(global_position):
-			velocity.y = 2.5  # (fuera, un bordillo; dentro no: se subía encima de la barra y las mesas)
 	if _rig:
 		_rig.speed = Vector2(velocity.x, velocity.z).length()
 		_rig.airborne = not is_on_floor() and velocity.y < -2.0
+
+
+## ¿Lo está viendo el jugador? (en pantalla y a menos de 40 m). Nadie aparece ni desaparece de
+## golpe delante de ti.
+func _seen() -> bool:
+	var vp := get_viewport()
+	var cam := vp.get_camera_3d() if vp else null
+	return cam != null and cam.is_position_in_frustum(global_position + Vector3(0, 1, 0)) and cam.global_position.distance_to(global_position) < 40.0
 
 
 # --- En un vehículo, atropellos y lo que lleva en la mano -------------------------------------

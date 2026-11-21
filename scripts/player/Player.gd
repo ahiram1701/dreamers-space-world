@@ -40,6 +40,8 @@ var controls_enabled := true:
 
 ## Elige con qué se interactúa al pulsar E (PNJs, puertas, sillas…).
 var interaction: InteractionSystem
+## Coger, llevar, soltar, lanzar y empujar cosas (G y clic).
+var hands: Hands
 ## Lo que se usaría ahora con E (lo calcula `interaction`).
 var interact_target: Node:
 	get:
@@ -94,6 +96,7 @@ var _breath_t := 0.0
 var _coyote_t := 0.0              # tiempo que aún vale saltar tras dejar el suelo
 var _jump_buffer_t := 0.0         # pulsación de salto pendiente
 var _jump_held := false           # este salto aún sube con la tecla pulsada (soltar lo corta)
+var _step_lag := 0.0              # al subir un escalón: lo que se ve va un poco por detrás (y lo alcanza)
 ## Paseo (Alt): andar despacio, a ritmo de vecino.
 var stroll := false
 
@@ -108,6 +111,9 @@ func _ready() -> void:
 	shape.position.y = 0.9
 	add_child(shape)
 	floor_snap_length = 0.3    # al bajar un escalón no «vuela»: se queda pegado al suelo
+	floor_max_angle = deg_to_rad(46.0)
+	floor_constant_speed = true  # cuesta arriba no se frena ni se acelera cuesta abajo
+	max_slides = 6
 
 	_body = Node3D.new()
 	add_child(_body)
@@ -132,6 +138,9 @@ func _ready() -> void:
 	interaction = InteractionSystem.new()
 	interaction.player = self
 	add_child(interaction)
+	hands = Hands.new()
+	hands.player = self
+	add_child(hands)
 	controls_enabled = true
 
 
@@ -330,6 +339,15 @@ func facing_yaw() -> float:
 
 
 ## Hacia delante del cuerpo (horizontal).
+## Hacia dónde apuntas con la cámara (para lanzar algo): adelante y un poco hacia arriba si miras arriba.
+func aim_direction() -> Vector3:
+	if _cam == null:
+		return facing_dir()
+	var d := -_cam.global_basis.z
+	d.y = clampf(d.y + 0.15, -0.3, 0.8)
+	return d.normalized()
+
+
 func facing_dir() -> Vector3:
 	return Vector3(sin(_body.rotation.y), 0, cos(_body.rotation.y))
 
@@ -505,13 +523,16 @@ func _process(delta: float) -> void:
 		_cam.v_offset = randf_range(-_shake_strength, _shake_strength)
 	elif vspeed <= 25.0:  # encuadre (bajar la cámara en las conversaciones) y la cabeza al andar
 		_cam.h_offset = _bob.x
-		_cam.v_offset = _frame_cur + _bob.y - _land_dip
+		_cam.v_offset = _frame_cur + _bob.y - _land_dip + _step_lag
 
 
 ## La cabeza al andar: sube y baja con cada paso y se mece de lado cada dos (solo en primera
 ## persona, y si no lo quitaste en Ajustes). Al caer de un salto, baja un poco y vuelve.
 func _update_bob(delta: float) -> void:
 	_land_dip = lerpf(_land_dip, 0.0, 1.0 - exp(-7.0 * delta))
+	_step_lag = lerpf(_step_lag, 0.0, 1.0 - exp(-16.0 * delta))
+	if _body:
+		_body.position.y = _step_lag
 	var speed := Vector2(velocity.x, velocity.z).length()
 	var on := _first_person and Settings.head_bob and riding == null and is_on_floor() and not _swimming and speed > 0.3
 	if not on:
@@ -694,22 +715,11 @@ func _pant(delta: float) -> void:
 
 
 ## Escalones: si al andar chocas con algo bajo (un peldaño, un bordillo), subes encima sin saltar.
+## El cuerpo sube de golpe, pero lo que se ve (el muñeco y la cámara) lo alcanza en un instante.
 func _try_step(dir: Vector3) -> void:
-	if not is_on_floor() or not is_on_wall():
-		return
-	var motion := dir.normalized() * 0.3
-	var raised := global_transform.translated(Vector3(0, STEP_MAX, 0))
-	if test_move(raised, motion):
-		return  # sigue chocando aun subiendo: es una pared, no un escalón
-	var from := global_position + Vector3(0, STEP_MAX + 0.05, 0) + motion
-	var q := PhysicsRayQueryParameters3D.create(from, global_position + motion - Vector3(0, 0.05, 0), Layers.WORLD, [get_rid()])
-	var hit := get_world_3d().direct_space_state.intersect_ray(q)
-	if hit.is_empty():
-		return
-	var rise: float = hit.position.y - global_position.y
-	if rise > 0.02 and rise <= STEP_MAX and (hit.normal as Vector3).y > 0.7:
-		global_position += Vector3(0, rise + 0.02, 0) + motion * 0.4
-		velocity.y = maxf(velocity.y, 0.0)
+	var rise := Steps.try_step(self, dir, 0.32, STEP_MAX)
+	if rise > 0.0:
+		_step_lag -= rise + 0.02
 
 
 ## Una caída fuerte: duele según lo rápido que llegas al suelo; muy fuerte, pierdes el sentido.
@@ -744,7 +754,7 @@ func _check_stuck(dir: Vector3, speed: float, before: Vector3, delta: float) -> 
 		return
 	_stuck_t = 0.0
 	var feet := global_position
-	if not InteriorManager.is_free(self, feet, [self], 0.26):  # de verdad estás dentro de algo
+	if not InteriorManager.is_free(self, feet, [self], 0.30):  # de verdad estás dentro de algo
 		global_position = InteriorManager.free_spot_near(self, feet, dir, [self]) + Vector3(0, 0.15, 0)
 		velocity = Vector3.ZERO
 

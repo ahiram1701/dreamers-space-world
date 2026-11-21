@@ -264,15 +264,16 @@ static func _part(body: Node3D, p: Dictionary, index: int, collide: bool) -> Nod
 			mesh.top_radius = 0.0
 			mesh.bottom_radius = size.x / 2.0
 			mesh.height = size.y
-			col = CylinderShape3D.new()
-			col.radius = size.x / 2.0
-			col.height = size.y
+			col = mesh.create_convex_shape(true, true)  # (un cilindro del ancho de la base era aire arriba)
 		"sphere":
 			mesh = SphereMesh.new()
 			mesh.radius = size.x / 2.0
 			mesh.height = size.y
-			col = SphereShape3D.new()
-			col.radius = size.x / 2.0
+			if absf(size.y - size.x) < 0.02:
+				col = SphereShape3D.new()
+				col.radius = size.x / 2.0
+			else:  # achatada o alargada: con su forma (una esfera del ancho chocaba por encima)
+				col = mesh.create_convex_shape(true, true)
 		"capsule":
 			mesh = CapsuleMesh.new()
 			mesh.radius = size.x / 2.0
@@ -284,9 +285,7 @@ static func _part(body: Node3D, p: Dictionary, index: int, collide: bool) -> Nod
 			mesh = TorusMesh.new()
 			mesh.outer_radius = size.x / 2.0
 			mesh.inner_radius = maxf(size.x / 2.0 - maxf(size.y, 0.02), 0.005)
-			col = CylinderShape3D.new()
-			col.radius = size.x / 2.0
-			col.height = size.y
+			col = mesh.create_trimesh_shape()  # con su agujero: un aro se puede atravesar por el centro
 	var mi := MeshInstance3D.new()
 	mi.name = "Part_%d" % index
 	mi.mesh = mesh

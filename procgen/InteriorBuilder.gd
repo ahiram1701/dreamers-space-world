@@ -107,6 +107,8 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3, opts
 	# Edificios de dos plantas por fuera (casas, tiendas, la estación…): también por dentro, con
 	# escalera de verdad hasta arriba. El faro tiene la suya (de caracol, hasta la linterna).
 	var floors := clampi(int(opts.get("floors", 1)), 1, 4) if not round else 1
+	if kind == "tower":
+		floors = 2  # la escalera de caracol sube hasta 6.4 m: con techo a 3.2 lo atravesaba
 	if kind == "dome":
 		_dome_shell(root, w / 2.0, wall, Color(room.floor))
 	elif round:
@@ -117,9 +119,9 @@ static func build(parent: Node3D, kind: String, seed: int, origin: Vector3, opts
 		return _round_layout(root, kind, w / 2.0, origin, rng)
 	if kind in ["house", "home"]:
 		_home_rooms(root, w, d, wall, floors)
-	elif floors > 1:
+	elif floors > 1 and kind != "tower":
 		_stairs_up(root, w, d, 0)
-	for f in range(1, floors - 1):  # tercera planta y más: otro tramo, en la pared de enfrente
+	for f in range(1, floors - 1 if kind != "tower" else 0):  # tercera planta y más: otro tramo, en la pared de enfrente
 		_stairs_up(root, w, d, f)
 
 	var out := {"root": root, "size": Vector2(w, d), "spawn": origin + Vector3(0, 0.1, d / 2.0 - 2.4), "exit": origin + Vector3(0, 0.1, d / 2.0 - 0.4),
@@ -477,7 +479,7 @@ static func _round_layout(root: Node3D, kind: String, r: float, origin: Vector3,
 		_put(root, "Bed_Single", at.call(200.0, r - 0.6), deg_to_rad(200.0) + PI / 2, out.beds)
 		var fire := AssetLibrary.instance("survival_pack", "Bonfire")
 		if fire:
-			AssetLibrary.place(root, fire, Vector3(0, 0, -0.2), 0.4, 0.0, true)
+			AssetLibrary.place(root, fire, Vector3(0, 0, -0.2), 0.4, 0.0, false)  # el fuego no es sólido
 		_put(root, "Shelf_Small1", at.call(120.0, r - 0.3) + Vector3(0, 1.2, 0), deg_to_rad(120.0) + PI)
 		_seat(root, "Chair_3", at.call(-120.0, r - 0.8), deg_to_rad(-120.0) + PI, out, "table")
 		var glow := OmniLight3D.new()
@@ -653,8 +655,85 @@ static func _shell(root: Node3D, w: float, d: float, wall: Color, floor_color: C
 		light.shadow_enabled = Settings.graphics_quality >= 2
 		light.add_to_group("quality_shadows")
 		light.position = Vector3(x, HEIGHT - 0.4, 0)
+		light.add_to_group("room_light")
 		root.add_child(light)
 		_put(root, "Light_Ceiling1", Vector3(x, HEIGHT, 0), 0.0)
+	_light_switch(root, Vector3(gap / 2.0 + 0.35, 1.25, d / 2 - 0.12))
+
+
+## El interruptor junto a la puerta: apaga y enciende las luces del techo (encendidas al llegar).
+static func _light_switch(root: Node3D, at: Vector3) -> void:
+	var plate := PropsBuilder._box(root, at, Vector3(0.08, 0.12, 0.02), Color("#efeae0"), false)
+	plate.name = "Interruptor"
+	Toggle.make(plate, "la luz", func(on: bool):
+		if not root.is_inside_tree():
+			return
+		for l in root.get_tree().get_nodes_in_group("room_light"):
+			if root.is_ancestor_of(l):
+				(l as Light3D).visible = on, ["Encender", "Apagar"], true)
+
+
+## Lo que se abre, se enciende o se usa en una casa (v0.15.0): la nevera, el horno, los grifos, el
+## inodoro, las cortinas y la chimenea. Cada uno se ve y se oye al usarlo.
+static func _fixture(placed: Node3D, model_name: String, size: Vector3) -> void:
+	if model_name == "Kitchen_Fridge":
+		var cold := _fixture_light(placed, Color("#dff0ff"), size * Vector3(0, 0.6, 0.6), 1.2)
+		Toggle.make(placed, "la nevera", func(on: bool): cold.visible = on, ["Abrir", "Cerrar"])
+	elif model_name.begins_with("Kitchen_Oven"):
+		var glow := _fixture_light(placed, Color("#ff8a3a"), Vector3(0, size.y * 0.35, size.z * 0.55), 0.9)
+		Toggle.make(placed, "el horno", func(on: bool): glow.visible = on)
+	elif model_name in ["Kitchen_Sink", "Bathroom_Sink"]:
+		var water := MeshInstance3D.new()
+		water.mesh = CylinderMesh.new()
+		water.mesh.top_radius = 0.012
+		water.mesh.bottom_radius = 0.018
+		water.mesh.height = 0.22
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(0.75, 0.88, 1.0, 0.55)
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.roughness = 0.05
+		water.material_override = m
+		water.position = Vector3(0, size.y + 0.05, -size.z * 0.15)
+		water.visible = false
+		placed.add_child(water)
+		Toggle.make(placed, "el grifo", func(on: bool):
+			water.visible = on
+			if on and placed.is_inside_tree():
+				Sfx.at(placed, "splash", placed.global_position + Vector3(0, size.y, 0), 0.2, -10.0), ["Abrir", "Cerrar"])
+	elif model_name.begins_with("Bathroom_Toilet"):
+		var it := Interactable.create(placed, Vector3(0, 0.7, 0), 1.0, "Tirar de la cadena", func(_p):
+			Sfx.at(placed, "splash", placed.global_position + Vector3(0, 0.6, 0), 0.1, -2.0, 0.7), placed)
+		it.name = "Cisterna"
+	elif model_name.begins_with("Curtains"):
+		var model := placed.get_child(0) as Node3D
+		var full := model.scale
+		Toggle.make(placed, "las cortinas", func(on: bool):
+			# Abiertas, recogidas a un lado; cerradas, tapan la ventana (y entra menos luz)
+			model.scale = Vector3(full.x * (0.35 if on else 1.0), full.y, full.z), ["Abrir", "Cerrar"], true)
+	elif model_name == "Fireplace":
+		var fire := _fixture_light(placed, Color("#ff9a4a"), Vector3(0, size.y * 0.25, size.z * 0.3), 2.2)
+		var flames := AssetLibrary.instance("survival_pack", "Bonfire_Fire")
+		var holder: Node3D = null
+		if flames:
+			holder = AssetLibrary.place(placed, flames, Vector3(0, 0.02, size.z * 0.15), 0.35, 0.0, false)
+		Toggle.make(placed, "la chimenea", func(on: bool):
+			fire.visible = on
+			if holder:
+				holder.visible = on
+			if on and placed.is_inside_tree():
+				Body.change("rest", 1.0)  # (al calor del fuego se descansa mejor)
+		)
+
+
+static func _fixture_light(placed: Node3D, color: Color, at: Vector3, energy: float) -> OmniLight3D:
+	var l := OmniLight3D.new()
+	l.light_color = color
+	l.light_energy = energy
+	l.omni_range = 2.5
+	l.position = at
+	l.visible = false
+	placed.add_child(l)
+	return l
 
 
 ## Un mueble que se usa con E (nevera, grifo, ducha): `what` dice qué hace al usarlo.
@@ -797,7 +876,7 @@ static func _special_room(root: Node3D, kind: String, w: float, d: float, origin
 			out.npc_spots = [origin + Vector3(-1.0, 0, 0.5), origin + Vector3(1.5, 0, 1.5), origin + Vector3(-2.5, 0, 2.0)]
 		"tower":
 			var top := _spiral_stairs(root, Vector3.ZERO, 0.4, 1.9, 16, HEIGHT * 2.0, Color("#6b665e"), 1.92)
-			PropsBuilder._box(root, Vector3(0, HEIGHT * 2.0 - 0.1, 0), Vector3(w - 0.4, 0.2, d - 0.4), Color("#6b665e"), true).visible = false
+			PropsBuilder._box(root, Vector3(0, HEIGHT * 2.0 - 0.1, 0), Vector3(w - 0.4, 0.2, d - 0.4), Color("#6b665e"), true)  # el suelo del mirador (se ve: si no se ve, no choca)
 			_use_at(root, top + Vector3(0, 0.1, 0), out, "climb_up", "Subir al mirador")
 			out["hatch"] = origin + top
 			out.npc_spots = [origin + Vector3(1.8, 0, 1.8), origin + Vector3(-1.8, 0, 1.8)]
@@ -980,6 +1059,8 @@ const FURNITURE_LABELS := {"Bookshelf": "una estantería con libros", "Kitchen_O
 	"Drawer_5": "una cómoda", "NightStand_1": "una mesita de noche", "Table_RoundLarge": "una mesa", "Table_RoundSmall": "una mesa pequeña",
 	"Bathroom_Toilet": "el inodoro", "Bathroom_Sink": "el lavabo", "Trashcan_Large": "un bote de basura", "Kitchen_Cabinet1": "un mueble de cocina",
 	"Kitchen_2Drawers": "la barra", "Fireplace": "la chimenea", "Bathroom_Mirror1": "un espejo", "Carpet_1": "una alfombra", "Carpet_2": "una alfombra", "Carpet_Round": "una alfombra redonda"}
+## Asientos de cualquier tipo (también los que no usa nadie de la casa).
+const SEATS := ["Chair_", "Stool", "Couch_"]
 const LAMPS := ["Light_Stand1", "Light_Stand2", "Light_Floor1", "Light_Floor2", "Light_Floor3", "Light_Floor4", "Light_Desk"]
 
 
@@ -1000,7 +1081,11 @@ static func _put(root: Node3D, model_name: String, pos: Vector3, yaw: float, lis
 	elif FURNITURE_LABELS.has(model_name):  # se puede examinar (y la tecla F lo conoce)
 		placed.set_meta("thing", FURNITURE_LABELS[model_name])
 		placed.add_to_group("things")
-		Examine.attach(root, pos, FURNITURE_LABELS[model_name], "furniture")
+		# (si se puede mover, el aviso de examinar va con el mueble, no se queda en el sitio)
+		var movable := Hands.weight_of(model_name) > 0.0
+		Examine.attach(placed if movable else root, Vector3.ZERO if movable else pos, FURNITURE_LABELS[model_name], "furniture")
+	if solid:  # lo que está suelto se coge o se empuja (G); lo empotrado, no
+		Hands.make_movable(placed)
 	if model_name in LAMPS:  # las lámparas se encienden y se apagan
 		var bulb := OmniLight3D.new()
 		bulb.light_color = Color("#ffd9a0")
@@ -1010,3 +1095,10 @@ static func _put(root: Node3D, model_name: String, pos: Vector3, yaw: float, lis
 		bulb.visible = false
 		placed.add_child(bulb)
 		Toggle.make(placed, "la lámpara", func(on: bool): bulb.visible = on)
+	if list == null:
+		_fixture(placed, model_name, b.size * SCALE)
+	# Donde uno se sienta o se tumba (aunque no lo use nadie de la casa): se puede, con E
+	if list == null and SEATS.any(func(k): return model_name.begins_with(k)):
+		placed.set_meta("seat", true)
+	elif list == null and model_name.begins_with("Bed_"):
+		placed.set_meta("bed", true)

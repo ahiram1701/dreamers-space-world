@@ -60,6 +60,8 @@ func _parts(id: String) -> Array:
 			return [["key", "anchor"], "Ancla: salta a otras ramas del multiverso"]
 		"pause":
 			return [["key", "pause"], "Pausa: ahí tienes todos los controles"]
+		"grab":
+			return [["key", "grab"], "coge lo que está suelto (una silla, una caja) y vuelve a dejarlo; lo pesado se empuja andando"]
 	return []
 
 
@@ -72,6 +74,8 @@ func show_once(id: String) -> void:
 func _process(delta: float) -> void:
 	if player and player.interact_target != null:
 		show_once("interact")
+	if player and player.get("hands") and player.hands.target() != null:
+		show_once("grab")
 	if _showing:
 		_t += delta
 		if player and not player.controls_enabled:

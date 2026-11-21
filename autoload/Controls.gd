@@ -16,11 +16,13 @@ const KEYS := {
 	"horn": [KEY_H],                # en un vehículo: claxon
 	"next_target": [KEY_TAB],       # en el espacio: cambiar de destino
 	"flight_assist": [KEY_Z],       # en el espacio: amortiguar la inercia o no
+	"grab": [KEY_G],                # a pie: coger, llevar y soltar (en el espacio, G es el piloto automático)
 }
 const BUTTONS := {
 	"jump": [JOY_BUTTON_A], "interact": [JOY_BUTTON_X], "act": [JOY_BUTTON_Y],
 	"inventory": [JOY_BUTTON_BACK], "back": [JOY_BUTTON_B], "anchor": [JOY_BUTTON_LEFT_SHOULDER], "pause": [JOY_BUTTON_START],
 	"run": [JOY_BUTTON_LEFT_STICK], "phone": [JOY_BUTTON_RIGHT_SHOULDER], "descend": [JOY_BUTTON_RIGHT_STICK], "zoom_in": [JOY_BUTTON_DPAD_UP], "zoom_out": [JOY_BUTTON_DPAD_DOWN],
+	"grab": [JOY_BUTTON_DPAD_RIGHT], "throw": [JOY_BUTTON_DPAD_LEFT],
 }
 const AXES := {
 	"move_forward": [JOY_AXIS_LEFT_Y, -1.0], "move_back": [JOY_AXIS_LEFT_Y, 1.0],
@@ -38,6 +40,10 @@ func _ready() -> void:
 			var e := InputEventKey.new()
 			e.physical_keycode = k
 			InputMap.action_add_event(action, e)
+	_ensure("throw")  # lanzar lo que llevas: clic izquierdo
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	InputMap.action_add_event("throw", click)
 	for action in ["zoom_in", "zoom_out"]:
 		_ensure(action)
 		var w := InputEventMouseButton.new()
@@ -73,7 +79,7 @@ func label_for(action: String) -> String:
 	if using_gamepad and BUTTONS.has(action):
 		return {JOY_BUTTON_A: "A", JOY_BUTTON_B: "B", JOY_BUTTON_X: "X", JOY_BUTTON_Y: "Y", JOY_BUTTON_BACK: "Back",
 			JOY_BUTTON_START: "Start", JOY_BUTTON_LEFT_SHOULDER: "LB", JOY_BUTTON_RIGHT_SHOULDER: "RB", JOY_BUTTON_LEFT_STICK: "L3",
-			JOY_BUTTON_DPAD_UP: "↑", JOY_BUTTON_DPAD_DOWN: "↓"}.get(BUTTONS[action][0], "?")
+			JOY_BUTTON_DPAD_UP: "↑", JOY_BUTTON_DPAD_DOWN: "↓", JOY_BUTTON_DPAD_RIGHT: "→", JOY_BUTTON_DPAD_LEFT: "←"}.get(BUTTONS[action][0], "?")
 	if KEYS.has(action):
 		return OS.get_keycode_string(KEYS[action][0]).replace("Escape", "Esc").replace("Space", "Espacio")
 	return {"zoom_in": "Rueda", "zoom_out": "Rueda"}.get(action, action)

@@ -857,7 +857,7 @@ func _level_crossing(at: Vector3) -> void:
 			stripe.rotation.z = a
 		var sign := AssetLibrary.instance("street_pack", "Sign_Triangle")
 		if sign:
-			AssetLibrary.place(self, sign, at + Vector3(side * 5.6, 0, side * 6.0), 2.4, 0.0 if side < 0 else PI, true)
+			AssetLibrary.place(self, sign, at + Vector3(side * 5.6, 0, side * 6.0), 2.4, 0.0 if side < 0 else PI, "mesh")
 
 
 ## Plataforma de despegue al oeste del pueblo (donde está la lanzadera vieja).
@@ -935,7 +935,7 @@ func _house(base: Vector3, side: int, size_class: String, wall: Color, rng: Rand
 		_box(base + Vector3(0, 2, 0), Vector3(6, 4, 6), wall)
 		return
 	var b := AssetLibrary.bounds(model)
-	var root := AssetLibrary.place(self, model, base, b.size.y * 2.7, PI / 2 if side < 0 else -PI / 2, true)
+	var root := AssetLibrary.place(self, model, base, b.size.y * 2.7, PI / 2 if side < 0 else -PI / 2, "mesh")
 	_house_count += 1
 	var home := base.is_equal_approx(Vector3(-16, 0, -4))
 	if not home and side > 0 and absf(base.z) <= 14.0 and not _shops_to_open.is_empty():
@@ -963,7 +963,7 @@ func _building(base: Vector3, model_name: String, scale: float, yaw: float, wall
 		_box(base + Vector3(0, 2, 0), Vector3(8, 4, 6), wall)
 		return
 	var b := AssetLibrary.bounds(model)
-	_add_door(AssetLibrary.place(self, model, base, b.size.y * scale, yaw, true), kind, kind, label)
+	_add_door(AssetLibrary.place(self, model, base, b.size.y * scale, yaw, "mesh"), kind, kind, label)
 
 
 ## Puerta en la fachada (los modelos miran hacia +Z): se entra con E.
@@ -992,19 +992,12 @@ func _add_door(root: Node3D, kind: String, id: String, label: String) -> void:
 	_interiors.set_door_option(id, "floors", AssetLibrary.floors_of(mname, size.y))
 	_interiors.set_door_option(id, "balcony", mname.contains("Balcony"))
 	if mname.contains("Balcony"):
-		# El balcón de verdad del modelo: ahí se sale (antes, una losa invisible por delante). Y la
-		# caja de choque de la casa acaba en la fachada, para poder pisarlo.
+		# El balcón de verdad del modelo: ahí se sale (antes, una losa invisible por delante). La casa
+		# choca con su forma exacta, así que el balcón se pisa tal cual.
 		var bal := AssetLibrary.balcony_of(root)
 		if not bal.is_empty():
 			_interiors.set_door_option(id, "balcony_spot", root.global_transform * (bal.local as Vector3))
 			_interiors.set_door_option(id, "balcony_size", Vector2(float(bal.width), float(bal.depth)))
-			for body in root.get_children():
-				if body is StaticBody3D:
-					for cs in body.get_children():
-						if cs is CollisionShape3D and cs.shape is BoxShape3D:
-							var bx: BoxShape3D = cs.shape
-							bx.size.z -= float(bal.depth) + 0.1
-							cs.position.z -= (float(bal.depth) + 0.1) / 2.0
 	var sign: String = {"clothes": "Ropa", "salon": "Peluquería"}.get(kind, str(Shops.info(kind).get("sign", "")) if Shops.is_shop(kind) else "")
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(id)
@@ -1047,7 +1040,7 @@ func _lighthouse_door(lp: Vector3) -> void:
 	var door_at := lp + out * 3.18 + Vector3(0, plinth_top, 0)
 	var model := AssetLibrary.instance("house_interior_pack", "Door_4")
 	if model:
-		AssetLibrary.place(self, model, door_at, 2.25, yaw, true)
+		AssetLibrary.place(self, model, door_at, 2.25, yaw, "mesh")
 	else:
 		_box(door_at + Vector3(0, 1.1, 0), Vector3(1.1, 2.2, 0.12), Color("#4a3426"), false).rotation.y = yaw
 	var stone := Color("#b9b2a4")
@@ -1125,9 +1118,7 @@ func _cylinder(pos: Vector3, top: float, bottom: float, height: float, color: Co
 	add_child(mesh)
 	var body := StaticBody3D.new()
 	var shape := CollisionShape3D.new()
-	shape.shape = CylinderShape3D.new()
-	shape.shape.radius = bottom
-	shape.shape.height = height
+	shape.shape = PropsBuilder.cylinder_shape(mesh.mesh)
 	body.add_child(shape)
 	mesh.add_child(body)
 	return mesh

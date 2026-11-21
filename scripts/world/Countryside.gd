@@ -291,7 +291,7 @@ func _fence_ring(center: Vector3, half: Vector2, ground: Callable, gap_side: int
 
 
 func _farm(at: Vector3, rng: RandomNumberGenerator, ground: Callable) -> void:
-	var barn := _model("buildings_pack_3", "1Story_GableRoof_Mat", at + Vector3(8, 0, -10), 6.0, 0.0)
+	var barn := _model("buildings_pack_3", "1Story_GableRoof_Mat", at + Vector3(8, 0, -10), 6.0, 0.0, "mesh")
 	if barn:
 		_enterable.call_deferred(barn, "granero", "el granero", "barn", "box")
 	_model("kenney_cars", "tractor", at + Vector3(2, 0, -14), 2.4, 0.6)
@@ -347,10 +347,12 @@ func _camp(at: Vector3, rng: RandomNumberGenerator) -> void:
 	var tent := _model("survival_pack", "Tent", at + Vector3(-3, 0, -2), 1.8, 0.4)
 	if tent:
 		_enterable.call_deferred(tent, "tienda_campamento", "la tienda de campaña", "tent", "box")
-	_model("survival_pack", "Bonfire_Fire", at + Vector3(1, 0, 1), 0.6, 0.0, true)
+	_model("survival_pack", "Bonfire_Fire", at + Vector3(1, 0, 1), 0.6, 0.0, false)  # el fuego no es sólido
 	for i in 3:
 		var a := TAU * i / 3.0 + 0.3
-		_model("survival_pack", "WoodLog", at + Vector3(1 + cos(a) * 1.8, 0, 1 + sin(a) * 1.8), 0.4, a, true)
+		var log_seat := _model("survival_pack", "WoodLog", at + Vector3(1 + cos(a) * 1.8, 0, 1 + sin(a) * 1.8), 0.4, a, true)
+		if log_seat:
+			Hands.make_movable(log_seat, -1.0, "el tronco")  # (se puede arrimar al fuego)
 	var fire := OmniLight3D.new()
 	fire.light_color = Color("#ff9a4a")
 	fire.omni_range = 7.0
@@ -391,7 +393,7 @@ func _lookout(at: Vector3) -> void:
 
 
 func _hut(at: Vector3, rng: RandomNumberGenerator) -> void:
-	var hut := _model("buildings_pack_3", "1Story_RoundRoof_Mat", at + Vector3(-3, 0, 0), 4.2, PI / 2)
+	var hut := _model("buildings_pack_3", "1Story_RoundRoof_Mat", at + Vector3(-3, 0, 0), 4.2, PI / 2, "mesh")
 	if hut:
 		_enterable.call_deferred(hut, "choza", "la cabaña del pescador")
 	_real_boat(at + Vector3(6, 0, 3), "Boat", 4.0)
@@ -415,7 +417,7 @@ func _forest(at: Vector3, rng: RandomNumberGenerator) -> void:
 		var tree := AssetLibrary.nature("temperate", 0, rng)
 		if tree:
 			p.y = _ground.call(p.x, p.z)
-			AssetLibrary.place(self, tree, p, rng.randf_range(5.0, 9.0), rng.randf() * TAU, true)
+			AssetLibrary.place(self, tree, p, rng.randf_range(5.0, 9.0), rng.randf() * TAU, "trunk")  # (la copa no choca: se pasa por debajo)
 	for k in ["deer", "deer", "deer", "rabbit", "rabbit", "rabbit", "fox"]:
 		var c := at + Vector3(rng.randf_range(-35, 35), 0, rng.randf_range(-35, 35))
 		var an := Animal.make(k, c, Vector2(14, 14), rng)
@@ -429,7 +431,9 @@ func _forest(at: Vector3, rng: RandomNumberGenerator) -> void:
 ## La boca de una cueva en la ladera: se entra (oscura: mejor con linterna).
 func _cave(at: Vector3) -> void:
 	var rock := Color("#5a524a")
-	var mound := PropsBuilder._cylinder(self, at + Vector3(0, 3.0, -4.0), 3.0, 8.0, 6.0, rock, true)
+	# La ladera, con su cara justo detrás de la boca (antes la tapaba: la boca y la puerta quedaban
+	# dentro del montículo y no se llegaba a entrar)
+	var mound := PropsBuilder._cylinder(self, at + Vector3(0, 3.0, -6.6), 3.0, 8.0, 6.0, rock, true)
 	mound.name = "Ladera"
 	var mouth := PropsBuilder._box(self, at + Vector3(0, 1.4, 0.05), Vector3(2.6, 2.8, 0.4), Color("#080706"), false)
 	mouth.name = "Boca"
@@ -505,10 +509,11 @@ static func make_forage(parent: Node3D, scene_ref: Node, at: Vector3, prompt: St
 	holder.position = at
 	parent.add_child(holder)
 	var key := "%s_%d_%d" % [GameState.current_location(), int(at.x), int(at.z)]
+	var picked_today := int(WorldDB.get_state("forage", {}).get(key, -1)) == int(WorldClock.absolute_minutes() / 1440.0)
 	if not model.is_empty():
-		var m := AssetLibrary.instance("nature_pack", model)
-		if m:
-			AssetLibrary.place(holder, m, Vector3.ZERO, 0.9, 0.0, "bush")
+		# Una mata (de moras): al recogerlas, la mata sigue ahí, sin fruto, hasta mañana
+		holder.set_meta("forage_bare", model.replace("BushBerries_", "Bush_"))
+		_forage_model(holder, holder.get_meta("forage_bare") if picked_today else model)
 	else:
 		var col := Color("#d8c9a8")
 		if item == "Conchas" or item.begins_with("Concha"):
@@ -519,18 +524,41 @@ static func make_forage(parent: Node3D, scene_ref: Node, at: Vector3, prompt: St
 			PropsBuilder._sphere(holder, Vector3(randf_range(-0.4, 0.4), 0.08, randf_range(-0.4, 0.4)), 0.09 + randf() * 0.05, col, false)
 	var it := Interactable.create(holder, Vector3(0, 0.6, 0), 1.3, prompt, func(_p): _pick(scene_ref, holder, key, item, desc, effect))
 	it.name = "Recoger"
-	var picked: Dictionary = WorldDB.get_state("forage", {})
-	holder.visible = int(picked.get(key, -1)) != int(WorldClock.absolute_minutes() / 1440.0)
+	_set_picked(holder, picked_today)
 	Decor.landmark(parent, at, "%s en el suelo" % item.to_lower(), "forage")
 
 
+## La mata con o sin fruto (sólida, se rodea).
+static func _forage_model(holder: Node3D, model: String) -> void:
+	for c in holder.get_children():
+		if c.has_meta("size"):
+			c.free()
+	var m := AssetLibrary.instance("nature_pack", model)
+	if m:
+		AssetLibrary.place(holder, m, Vector3.ZERO, 0.9, 0.0, "bush")
+
+
+## Recogido: lo suelto (setas, conchas) desaparece; una mata se queda, sin fruto. Y no se vuelve a
+## ofrecer hasta que vuelva a salir.
+static func _set_picked(holder: Node3D, picked: bool) -> void:
+	holder.set_meta("picked", picked)
+	var it := holder.get_node_or_null("Recoger")
+	if it:
+		it.enabled = not picked
+	if holder.has_meta("forage_bare"):
+		return
+	holder.visible = not picked
+
+
 static func _pick(scene_ref: Node, holder: Node3D, key: String, item: String, desc: String, effect: String) -> void:
-	if not holder.visible:
+	if holder.get_meta("picked", false):
 		return
 	var picked: Dictionary = WorldDB.get_state("forage", {})
 	picked[key] = int(WorldClock.absolute_minutes() / 1440.0)
 	WorldDB.set_state("forage", picked)
-	holder.visible = false
+	if holder.has_meta("forage_bare"):
+		_forage_model(holder, holder.get_meta("forage_bare"))
+	_set_picked(holder, true)
 	if scene_ref and scene_ref.get("_player"):
 		scene_ref.get("_player").play_gesture("pick_up", 1.2)
 	var notes := Actions.execute("", [{"type": "give_item", "item_name": item, "item_description": desc, "item_effect": effect}])

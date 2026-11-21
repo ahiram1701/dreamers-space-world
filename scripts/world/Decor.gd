@@ -142,7 +142,18 @@ static func streetlight(parent: Node3D, pos: Vector3, yaw: float, fx: Environmen
 	light.distance_fade_length = 15.0
 	var glass: StandardMaterial3D = null
 	if model:
-		AssetLibrary.place(parent, model, pos, 4.4, yaw, true)
+		# Choca el poste, hasta donde llega una persona saltando; bajo el brazo y el farol se pasa
+		# (con su forma exacta eran 1100 caras por farola, y hay decenas)
+		var lamp := AssetLibrary.place(parent, model, pos, 4.4, yaw, "trunk")
+		var body: StaticBody3D = lamp.get_children().filter(func(c): return c is StaticBody3D).front()
+		var pole: CollisionShape3D = body.get_child(0) if body.get_child_count() > 0 else null
+		if pole:
+			var upper := CollisionShape3D.new()
+			upper.shape = CylinderShape3D.new()
+			upper.shape.radius = (pole.shape as CylinderShape3D).radius
+			upper.shape.height = 1.6
+			upper.position = Vector3(pole.position.x, 2.3, pole.position.z)
+			body.add_child(upper)
 		# La luz va DEBAJO del farol: dentro, a centímetros del cristal, lo quemaba a blanco puro
 		light.position = pos + Vector3(0, 3.55, 0)
 		glass = _lantern_glass(model)
@@ -323,6 +334,8 @@ static func build_placed(parent: Node3D, entry: Dictionary, height_at: Callable,
 		var model := AssetLibrary.instance(spec[0], spec[1])
 		if model:
 			root = AssetLibrary.place(parent, model, pos, spec[2], yaw, "trunk" if kind == "torch" else kind != "campfire")  # todo es sólido menos el fuego
+			if kind in ["chair", "table", "box"]:
+				Hands.make_movable(root)
 	if root == null:
 		root = _primitive_placed(parent, kind, pos, yaw)
 	var function: String = entry.get("function", "none")

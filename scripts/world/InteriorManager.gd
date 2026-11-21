@@ -32,6 +32,8 @@ var _doors := {}          # id -> { pos, yaw, kind, seed, label, node }
 ## Puertas cerradas por dentro: id -> texto que se ve al intentar entrar ("Teo no abre").
 var locked := {}
 var _current := ""
+## El interior en que se está ahora ("" fuera): para guardar lo que cambias dentro de cada uno.
+static var inside_id := ""
 var _interior: Dictionary = {}
 var _fade: ColorRect
 var _busy := false
@@ -312,6 +314,7 @@ func enter(id: String, through: bool = false) -> void:
 		var bs: Vector3 = door.building.size
 		opts["footprint"] = Vector2(bs.x, bs.z)
 		opts["height"] = bs.y
+	inside_id = id
 	_interior = InteriorBuilder.build(self, door.kind, door.seed, ORIGIN, opts)
 	_current = id
 	var exit_it := Interactable.create(_interior.root, _interior.exit - ORIGIN + Vector3(0, 1.0, 0), 1.9, "Salir", func(p): leave())
@@ -322,6 +325,13 @@ func enter(id: String, through: bool = false) -> void:
 	for bed in _interior.beds:
 		var node: Node3D = bed.node
 		Interactable.create(node, Vector3(0, 0.5, 0), 1.5, "Dormir", func(p): sleep(node), node)
+	# Cualquier silla, taburete o sofá sirve para sentarse, y cualquier cama para tumbarse (no
+	# solo los de la gente de la casa)
+	for node in _interior.root.find_children("*", "Node3D", true, false):
+		if node.has_meta("seat"):
+			Interactable.create(node, Vector3(0, 0.5, 0), 1.0, "Sentarse", func(p): sit(node), node)
+		elif node.has_meta("bed"):
+			Interactable.create(node, Vector3(0, 0.5, 0), 1.5, "Dormir", func(p): sleep(node), node)
 	for u in _interior.get("uses", []):
 		var node: Node3D = u.node
 		var what: String = u.get("what", "")
@@ -346,6 +356,7 @@ func leave_to(pos: Vector3, look: Vector3) -> void:
 	var id := _current
 	var door: Dictionary = _doors[id]
 	_current = ""
+	inside_id = ""
 	invited.erase(id)
 	_clear_interior()
 	player.velocity = Vector3.ZERO
@@ -362,6 +373,29 @@ func leave_to(pos: Vector3, look: Vector3) -> void:
 ## Salir al balcón de un edificio: sobre una losa delante de la fachada, a la altura de la planta
 ## de arriba (y, para volver, «Entrar»).
 var _balconies := {}
+
+## Una barandilla que se ve donde está su colisión: un pasamanos y unos barrotes.
+func _rail_mesh(size: Vector3, at: Vector3, wood: StandardMaterial3D) -> Node3D:
+	var holder := Node3D.new()
+	holder.position = at
+	var top := MeshInstance3D.new()
+	top.mesh = BoxMesh.new()
+	top.mesh.size = Vector3(size.x, 0.06, size.z)
+	top.position.y = size.y / 2.0 - 0.03
+	top.material_override = wood
+	holder.add_child(top)
+	var long := maxf(size.x, size.z)
+	var n := maxi(int(long / 0.25), 2)
+	for i in n + 1:
+		var bar := MeshInstance3D.new()
+		bar.mesh = BoxMesh.new()
+		bar.mesh.size = Vector3(0.04, size.y, 0.04)
+		var t := -long / 2.0 + long * i / n
+		bar.position = Vector3(t, 0, 0) if size.x > size.z else Vector3(0, 0, t)
+		bar.material_override = wood
+		holder.add_child(bar)
+	return holder
+
 
 func _go_balcony(id: String) -> void:
 	var b: Dictionary = _doors.get(id, {}).get("building", {})
@@ -397,19 +431,24 @@ func _go_balcony(id: String) -> void:
 		get_parent().add_child(slab)
 		slab.global_position = spot - Vector3(0, 0.08, 0)
 		slab.rotation.y = float(b.yaw)
-		for sx in [-1.0, 1.0]:  # barandilla a los lados y delante (para no caerse al salir)
-			var rail := CollisionShape3D.new()
-			var rb := BoxShape3D.new()
-			rb.size = Vector3(0.08, 1.0, bsize.y)
-			rail.shape = rb
-			rail.position = Vector3(sx * bsize.x / 2.0, 0.55, 0)
-			slab.add_child(rail)
-		var fr := CollisionShape3D.new()
-		var fb := BoxShape3D.new()
-		fb.size = Vector3(bsize.x, 1.0, 0.08)
-		fr.shape = fb
-		fr.position = Vector3(0, 0.55, bsize.y / 2.0 - 0.04)
-		slab.add_child(fr)
+		# Barandilla a los lados y delante (para no caerse al salir). El balcón del propio modelo ya
+		# tiene la suya y choca con su forma: solo la losa improvisada la necesita.
+		if not opts.has("balcony_spot"):
+			for sx in [-1.0, 1.0]:
+				var rail := CollisionShape3D.new()
+				var rb := BoxShape3D.new()
+				rb.size = Vector3(0.08, 1.0, bsize.y)
+				rail.shape = rb
+				rail.position = Vector3(sx * bsize.x / 2.0, 0.55, 0)
+				slab.add_child(rail)
+				slab.add_child(_rail_mesh(rb.size, rail.position, wood))  # (se ve: si no se ve, no choca)
+			var fr := CollisionShape3D.new()
+			var fb := BoxShape3D.new()
+			fb.size = Vector3(bsize.x, 1.0, 0.08)
+			fr.shape = fb
+			fr.position = Vector3(0, 0.55, bsize.y / 2.0 - 0.04)
+			slab.add_child(fr)
+			slab.add_child(_rail_mesh(fb.size, fr.position, wood))
 		Interactable.create(get_parent(), spot - front * 0.3 + Vector3(0, 1.0, 0), 1.2, "Entrar", func(_p): enter_at(id, "balcony_in"))
 		Decor.landmark(get_parent(), spot, "el balcón de %s" % _doors[id].label, "balcony")
 		_balconies[id] = slab
@@ -432,6 +471,7 @@ func leave() -> void:
 	var id := _current
 	var door: Dictionary = _doors[id]
 	_current = ""
+	inside_id = ""
 	invited.erase(id)  # la invitación era para esa visita
 	_clear_interior()
 	player.velocity = Vector3.ZERO

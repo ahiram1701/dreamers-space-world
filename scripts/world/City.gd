@@ -153,16 +153,17 @@ func _car(ring: Array, i: int, rng: RandomNumberGenerator) -> void:
 	var model := AssetLibrary.instance("kenney_cars", ["sedan", "taxi", "van", "hatchback-sports"][i % 4])
 	var node := Node3D.new()
 	add_child(node)
-	if model:
-		AssetLibrary.place(node, model, Vector3.ZERO, 1.5, 0.0, true)
+	var size := Vector3(1.8, 1.4, 4.2)
+	if model:  # (el cuerpo que se mueve es el de abajo: un estático que se desplaza no empuja bien)
+		size = AssetLibrary.place(node, model, Vector3.ZERO, 1.5, 0.0, false).get_meta("size")
 	else:
 		PropsBuilder._box(node, Vector3(0, 0.7, 0), Vector3(1.8, 1.3, 4.2), Color.from_hsv(rng.randf(), 0.6, 0.8), false)
 	var body := AnimatableBody3D.new()
 	var cs := CollisionShape3D.new()
 	var bs := BoxShape3D.new()
-	bs.size = Vector3(1.8, 1.4, 4.2)
+	bs.size = size
 	cs.shape = bs
-	cs.position.y = 0.7
+	cs.position.y = size.y / 2.0
 	body.add_child(cs)
 	node.add_child(body)
 	node.global_position = (ring[i] as Vector3)

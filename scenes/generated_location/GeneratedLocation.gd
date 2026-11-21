@@ -381,7 +381,7 @@ func _beacon(pos: Vector3, label: String, _color: Color, poi_index: int) -> void
 		"wreck":  # restos de una nave medio enterrada
 			var ship := AssetLibrary.instance(Ship.MODEL_DIR, ["Striker", "Bob", "Dispatcher"][rng.randi() % 3])
 			if ship:
-				var placed := AssetLibrary.place(root, ship, Vector3(0, -0.6, 0), 2.6, rng.randf() * TAU, true)
+				var placed := AssetLibrary.place(root, ship, Vector3(0, -0.6, 0), 2.6, rng.randf() * TAU, "mesh")
 				placed.rotation_degrees.z = rng.randf_range(12.0, 28.0)
 				placed.rotation_degrees.x = rng.randf_range(-10.0, 10.0)
 			for k in 6:

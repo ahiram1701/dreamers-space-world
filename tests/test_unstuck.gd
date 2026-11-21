@@ -52,7 +52,8 @@ func _run() -> void:
 	# Metido dentro de un arbusto: al empujar, te despegas
 	var bush_pos := Vector3.INF
 	for f in town.get("_features"):
-		if f.kind == "bush" and is_instance_valid(f.node):
+		# (una mata de verdad: las flores y la hierba alta se atraviesan desde la 0.15.0)
+		if f.kind == "bush" and is_instance_valid(f.node) and f.node.get_children().any(func(c): return c is StaticBody3D):
 			bush_pos = f.node.global_position
 			break
 	_expect(bush_pos != Vector3.INF, "hay arbustos en el pueblo")

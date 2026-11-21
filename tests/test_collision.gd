@@ -5,7 +5,7 @@ extends SceneTree
 ## personajes (que tienen la suya).
 ##   godot --headless --path . -s tests/test_collision.gd
 
-const PASSABLE := ["Carpet", "Light_Ceiling", "Flowers", "Grass"]  # (las flores y la hierba alta se atraviesan)
+const PASSABLE := ["Carpet", "Light_Ceiling", "Flowers", "Grass", "Plant_", "Bonfire"]  # (las flores, la hierba alta, los helechos y el fuego se atraviesan)
 
 var _failed := 0
 
@@ -25,6 +25,16 @@ func _run() -> void:
 		await process_frame
 	var missing := _without_collision(town)
 	_expect(missing.is_empty(), "el pueblo: todo lo sólido tiene colisión %s" % [missing.slice(0, 8)])
+	# v0.15.0: y al revés, lo que se atraviesa no tiene cuerpo
+	var walls := _passable_with_body(town)
+	_expect(walls.is_empty(), "las flores, la hierba, los helechos y el fuego se atraviesan %s" % [walls.slice(0, 8)])
+	# La cueva: su puerta se alcanza andando (antes quedaba dentro del montículo)
+	var doors: Dictionary = town.get("_interiors").doors()
+	_expect(doors.has("cueva"), "la cueva tiene puerta")
+	if doors.has("cueva"):
+		var door: Vector3 = town.get("_interiors").door_position("cueva")
+		var reach := _reachable(town, door)
+		_expect(reach < 1.5, "a la puerta de la cueva se llega a pie (a %.1f m)" % reach)
 
 	var builder = load("res://procgen/InteriorBuilder.gd")
 	for kind in builder.ROOMS:
@@ -36,6 +46,20 @@ func _run() -> void:
 		_expect(not room.npc_spots.is_empty() and room.spawn.distance_to(room.npc_spots[0]) > 1.5,
 			"interior «%s»: el sitio del PNJ no tapa la entrada" % kind)
 		holder.queue_free()
+
+	# La mina de un mundo generado: su boca no está tapada por el montículo
+	var poi := Node3D.new()
+	root.add_child(poi)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var mine: Dictionary = load("res://procgen/PoiCatalog.gd").build(poi, "mine", rng, Color("#8a8478"))
+	poi.position = Vector3(300, -200, 300)
+	await physics_frame
+	await physics_frame
+	var mouth: Vector3 = poi.global_position + (mine.door.offset as Vector3) + Vector3(-0.6, 0, 0.8)  # (al lado de la vagoneta)
+	var im = load("res://scripts/world/InteriorManager.gd")
+	_expect(im.is_free(poi, mouth, [], 0.3), "delante de la boca de la mina hay sitio para estar de pie")
+	poi.queue_free()
 
 	town.queue_free()
 	await process_frame
@@ -63,7 +87,37 @@ func _without_collision(node: Node) -> Array:
 	return out
 
 
+## Lo que debería atravesarse y tiene cuerpo.
+func _passable_with_body(node: Node) -> Array:
+	var out := []
+	for n in node.find_children("*", "Node3D", true, false):
+		if not n.has_meta("size"):
+			continue
+		var name := _model_name(n)
+		if not (["Flowers", "Grass", "Plant_", "Bonfire"].any(func(k): return name.begins_with(k))):
+			continue
+		for c in n.get_children():
+			if c is StaticBody3D:
+				out.append(name)
+	return out
+
+
+## A qué distancia de `to` se puede quedar de pie el jugador (barriendo hacia fuera).
+func _reachable(scene: Node3D, to: Vector3) -> float:
+	var im = load("res://scripts/world/InteriorManager.gd")
+	for r in [0.0, 0.4, 0.8, 1.2, 1.6, 2.0, 3.0]:
+		for k in 12:
+			var a := TAU * k / 12.0
+			var p := to + Vector3(cos(a) * r, 0, sin(a) * r)
+			p.y = scene.ground_at(p.x, p.z) + 0.05
+			if im.is_free(scene, p, [], 0.3):
+				return r
+	return INF
+
+
 func _exempt(n: Node) -> bool:
+	if n.get_parent() != null and n.get_parent().get_children().any(func(c): return c is AnimatableBody3D):
+		return true  # un coche que circula: su cuerpo va aparte (y se mueve con él)
 	var p := n.get_parent()
 	while p != null:
 		if p is CharacterBody3D or p.get_script() == load("res://scripts/world/Boat.gd"):
@@ -76,7 +130,7 @@ func _exempt(n: Node) -> bool:
 func _model_name(n: Node) -> String:
 	for c in n.get_children():
 		if not (c is CollisionObject3D):
-			return str(c.name)
+			return load("res://procgen/AssetLibrary.gd").model_name_of(c)
 	return str(n.name)
 
 

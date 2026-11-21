@@ -57,10 +57,11 @@ func _run() -> void:
 	await create_timer(2.5).timeout
 	var v: float = car.speed()
 	_expect(v > 6.0 and v < 16.0, "acelera con brío pero creíble (%.1f m/s en 2.5 s)" % v)
-	Input.action_press("move_left")
+	# A la derecha: a la izquierda está la farola de la acera, y desde la 0.15 su poste choca de verdad
+	Input.action_press("move_right")
 	var yaw0: float = car.global_rotation.y
 	await create_timer(1.2).timeout
-	Input.action_release("move_left")
+	Input.action_release("move_right")
 	_expect(absf(angle_difference(car.global_rotation.y, yaw0)) > 0.15, "gira")
 	_expect(car.global_basis.y.dot(Vector3.UP) > 0.9 and absf(car.angular_velocity.y) < 2.0, "y gira sin volcar ni hacer un trompo")
 	Input.action_release("move_forward")

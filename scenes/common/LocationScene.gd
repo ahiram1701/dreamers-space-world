@@ -1858,7 +1858,7 @@ func _build_place(e: Dictionary) -> void:
 	var root: Node3D
 	if model:
 		var b := AssetLibrary.bounds(model)
-		root = AssetLibrary.place(self, model, pos, b.size.y * 2.6, yaw, true)
+		root = AssetLibrary.place(self, model, pos, b.size.y * 2.6, yaw, "mesh")
 	else:
 		root = Node3D.new()
 		root.position = pos

@@ -103,7 +103,8 @@ static func _outpost(parent: Node3D, def: Dictionary, height_at: Callable, rng: 
 		var model := str(props[rng.randi() % props.size()])
 		var m := AssetLibrary.instance("modular_sci_fi", model)
 		if m:
-			AssetLibrary.place(parent, m, p, rng.randf_range(0.9, 2.2), rng.randf() * TAU, true)
+			var prop := AssetLibrary.place(parent, m, p, rng.randf_range(0.9, 2.2), rng.randf() * TAU, true)
+			Hands.make_movable(prop)  # las cajas y bidones sueltos se cogen o se empujan
 			avoid.append(Vector3(p.x, 2.0, p.z))
 			Decor.landmark(parent, p, OUTPOST_LABELS.get(model, "material del puesto"), "prop")
 
@@ -125,7 +126,7 @@ static func _settlement(parent: Node3D, def: Dictionary, height_at: Callable, rn
 			if model:
 				var b := AssetLibrary.bounds(model)
 				var building := AssetLibrary.place(parent, model, p + Vector3(0, 0.25, 0), b.size.y * rng.randf_range(2.4, 3.0),
-					atan2(hub.x - p.x, hub.y - p.z), true)  # mirando a la plaza
+					atan2(hub.x - p.x, hub.y - p.z), "mesh")  # mirando a la plaza
 				building.set_meta("style", "model")
 				building.set_meta("model_name", str(model.get_meta("model_name", "")))
 				if _extras.has("buildings"):
@@ -268,7 +269,7 @@ static func _nature(parent: Node3D, biome: String, height_at: Callable, rng: Ran
 					continue
 				p.y = height_at.call(p.x, p.z)
 				var h := rng.randf_range(1.5, 6.0)
-				var spike := _cone(parent, p + Vector3(0, h / 2, 0), rng.randf_range(0.3, 1.0), h, tint)
+				var spike := _cone(parent, p + Vector3(0, h / 2, 0), rng.randf_range(0.3, 1.0), h, tint, true)  # (un cristal de 6 m no se atraviesa)
 				spike.rotation_degrees = Vector3(rng.randf_range(-15, 15), rng.randf() * 360.0, rng.randf_range(-15, 15))
 				var m: StandardMaterial3D = spike.material_override
 				m.roughness = 0.15
@@ -379,14 +380,23 @@ static func _cylinder(parent: Node3D, pos: Vector3, top: float, bottom: float, h
 	m.height = h
 	var s: Shape3D = null
 	if collide:
-		s = CylinderShape3D.new()
-		s.radius = maxf(top, bottom)
-		s.height = h
+		s = cylinder_shape(m)
 	return _add(parent, m, pos, c, s)
 
 
-static func _cone(parent: Node3D, pos: Vector3, radius: float, h: float, c: Color) -> MeshInstance3D:
-	return _cylinder(parent, pos, 0.0, radius, h, c, false)
+## La colisión de un cilindro tal como se ve: si se estrecha (un cono, un montículo), con su forma;
+## un cilindro del ancho de la base dejaba un anillo de aire alrededor de la parte de arriba.
+static func cylinder_shape(m: CylinderMesh) -> Shape3D:
+	if absf(m.top_radius - m.bottom_radius) < 0.02:
+		var s := CylinderShape3D.new()
+		s.radius = m.bottom_radius
+		s.height = m.height
+		return s
+	return m.create_convex_shape(true, true)
+
+
+static func _cone(parent: Node3D, pos: Vector3, radius: float, h: float, c: Color, collide: bool = false) -> MeshInstance3D:
+	return _cylinder(parent, pos, 0.0, radius, h, c, collide)
 
 
 static func _prism(parent: Node3D, pos: Vector3, size: Vector3, c: Color) -> void:

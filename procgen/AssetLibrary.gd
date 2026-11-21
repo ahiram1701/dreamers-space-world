@@ -256,8 +256,37 @@ static func bounds(node: Node3D) -> AABB:
 	return out
 
 
-## Pone el modelo en el mundo con la altura pedida. `collide`: false, true (caja), "trunk"
-## (solo un cilindro fino en la base: se puede pasar bajo la copa de un árbol) o "bush".
+## Plantas que se atraviesan andando (flores, hierba alta, helechos): no llevan cuerpo aunque se
+## pidan como "bush". Un arbusto de verdad (Bush_*, BushBerries_*) sí es sólido.
+const PASSABLE_PLANTS := ["Flowers", "Grass", "Plant_"]
+
+## Modelos con huecos a la vista (la ducha abierta, estantes, cortinas, literas, la cápsula): con
+## "hull" se taparían, así que chocan con su forma exacta.
+const HOLLOW := ["Bathroom_Shower", "Shelf_Large", "Bookshelf", "Curtains", "Bed_Bunk", "Props_Shelf", "Props_Pod",
+	"Props_Capsule", "Props_Teleporter", "Tent", "Column_Round"]
+
+## Formas de colisión ya calculadas, por modelo, modo y escala: [[Shape3D, Transform3D], …]
+static var _shape_cache := {}
+
+
+static func model_name_of(model: Node) -> String:
+	var p := str(model.scene_file_path)
+	return p.get_file().get_basename() if not p.is_empty() else str(model.get_meta("model_name", model.name))
+
+
+static func is_passable_plant(model: Node) -> bool:
+	var n := model_name_of(model)
+	return PASSABLE_PLANTS.any(func(k): return n.begins_with(k))
+
+
+## Pone el modelo en el mundo con la altura pedida. `collide`:
+##   false      nada (se atraviesa)
+##   true       = "hull": una forma convexa por cada pieza del modelo (rocas, muebles, un tractor)
+##   "box"      una caja del tamaño del modelo (antes era lo normal: dejaba paredes de aire junto a
+##              todo lo que no es una caja, como el brazo de una farola o la copa de un árbol)
+##   "mesh"     la forma exacta de lo que se ve (edificios, farolas, letreros: con huecos y salientes)
+##   "trunk"    un cilindro en el tronco: se pasa bajo la copa de un árbol
+##   "bush"     un cilindro que ocupa casi todo el arbusto (las flores y la hierba, nada)
 ## Devuelve el nodo raíz (posición = base del modelo).
 static func place(parent: Node3D, model: Node3D, pos: Vector3, target_height: float, yaw: float, collide: Variant) -> Node3D:
 	var b := bounds(model)
@@ -269,18 +298,40 @@ static func place(parent: Node3D, model: Node3D, pos: Vector3, target_height: fl
 	model.position = -Vector3(b.get_center().x, b.position.y, b.get_center().z) * s
 	root.add_child(model)
 	root.set_meta("size", b.size * s)
-	if collide is String and collide in ["trunk", "bush"]:
-		# "bush": un cilindro que ocupa casi todo el arbusto (no se atraviesa, pero se rodea bien)
+	if collide is String and collide == "bush" and is_passable_plant(model):
+		collide = false
+	if collide is bool and collide:
+		collide = "hull"
+	if collide is String and collide == "hull" and HOLLOW.any(func(k): return model_name_of(model).begins_with(k)):
+		collide = "mesh"
+	if collide is String and collide in ["hull", "mesh"]:
+		var body := StaticBody3D.new()
+		for pair in _model_shapes(model, collide, s):
+			var cs := CollisionShape3D.new()
+			cs.shape = pair[0]
+			cs.transform = pair[1]
+			body.add_child(cs)
+		root.add_child(body)
+	elif collide is String and collide == "trunk":
+		var body := StaticBody3D.new()
+		for pair in _model_shapes(model, "trunk", s):
+			var cs := CollisionShape3D.new()
+			cs.shape = pair[0]
+			cs.transform = pair[1]
+			body.add_child(cs)
+		root.add_child(body)
+	elif collide is String and collide == "bush":
+		# un cilindro que ocupa casi todo el arbusto (no se atraviesa, pero se rodea bien)
 		var body := StaticBody3D.new()
 		var cs := CollisionShape3D.new()
 		cs.shape = CylinderShape3D.new()
 		var r := minf(b.size.x, b.size.z) * s
-		cs.shape.radius = clampf(r * 0.08, 0.2, 0.45) if collide == "trunk" else clampf(r * 0.38, 0.2, 1.6)
+		cs.shape.radius = clampf(r * 0.38, 0.2, 1.6)
 		cs.shape.height = minf(target_height, 4.0)
 		cs.position.y = cs.shape.height / 2.0
 		body.add_child(cs)
 		root.add_child(body)
-	elif collide:
+	elif collide is String and collide == "box":
 		var body := StaticBody3D.new()
 		var cs := CollisionShape3D.new()
 		cs.shape = BoxShape3D.new()
@@ -290,6 +341,178 @@ static func place(parent: Node3D, model: Node3D, pos: Vector3, target_height: fl
 		root.add_child(body)
 	parent.add_child(root)
 	return root
+
+
+## Transformación de una malla respecto a `root` (sin pasar por el árbol de escena).
+static func _relative(mi: Node3D, root: Node) -> Transform3D:
+	var t := Transform3D.IDENTITY
+	var n: Node = mi
+	while n != root and n != null:
+		if n is Node3D:
+			t = (n as Node3D).transform * t
+		n = n.get_parent()
+	return t
+
+
+## Centro (x, z) de unos puntos, o INF si no hay.
+static func _centroid(pts: Array) -> Vector2:
+	if pts.is_empty():
+		return Vector2.INF
+	var sum := Vector2.ZERO
+	for p in pts:
+		sum += Vector2(p.x, p.z)
+	return sum / pts.size()
+
+
+## Forma convexa de unos puntos. Si son planos (una cortina, una tabla), se les da 4 cm de grosor:
+## el casco de puntos coplanarios no existe y Godot se queja (y la navegación también).
+static func _hull(pts: PackedVector3Array) -> ConvexPolygonShape3D:
+	if pts.size() < 3:
+		return null
+	var box := AABB(pts[0], Vector3.ZERO)
+	for p in pts:
+		box = box.expand(p)
+	if box.size.length() < 0.05:
+		return null
+	var flat := false
+	for k in 3:
+		if box.size[k] < 0.04:  # (una línea tiene dos ejes planos: se engorda en los dos)
+			var push := Vector3.ZERO
+			push[k] = 0.04
+			var extra := PackedVector3Array()
+			for p in pts:
+				extra.append(p + push)
+			pts.append_array(extra)
+			flat = true
+	if not flat and pts.size() < 4:
+		return null
+	var shape := ConvexPolygonShape3D.new()
+	shape.points = pts
+	return shape
+
+
+## Formas que siguen lo que se ve del modelo (ya escalado y centrado bajo su raíz).
+## Lo caro (leer las caras, el casco convexo, buscar el tronco) se hace una vez por modelo, en
+## sus coordenadas; cada copia solo lo escala y lo coloca (un bosque de 140 árboles de alturas
+## distintas tardaba segundos en cargar).
+static func _model_shapes(model: Node3D, mode: String, s: float) -> Array:
+	var name := model_name_of(model)
+	if mode == "mesh":
+		var key := "%s|mesh|%.4f" % [name, s]
+		if _shape_cache.has(key):
+			return _shape_cache[key]
+		var faces := PackedVector3Array()
+		var root := model.get_parent()
+		for mi in _meshes(model):
+			var t := _relative(mi, root)
+			var src := mi.mesh.get_faces()
+			for k in range(0, src.size(), 3):
+				var a: Vector3 = t * src[k]
+				var b: Vector3 = t * src[k + 1]
+				var c: Vector3 = t * src[k + 2]
+				# Las caras diminutas (molduras, marcos, tornillos) no cambian por dónde se pasa y
+				# encarecen cada choque: fuera (en el pueblo, una de cada tres caras).
+				if (b - a).cross(c - a).length() < 0.04:
+					continue
+				faces.append(a)
+				faces.append(b)
+				faces.append(c)
+		var out := []
+		if not faces.is_empty():
+			var shape := ConcavePolygonShape3D.new()
+			shape.backface_collision = true  # (las caras sueltas, como un letrero, chocan por los dos lados)
+			shape.set_faces(faces)
+			out.append([shape, Transform3D.IDENTITY])
+		if not name.is_empty():
+			_shape_cache[key] = out
+		return out
+	var local_key := "%s|%s|local" % [name, mode]
+	var local: Array = _shape_cache.get(local_key, [])
+	if not _shape_cache.has(local_key):
+		local = _trunk_local(model) if mode == "trunk" else _hull_local(model)
+		if not name.is_empty():
+			_shape_cache[local_key] = local
+	var mt := model.transform  # escala y centrado de esta copia
+	var out := []
+	for part in local:
+		if mode == "trunk":  # [centro local, radio local, alto local]
+			var cyl := CylinderShape3D.new()
+			cyl.radius = clampf(float(part[1]) * s, 0.08, 0.35)
+			cyl.height = float(part[2]) * s
+			out.append([cyl, Transform3D(Basis.IDENTITY, mt * (part[0] as Vector3))])
+		else:
+			var pts := PackedVector3Array()
+			for v in part:
+				pts.append(mt * v)
+			var shape := _hull(pts)
+			if shape:
+				out.append([shape, Transform3D.IDENTITY])
+	return out
+
+
+## Los cascos convexos de cada pieza, en coordenadas del modelo: [PackedVector3Array, …]
+static func _hull_local(model: Node3D) -> Array:
+	var out := []
+	for mi in _meshes(model):
+		var convex := mi.mesh.create_convex_shape(true, false) as ConvexPolygonShape3D
+		if convex == null:
+			continue
+		var t := _relative(mi, model)
+		var pts := PackedVector3Array()
+		for v in convex.points:
+			pts.append(t * v)
+		out.append(pts)
+	return out
+
+
+## El tronco, en coordenadas del modelo: por tramos (hasta un tercio de la altura del árbol, unos
+## 2.3 m en uno de 7), lo que hay cerca del centro de cada tramo. Sigue a una palmera inclinada o
+## a un sauce, y la copa no choca: se pasa por debajo. Devuelve [[centro, radio, alto], …].
+static func _trunk_local(model: Node3D) -> Array:
+	var verts := PackedVector3Array()
+	for mi in _meshes(model):
+		var t := _relative(mi, model)
+		for v in mi.mesh.get_faces():
+			verts.append(t * v)
+	if verts.is_empty():
+		return []
+	var lo := INF
+	var hi := -INF
+	for v in verts:
+		lo = minf(lo, v.y)
+		hi = maxf(hi, v.y)
+	var h := hi - lo
+	var low := PackedVector3Array()  # (solo el tercio de abajo: la copa no hace falta mirarla)
+	for v in verts:
+		if v.y < lo + 0.34 * h:
+			low.append(v)
+	verts = low
+	var out := []
+	var seed := Vector2.INF
+	for band in [[-0.07, 0.1], [0.1, 0.19], [0.19, 0.27], [0.27, 0.33]]:
+		var y0: float = lo + float(band[0]) * h
+		var y1: float = lo + float(band[1]) * h
+		var near := func(c: Vector2, r: float) -> Array:
+			var picked := []
+			for v in verts:
+				if v.y >= y0 and v.y < y1 + 0.007 * h and (c == Vector2.INF or Vector2(v.x, v.z).distance_to(c) < r):
+					picked.append(v)
+			return picked
+		var mid := _centroid(near.call(seed, 0.085 * h))
+		if mid == Vector2.INF:
+			continue
+		var dists := []
+		var b0 := INF
+		var b1 := -INF
+		for v in near.call(mid, 0.05 * h):
+			dists.append(Vector2(v.x, v.z).distance_to(mid))
+			b0 = minf(b0, v.y)
+			b1 = maxf(b1, v.y)
+		if b1 - b0 > 0.014 * h:
+			dists.sort()  # (el 75 %: las ramitas sueltas de un abedul no engordan el tronco)
+			out.append([Vector3(mid.x, (b0 + b1) / 2.0, mid.y), float(dists[int(dists.size() * 0.75)]), b1 - b0])
+		seed = mid
+	return out
 
 
 static func _windows() -> StandardMaterial3D:

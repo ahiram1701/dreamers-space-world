@@ -444,7 +444,7 @@ Reglas:
 - create_place: aparece o se abre un sitio nuevo que encaja con el lugar y la época (una panadería, un taller…). "item_name": su nombre (el del letrero); "target": shop, bakery, bar, workshop, house, office, clinic o market; "text": cómo es.
 - sleep: dormir. "until_hour": hora a la que se despierta (0–24; 3.5 = 3:30, 15 = 3 de la tarde) o "hours": cuántas horas. "target": "home" si va a dormir a su casa (el juego le lleva, entra y se acuesta en su cama), "bed" para la cama más cercana; "floor": true SOLO si quiere dormir en el suelo. Hace pasar el tiempo él solo ("minutes": 0).
 - travel: ir a otro lugar. "target": "location:<id>" de "OTROS LUGARES A LOS QUE PUEDE VIAJAR" (va en su nave o con el Ancla) o el nombre de un sitio de "SITIOS DE ESTE LUGAR" aunque esté lejos ("regreso al pueblo" = "pueblo"/la plaza).
-- interact: usar cualquier COSA de la lista (thing:N, object:N…): encender o apagar (la tele, una lámpara), abrir, mirar, tocar, sentarse… "target": id; "verb": turn_on, turn_off, open, close, use o look.
+- interact: usar cualquier COSA de la lista (thing:N, object:N…): encender o apagar (la tele, una lámpara), abrir, mirar, tocar, sentarse… "target": id; "verb": turn_on, turn_off, open, close, use, look, pick_up (cogerla y llevarla en brazos: una silla, una caja), drop (dejar lo que lleva), throw (lanzarla) o push (empujar algo pesado: un sofá, una mesa).
 - drive_to: ir en vehículo a un sitio (sube a tu coche o a uno cercano, conduce y gasta gasolina). "target": un sitio de este lugar.
 - buy: comprar algo de verdad en un local de aquí (con su precio y su horario). "item_name": lo que compra.
 - call: llamar por teléfono a alguien que conoce. "target": npc:id.

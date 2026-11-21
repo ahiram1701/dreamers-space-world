@@ -96,6 +96,7 @@ Si la IA no está disponible, el juego usa contenido de respaldo y **nunca se qu
 | ✅ | **Mundo sin borde**: el terreno sigue por trozos a tu alrededor (colinas, montañas, mar con islas), en el pueblo y en los planetas |
 | ✅ | **Naves y espacio**: despega desde la plataforma, vuela por tu sistema solar (planetas, estación y asteroides sólidos) y aterriza en otros planetas, junto a tu nave |
 | ✅ | **Coherencia**: nombres y oficios que casan, el pueblo se conoce, ropa por prendas que cambia con el clima y que la IA conoce, y lo que un PNJ narra que hace, lo hace |
+| ✅ | **Las manos**: coge, lleva, lanza y empuja lo que está suelto (sillas, cajas, el sofá), y se queda donde lo dejas; la nevera, el horno, los grifos, las cortinas, la chimenea y la luz se usan; nada invisible te frena |
 
 ## 🚀 Jugar
 

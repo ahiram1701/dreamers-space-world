@@ -3,6 +3,49 @@
 Todos los cambios relevantes del proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [0.15.0] - 2026-11-20
+
+### Corregido
+- **Chocar con cosas invisibles.** Casi todo lo sólido chocaba como una caja del tamaño del modelo entero, así que había paredes de aire junto a todo lo que no es una caja. En el pueblo y el campo, 184 de 598 cosas sólidas tenían aire que chocaba, hasta 2 m. Pasaba también en 25 tipos de interior y en todos los mundos generados. Ahora cada cosa choca con su forma, y una prueba nueva lo comprueba en el pueblo, el campo, cada interior, cada tipo de mundo y cada punto de interés: hoy no queda ninguna pared de aire.
+  - **Árboles del bosque:** chocaba la copa entera, un muro de 5 a 9 m. Ahora solo el tronco, que también se sigue en las palmeras inclinadas y los sauces, y se pasa por debajo de las ramas.
+  - **Farolas:** se pasa bajo el brazo del farol.
+  - **Casas:** se pasa bajo los balcones, junto a las escaleras, los porches y las columnas, y bajo los letreros. Los edificios chocan con su forma exacta.
+  - **Rocas, muebles, el tractor:** chocan con su contorno, no con su caja. La ducha, las estanterías, las literas y las cortinas, con sus huecos.
+  - **Montículos con forma de cono** (la cueva, la mina) y cristales: antes eran un cilindro del ancho de la base.
+  - Las flores, la hierba alta, los helechos y el fuego (la hoguera del campamento, la de la tienda) ya no son sólidos.
+  - Las moras recogidas dejaban un arbusto invisible todo el día. Ahora la mata se queda, sin fruto, hasta mañana.
+- **La cueva y la mina no se podían usar:** su boca y su puerta quedaban dentro del montículo. Ahora se llega andando.
+- **La torre:** su escalera de caracol atravesaba un techo a 3.2 m. Ahora la torre tiene su altura y el suelo del mirador se ve.
+- Las barandillas del balcón y el techo al que subes tenían colisión sin nada que se viera. Ahora se ven. En un tejado llano te quedas en el tejado de verdad; en uno a dos aguas, sobre unos tablones.
+- Los coches que circulan por la ciudad llevaban un cuerpo estático de más que se arrastraba con ellos.
+- Una lámpara encendida en una casa aparecía encendida en todas: todos los interiores se guardaban como el mismo sitio.
+- Las piezas del faro, el invernadero y los puntos de interés no seguían a su forma al girarla.
+
+### Cambiado
+- **Subir bordillos y escalones andando.** Un bordillo, un peldaño o una tarima de más de ~21 cm te frenaba en seco, como una pared invisible. Ahora se suben andando hasta 38 cm, también llegando en diagonal, y la subida es suave: la cámara no pega un salto. Cuesta arriba no se frena y cuesta abajo no se acelera.
+- **Vecinos más humanos.**
+  - Arrancan y frenan con inercia, como tú (antes cambiaban de velocidad en seco).
+  - Suben bordillos andando. Antes daban un saltito fuera y dentro no subían.
+  - Cada persona tiene su paso, entre 1.35 y 1.65 m/s; los mayores van a 1.15.
+  - Quien te sigue y se queda atrás ya no aparece de golpe a tu lado si lo estás viendo: viene corriendo.
+
+### Añadido
+- **Las manos: lo suelto se coge, se lleva, se lanza y se empuja.**
+  - <kbd>G</kbd> (→ en el mando) coge una silla, un taburete, una caja, una papelera, una planta o un tronco, hasta 25 kg. Lo llevas delante y <kbd>G</kbd> otra vez lo deja en el suelo.
+  - Clic (← en el mando) lo lanza: lo ligero vuela más lejos. Cae con física de verdad, choca, suena y se para.
+  - Lo pesado (un sofá, una mesa grande, la nevera, una cama), de 25 a 120 kg, se empuja andando contra ello. Va despacio, suena el roce y no atraviesa paredes ni otros muebles.
+  - Llevar o empujar algo pesado cansa.
+  - Lo que mueves se queda donde lo dejas, también al volver otro día.
+  - Si lo haces en casa ajena y alguien de la casa está dentro, lo ve y se acuerda.
+  - Con <kbd>F</kbd> también: «cojo la silla», «empujo el sofá», «lanzo la caja», «la suelto».
+- **Más cosas de casa que se usan:**
+  - La nevera se abre (con su luz fría), el horno se enciende y los grifos del lavabo y del fregadero echan agua.
+  - El inodoro tiene cisterna.
+  - Las cortinas se abren y se cierran.
+  - La chimenea se enciende, y al calor del fuego se descansa mejor.
+  - Junto a la puerta de cada interior hay un interruptor que apaga y enciende la luz del techo.
+- Te puedes sentar en cualquier silla, taburete o sofá y tumbarte en cualquier cama, no solo en los de la gente de la casa.
+
 ## [0.14.1] - 2026-11-19
 
 ### Corregido
